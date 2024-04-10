@@ -5,3 +5,4 @@ summary.json
 output/*.json
 conversation
 data
+__pycache__
