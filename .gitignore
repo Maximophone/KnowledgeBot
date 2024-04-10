@@ -3,3 +3,5 @@ summary.txt
 *.m4a
 summary.json
 output/*.json
+conversation
+data
