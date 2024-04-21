@@ -13,6 +13,7 @@ _MODELS_DICT = {
     "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
     "gemini1.0": "gemini-1.0-pro-latest",
+    "gemini1.5": "gemini-1.5-pro-latest",
     "gpt3.5": "gpt-3.5-turbo",
     "gpt4": "gpt-4-turbo-preview"
 }
@@ -103,8 +104,12 @@ class AI:
     def conversation(self, messages: List[Dict[str, str]], system_prompt: str = None, 
                      model_override: str = None, max_tokens: int=1000, 
                      temperature: float=0.0) -> str:
-        model_name = get_model(model_override) or self.model_name
-        client = get_client(model_override) or self.client
+        if model_override:
+            model_name = get_model(model_override) or self.model_name
+            client = get_client(model_override) or self.client
+        else:
+            model_name = self.model_name
+            client = self.client
         system_prompt = system_prompt or self.system_prompt
 
         response = client.messages(model_name, messages, system_prompt, 

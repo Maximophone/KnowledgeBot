@@ -7,32 +7,11 @@ import os
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
+import traceback
 
-class FileModifiedHandler(FileSystemEventHandler):
-    def on_modified(self, event):
-        if not event.is_directory:
-            print(f"File {event.src_path} modified")
-            with open(event.src_path, "r", encoding="utf-8") as f:
-                conv_txt = f.read()
-
-            if conv_txt.startswith("#["):
-                model_name, conv_txt = conv_txt.split("]",1)
-                model_name = model_name[2:]
-            
-            if not needs_answer(conv_txt):
-                print("No answer needed")
-                return
-
-            print("Answering...")
-            messages = process_conversation(conv_txt)
-
-            #response = haiku.conversation(messages, model_override=model_name, max_tokens = 4096)
-            response = model.conversation(messages, model_override=model_name, max_tokens=4096)
-
-            with open(event.src_path, "a+", encoding="utf-8") as f:
-                f.write("\n" + beacon_claude + "\n" + response + "\n" + beacon_me + "\n")
-
-
+beacon_error = """----
+[ERROR]
+----"""
 
 beacon_me = """----
 [ME]
@@ -41,6 +20,50 @@ beacon_me = """----
 beacon_claude = """----
 [AI]
 ----"""
+
+class FileModifiedHandler(FileSystemEventHandler):
+    def __init__(self, default_model: str):
+        self.default_model = default_model
+        self.dont_trigger = set()
+        super().__init__()
+
+    def on_modified(self, event):
+        print(event.src_path, flush=True)
+        print(self.dont_trigger, flush=True)
+        if event.is_directory:
+            return
+        if event.src_path in self.dont_trigger:
+            self.dont_trigger.remove(event.src_path)
+            return
+        try:
+            print(f"File {event.src_path} modified", flush=True)
+            with open(event.src_path, "r", encoding="utf-8") as f:
+                conv_txt = f.read()
+            model_name = self.default_model
+            if conv_txt.startswith("=#["):
+                model_name, conv_txt = conv_txt.split("]",1)
+                model_name = model_name[3:]
+            
+            if not needs_answer(conv_txt):
+                print("No answer needed", flush=True)
+                return
+
+            print("Answering...", flush=True)
+            messages = process_conversation(conv_txt)
+
+            #response = haiku.conversation(messages, model_override=model_name, max_tokens = 4096)
+            response = model.conversation(messages, model_override=model_name, max_tokens=4096)
+
+            # We dont want this writing event to trigger another answer
+            self.dont_trigger.add(event.src_path)
+            with open(event.src_path, "a+", encoding="utf-8") as f:
+                f.write("\n" + beacon_claude + "\n" + response + "\n" + beacon_me + "\n")
+        except Exception:
+            self.dont_trigger.add(event.src_path)
+            with open(event.src_path, "a+", encoding="utf-8") as f:
+                f.write("\n" + beacon_error + "\n" + traceback.format_exc() + "\n")
+
+
 
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
@@ -82,12 +105,13 @@ if __name__ == "__main__":
     if args.model:
         model_name = args.model
     else:
-        model_name = "claude-haiku"
+        model_name = "opus"
 
     path = "conversation"
-    event_handler = FileModifiedHandler()
+    event_handler = FileModifiedHandler(model_name)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
+    print("Ready.", flush=True)
     observer.start()
 
     try:
