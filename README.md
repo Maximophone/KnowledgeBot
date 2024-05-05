@@ -38,7 +38,7 @@ python run_ai.py [--model MODEL_NAME]
 
 The script will monitor the `conversation` directory for changes. When a file is modified, it will process the conversation and generate a response using the specified model.
 
-The model used by default is Claude 3 Opus. To use a different model, prefix your text like so:
+To use a different model, you can also prefix your text like so:
 ```
 =#[model]
 ```
