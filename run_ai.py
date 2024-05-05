@@ -21,6 +21,18 @@ beacon_claude = """----
 [AI]
 ----"""
 
+def parse_parameters(params_string: str) -> Dict:
+    print(params_string)
+    parameters = {}
+    params = params_string.split(",")
+    if len(params) == 1 and ":" not in params[0]:
+        # old use case, just the model name, for example =#[opus]
+        return {"model": params[0]}
+    for param in params:
+        param_name, param_value = param.split(":")
+        parameters[param_name.strip()] = param_value.strip()
+    return parameters
+
 class FileModifiedHandler(FileSystemEventHandler):
     def __init__(self, default_model: str):
         self.default_model = default_model
@@ -40,9 +52,14 @@ class FileModifiedHandler(FileSystemEventHandler):
             with open(event.src_path, "r", encoding="utf-8") as f:
                 conv_txt = f.read()
             model_name = self.default_model
+            system_prompt = None
             if conv_txt.startswith("=#["):
-                model_name, conv_txt = conv_txt.split("]",1)
-                model_name = model_name[3:]
+                params_string, conv_txt = conv_txt.split("]",1)
+                parameters = parse_parameters(params_string[3:])
+                if "model" in parameters:
+                    model_name = parameters["model"]
+                if "system" in parameters:
+                    system_prompt = parameters["system"]
             
             if not needs_answer(conv_txt):
                 print("No answer needed", flush=True)
@@ -51,8 +68,13 @@ class FileModifiedHandler(FileSystemEventHandler):
             print("Answering...", flush=True)
             messages = process_conversation(conv_txt)
 
+            if system_prompt is not None:
+                with open(f"prompts/{system_prompt}.md", "r") as f:
+                    system_prompt = f.read()
+
             #response = haiku.conversation(messages, model_override=model_name, max_tokens = 4096)
-            response = model.conversation(messages, model_override=model_name, max_tokens=4096)
+            response = model.conversation(messages, model_override=model_name, 
+                                          max_tokens=4096, system_prompt=system_prompt)
 
             # We dont want this writing event to trigger another answer
             self.dont_trigger.add(event.src_path)

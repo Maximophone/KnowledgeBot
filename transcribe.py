@@ -56,7 +56,7 @@ def transcribe_and_save(transcription_input: str, transcription_output: str):
             json.dump(result, f)
         text = result["text"]
         decoded_text = json.loads(f'"{text}"')
-        with open(f"{transcription_output}/{md_fname}", "w") as f:
+        with open(f"{transcription_output}/{md_fname}", "w", encoding='utf-8') as f:
             f.write(decoded_text)
         BEING_TRANSCRIBED.remove(fname)
 

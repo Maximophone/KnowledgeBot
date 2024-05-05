@@ -49,7 +49,8 @@ class GeminiWrapper(AIWrapper):
             model = genai.GenerativeModel(model_name)
         else:
             model = self.model
-        messages=[{"role": m["role"], "parts":[m["content"]]} for m in messages]
+        role_mapping = {"user": "user", "assistant": "model"}
+        messages=[{"role": role_mapping.get(m["role"]), "parts":[m["content"]]} for m in messages]
         response = model.generate_content(
             messages
         )
