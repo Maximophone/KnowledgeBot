@@ -3,6 +3,8 @@ import anthropic
 import google.generativeai as genai
 import yaml
 from openai import OpenAI
+from datetime import datetime as dt
+import sys
 
 
 with open("secrets.yml", "r") as f:
@@ -18,16 +20,48 @@ _MODELS_DICT = {
     "gpt4": "gpt-4-turbo-preview"
 }
 
+TOKEN_COUNT_FILE = "token_count.csv"
+
+def n_tokens(text: str) -> int:
+    return len(text) // 4
+
+def count_tokens_input(messages: str, system_prompt: str) -> int:
+    text = system_prompt
+    for m in messages:
+        text += m["content"]
+    return n_tokens(text)
+
+def count_tokens_output(response: str):
+    return n_tokens(response)
+
+def log_token_use(model: str, n_tokens: int, input: bool = True, 
+                  fpath: str=TOKEN_COUNT_FILE):
+    t = str(dt.now())
+    script = sys.argv[0]
+    with open(fpath, "a+") as f:
+        if input:
+            f.write(f"{model},input,{n_tokens},{t},{script}\n")
+        else:
+            f.write(f"{model},output,{n_tokens},{t},{script}\n")
+
 class AIWrapper:
-    def messages(self, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+    def messages(self, model_name: str, messages: List[Dict[str,str]], 
+                 system_prompt: str, max_tokens: int, 
                  temperature: float) -> str:
-        pass
+        response = self._messages(model_name, messages, system_prompt, max_tokens, temperature)
+        log_token_use(model_name, count_tokens_input(messages, system_prompt))
+        log_token_use(model_name, count_tokens_output(response), input=False)
+        return response
+    
+    def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+                 temperature: float) -> str:
+        raise NotImplementedError
 
 class ClaudeWrapper(AIWrapper):
     def __init__(self, api_key: str):
         self.client = anthropic.Client(api_key=api_key)
 
-    def messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+    def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
                  temperature: float) -> str:
         message = self.client.messages.create(
             model=model,
@@ -43,7 +77,7 @@ class GeminiWrapper(AIWrapper):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
     
-    def messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+    def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
                  temperature: float) -> str:
         if model_name:
             model = genai.GenerativeModel(model_name)
@@ -60,7 +94,7 @@ class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
         self.client = OpenAI(api_key = api_key, organization=org)
 
-    def messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+    def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
                  temperature: float) -> str:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
