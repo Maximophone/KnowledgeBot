@@ -1,4 +1,4 @@
-from news.question import question
+from news.question import answer_question, get_article_text, answer_question_from_url
 
 ARTICLE = """OpenAI et Meta annoncent le lancement de leurs intelligences artificielles capables de «raisonner»
 Intelligence artificielle : de la fascination à l'inquiétudedossier
@@ -27,8 +27,23 @@ Fin 2023, les membres du conseil d’administration de l’entreprise s’échar
 Depuis, OpenAI, Meta, Google et les autres acteurs du milieu se tirent la bourre à coups d’intelligences artificielles personnalisées et autres générateurs de vidéos en direct – à l’instar de Sora, capable de créer des extraits d’une minute après simple saisie de texte décrivant la scène demandée. Autant d’évolutions qui ont un coût : en février, Sam Altman demandait de réunir 7 000 milliards de dollars pour financer de nouvelles usines de semi-conducteurs, des composants essentiels pour faire fonctionner de puissantes IA.
 """
 
+URL = "https://www.liberation.fr/economie/economie-numerique/openai-et-meta-annoncent-le-lancement-de-leurs-intelligences-artificielles-capables-de-raisonner-20240410_FTBPXGC4NFGG3D5J2L6XX4PNXI/"
+QUESTION = "Does this article mention DeepFakes? Yes or No"
+URL = "https://www.lemonde.fr/campus/article/2024/05/03/comment-l-intelligence-artificielle-commence-a-seduire-les-enseignants-du-superieur_6231261_4401467.html"
+
 if __name__ == "__main__":
-    answer = question(ARTICLE, "Est ce que cet article mentionne les DeepFakes? Yes or No")
+
+    answer = answer_question(ARTICLE, QUESTION)
+    print(answer.answer)
+    print(answer.reflexions)
+    print(answer.explanations)
+    print(answer.error_message)
+    print(answer.full_answer)
+
+    print()
+    article_text = get_article_text(URL)
+    print(article_text)
+    answer = answer_question_from_url(URL, QUESTION)
     print(answer.answer)
     print(answer.reflexions)
     print(answer.explanations)

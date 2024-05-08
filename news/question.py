@@ -2,6 +2,7 @@
 from ai import AI
 from lxml import etree
 from dataclasses import dataclass
+from newspaper import Article
 
 
 gemini = AI("gemini1.5")
@@ -26,7 +27,7 @@ class Answer:
     error_message: str = ""
     full_answer: str = ""
 
-def question(article: str, question: str, n_retries=2) -> Answer:
+def answer_question(article: str, question: str, n_retries=2) -> Answer:
     assert n_retries >= 1, "N retries can't be < 1"
     prompt = PROMPT.format(question = question, article = article)
     response = gemini.message(prompt)
@@ -48,5 +49,14 @@ def question(article: str, question: str, n_retries=2) -> Answer:
     if answer.error:
         answer.error_message = str(error)
     return answer
-    
+
+def get_article_text(article_url: str) -> str:
+    article = Article(article_url)
+    article.download()
+    article.parse()
+    return article.text
+
+def answer_question_from_url(article_url: str, question: str) -> Answer:
+    article_text = get_article_text(article_url)
+    return answer_question(article_text, question)
 

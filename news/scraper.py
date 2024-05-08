@@ -24,6 +24,7 @@ NEWSPAPERS = [
     "https://www.leparisien.fr/",
     "https://www.mediapart.fr/",
     "https://www.latribune.fr/",
+    "https://www.lepoint.fr/",
 ]
 KEYWORDS_AI = [" ia ", "intelligence artificielle", "machine learning", "reseaux de neurones"]
 PARSED_NAME = "parsed.txt"
