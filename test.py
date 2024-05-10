@@ -1,4 +1,4 @@
-from news.question import answer_question, get_article_text, answer_question_from_url
+from news.question import answer_question, get_article_text, answer_question_from_url, get_article_text_ai
 
 ARTICLE = """OpenAI et Meta annoncent le lancement de leurs intelligences artificielles capables de «raisonner»
 Intelligence artificielle : de la fascination à l'inquiétudedossier
@@ -26,6 +26,9 @@ Fin 2023, les membres du conseil d’administration de l’entreprise s’échar
 
 Depuis, OpenAI, Meta, Google et les autres acteurs du milieu se tirent la bourre à coups d’intelligences artificielles personnalisées et autres générateurs de vidéos en direct – à l’instar de Sora, capable de créer des extraits d’une minute après simple saisie de texte décrivant la scène demandée. Autant d’évolutions qui ont un coût : en février, Sam Altman demandait de réunir 7 000 milliards de dollars pour financer de nouvelles usines de semi-conducteurs, des composants essentiels pour faire fonctionner de puissantes IA.
 """
+
+ARTICLE_RAW = "
+"
 
 URL = "https://www.liberation.fr/economie/economie-numerique/openai-et-meta-annoncent-le-lancement-de-leurs-intelligences-artificielles-capables-de-raisonner-20240410_FTBPXGC4NFGG3D5J2L6XX4PNXI/"
 QUESTION = "Does this article mention DeepFakes? Yes or No"
