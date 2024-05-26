@@ -73,7 +73,7 @@ class FileModifiedHandler(FileSystemEventHandler):
                     system_prompt = f.read()
 
             #response = haiku.conversation(messages, model_override=model_name, max_tokens = 4096)
-            response = model.conversation(messages, model_override=model_name, 
+            response = model.messages(messages, model_override=model_name, 
                                           max_tokens=4096, system_prompt=system_prompt)
 
             # We dont want this writing event to trigger another answer
