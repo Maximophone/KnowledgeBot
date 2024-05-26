@@ -9,13 +9,14 @@ from firebase_admin import firestore
 
 import newspaper
 from newspaper import Article, ArticleException
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from dataclasses import asdict
 from urllib.parse import urlparse, urljoin, quote
 
 from lxml import etree
+import requests
 
-from news.news_utils import get_article_text, get_source, NEWS_SOURCES
+from news.news_utils import get_all_urls, get_article_text, get_source, NEWS_SOURCES
 from ai import AI
 
 from news.question import Answer, answer_question, multi_answer_question
@@ -139,6 +140,18 @@ def update_null_fields(field_name: str, in_loop_wait=0.5,
         return inner
     return decorator
 
+async def get_urls_and_titles_from_webpages() -> List[Tuple[str, str]]:
+    articles_urls_titles = []
+    for source in NEWS_SOURCES:
+        for ai_source_page in source.ai_source_pages:
+            #TODO: add some error handling
+            response = requests.get(ai_source_page.url)
+            raw_html = response.text
+            urls_and_titles = get_all_urls(
+                raw_html, ai_source_page.link_xpath)
+            articles_urls_titles.extend(urls_and_titles)
+    return articles_urls_titles
+
 async def get_urls_newspapers() -> List[str]:
     """Sources article links from the newspaper library"""
     articles_urls = []
@@ -176,7 +189,7 @@ def update_documents_with_new_schema():
             document.reference.update(update_data)
             print(f"Updated document {document.id} with new schema fields.")
 
-async def add_article_if_not_exists(url):
+async def add_article_if_not_exists(url, title=""):
     if not uri_validator(url):
         # invalid url
         return
@@ -186,6 +199,7 @@ async def add_article_if_not_exists(url):
         doc_ref.set({
             'url': url,
             'added_on': firestore.SERVER_TIMESTAMP,  # Placeholder data
+            'title': title,
             **{field:"NULL" for field in SCHEMA_FIELDS},
             **{f"{field}_version": version for field, version in SCHEMA_FIELDS.items()}
         })
@@ -335,6 +349,17 @@ async def parse_articles(document):
         })
     return data
 
+async def source_urls_from_webpages():
+    # We automatically add urls from specific sources
+    # Typically pages in newspapers after searching for the terms 
+    # "Artificial Intelligence"
+    while True:
+        print("Looping Source URLs")
+        urls_and_titles = await get_urls_and_titles_from_webpages()
+        for url, title in urls_and_titles:
+            await add_article_if_not_exists(url, title=title)
+        await asyncio.sleep(3600) # This number can be large
+
 async def fetch_and_add_urls():
     while True:
         print("Looping URLS from newspaper3k")
@@ -360,7 +385,8 @@ async def main():
         extract_authors(),
         question("question1", QUESTION_1),
         question("question2", QUESTION_2),
-        filter_url()
+        filter_url(),
+        source_urls_from_webpages()
     )
 
 if __name__ == "__main__":

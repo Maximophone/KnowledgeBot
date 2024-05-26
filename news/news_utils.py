@@ -1,6 +1,7 @@
 from newspaper import Article
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Tuple
+from lxml import etree
 
 SOURCES = {
     "lemonde",
@@ -12,10 +13,16 @@ SOURCES = {
 }
 
 @dataclass
+class AISourcePage:
+    url: str = ""
+    link_xpath: str = ""
+
+@dataclass
 class NewsSource:
     name: str
     url: str
     article_xpath: str = "//article//text()"
+    ai_source_pages: List[AISourcePage] = field(default_factory=list)
 
 @dataclass
 class Author:
@@ -23,12 +30,20 @@ class Author:
     url: str = None
 
 NEWS_SOURCES = [
-    NewsSource("lemonde", "http://www.lemonde.fr", "//section//text()"),
+    NewsSource("lemonde", "http://www.lemonde.fr", "//section//text()",
+               [AISourcePage(
+                   "https://www.lemonde.fr/intelligence-artificielle/",
+                   "//a[@class='teaser__link']",
+               )]),
     NewsSource("liberation", "https://www.liberation.fr/", "//main//text()"),
     NewsSource("lexpress", "https://www.lexpress.fr/", '(//div[contains(@class, "article")])[0]//text()'),
     NewsSource("next.ink", "https://next.ink/", '//div[@id="article-contenu"]//text()'),
     NewsSource("mediapart", "https://www.mediapart.fr/", "//main//text()"),
-    NewsSource("latribune", "https://www.latribune.fr/"),
+    NewsSource("latribune", "https://www.latribune.fr/",
+               [AISourcePage(
+                   "https://www.latribune.fr/media-telecom-entreprise.html",
+                   "//article[contains(@class, 'article-wrapper')]//h2//a",
+               )]),
     NewsSource("lepoint", "https://www.lepoint.fr/"),
     NewsSource("lesechos", "https://www.lesechos.fr/"),
     NewsSource("humanite", "https://www.humanite.fr/"),
@@ -36,6 +51,16 @@ NEWS_SOURCES = [
     NewsSource("ladn", "https://www.ladn.eu/"),
     NewsSource("leparisien", "https://www.leparisien.fr/"),
 ]
+
+def get_all_urls(source_html: str, xpath: str) -> List[Tuple[str, str]]:
+    tree = etree.HTML(source_html)
+    links = tree.xpath(xpath)
+    urls_and_titles = []
+    for link in links:
+        url = link.attrib["href"]
+        title = ''.join(link.itertext()).strip()
+        urls_and_titles.append((url, title))
+    return urls_and_titles
 
 def get_source(url: str) -> NewsSource:
     for source in NEWS_SOURCES:
