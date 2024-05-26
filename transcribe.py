@@ -9,6 +9,9 @@ import asyncio
 from repeater import slow_repeater, start_repeaters
 import traceback
 
+from pyannote.audio import Pipeline
+from pyannote.core import Segment
+
 CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
 
 AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
@@ -21,6 +24,8 @@ BEING_SUMMARISED = set()
 BEING_IMPROVED = set()
 
 gemini = AI("gemini1.5")
+gpt4o = AI("gpt4o")
+ai_model = gpt4o
 
 with open("prompts/summarise_meetings.md", "r") as f:
     SUM_MEETING_PROMPT = f.read()
@@ -31,13 +36,31 @@ def change_file_extension(fname: str, new_extension: str) -> str:
 def transcribe_meeting(audio_folder:str, filename: str):
     return model.transcribe(f"{audio_folder}/{filename}")
 
+def diarize_audio(audio_path: str):
+    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
+    diarization = pipeline(audio_path)
+    return diarization
+
+def format_diarization(diarization) -> str:
+    formatted = ""
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        formatted += f"{speaker}: {turn.start:.1f}s - {turn.end:.1f}s\n"
+    return formatted
+
+def transcribe_and_diarize(audio_folder: str, filename: str):
+    transcription = transcribe_meeting(audio_folder, filename)
+    diarization = diarize_audio(f"{audio_folder}/{filename}")
+    formatted_diarization = format_diarization(diarization)
+    transcription["diarization"] = formatted_diarization
+    return transcription
+
 def summarise_generic(typ: str, transcription: str) -> str:
     with open(f"prompts/summarise_{typ.lower()}.md", "r") as f:
         prompt = f.read()
-    return gemini.message(prompt + transcription)
+    return ai_model.message(prompt + transcription)
 
 def summarise_meeting(meeting_transcription: str) -> str:
-    return gemini.message(SUM_MEETING_PROMPT + meeting_transcription)
+    return ai_model.message(SUM_MEETING_PROMPT + meeting_transcription)
 
 def transcribe_and_save(transcription_input: str, transcription_output: str):
     for fname in os.listdir(transcription_input):
@@ -51,7 +74,7 @@ def transcribe_and_save(transcription_input: str, transcription_output: str):
             continue
         BEING_TRANSCRIBED.add(fname)
         print(f"Transcribing: {fname}", flush=True)
-        result = transcribe_meeting(transcription_input, fname)
+        result = transcribe_and_diarize(transcription_input, fname)
         with open(f"{transcription_output}/{new_fname}", "w") as f:
             json.dump(result, f)
         text = result["text"]
@@ -93,7 +116,7 @@ def improve_transcription(pruned_transcript_json: Dict):
     pruned_transcript_txt = json.dumps(pruned_transcript_json)
     with open(f"prompts/improve_transcription.md", "r") as f:
         prompt = f.read()
-    return gemini.message(prompt + pruned_transcript_txt)
+    return ai_model.message(prompt + pruned_transcript_txt)
 
 def improve_transcription_and_save(input: str, output: str):
     for fname in os.listdir(input):
