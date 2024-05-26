@@ -17,7 +17,8 @@ _MODELS_DICT = {
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
     "gpt3.5": "gpt-3.5-turbo",
-    "gpt4": "gpt-4-turbo-preview"
+    "gpt4": "gpt-4-turbo-preview",
+    "gpt4o": "gpt-4o"
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
@@ -125,20 +126,24 @@ class AI:
         self.model_name = get_model(model_name)
         self.client = get_client(model_name)
         self.system_prompt = system_prompt
+        self._history = []
 
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str=None, max_tokens: int=1000, 
-                temperature: float=0.0) -> str:
+                temperature: float=0.0, xml=False) -> str:
         messages = [{
             "role": "user",
             "content": message
         }]
-        return self.conversation(messages, system_prompt, model_override, 
+        response = self.messages(messages, system_prompt, model_override, 
                                  max_tokens, temperature)
+        if xml:
+            response = f"<response>{response}</response>"
+        return response
         
-    def conversation(self, messages: List[Dict[str, str]], system_prompt: str = None, 
+    def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
                      model_override: str = None, max_tokens: int=1000, 
-                     temperature: float=0.0) -> str:
+                     temperature: float=0.0, xml=False) -> str:
         if model_override:
             model_name = get_model(model_override) or self.model_name
             client = get_client(model_override) or self.client
@@ -149,9 +154,27 @@ class AI:
 
         response = client.messages(model_name, messages, system_prompt, 
                                    max_tokens, temperature)
-
+        if xml:
+            response = f"<response>{response}</response>"
         return response
-
+    
+    def conversation(self, message: str, system_prompt: str = None, 
+                model_override: str=None, max_tokens: int=1000, 
+                temperature: float=0.0, xml=False):
+        messages = self._history + [{
+            "role": "user",
+            "content": message
+        }]
+        response = self.messages(messages, system_prompt, model_override, max_tokens, temperature)
+        self._history = messages + [
+            {
+                "role": "assistant",
+                "content": response
+            }
+        ]
+        if xml:
+            response = f"<response>{response}</response>"
+        return response
 
 class Claude:
     def __init__(self, client, model: str, system_prompt: str = ""):
