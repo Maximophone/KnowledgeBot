@@ -5,7 +5,7 @@ import yaml
 from openai import OpenAI
 from datetime import datetime as dt
 import sys
-
+import PyPDF2
 
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
@@ -14,6 +14,7 @@ _MODELS_DICT = {
     "haiku": "claude-3-haiku-20240307",
     "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
+    "sonnet3.5": "claude-3-5-sonnet-20240620",
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
     "gpt3.5": "gpt-3.5-turbo",
@@ -22,6 +23,14 @@ _MODELS_DICT = {
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
+
+def extract_text_from_pdf(pdf_path):
+    text = ""
+    with open(pdf_path, 'rb') as file:
+        reader = PyPDF2.PdfReader(file)
+        for page in reader.pages:
+            text += page.extract_text()
+    return text
 
 def n_tokens(text: str) -> int:
     return len(text) // 4

@@ -9,6 +9,8 @@ from watchdog.events import FileSystemEventHandler
 import time
 import traceback
 
+DEFAULT_LLM = "sonnet3.5"
+
 beacon_error = """----
 [ERROR]
 ----"""
@@ -33,6 +35,25 @@ def parse_parameters(params_string: str) -> Dict:
         parameters[param_name.strip()] = param_value.strip()
     return parameters
 
+def resolve_reference(reference: str, folder: str) -> List[str]:
+    path = f"G:\\My Drive\\Obsidian\\{folder}"
+    filenames = reference.split("|")
+    contents = []
+    for fname in filenames:
+        fname = fname.strip()
+        if not "." in fname:
+            fname = fname + ".md"
+        if os.path.isfile(f"{path}\\{fname}"):
+            if fname.endswith(".pdf"):
+                contents.append(ai.extract_text_from_pdf(f"{path}\\{fname}"))
+            else:
+                with open(f"{path}\\{fname}", "r", encoding="utf-8") as f:
+                    contents.append(f.read())
+        else:
+            print(f"Error: can't find document {fname}")
+            contents.append(f"Error: can't find document {fname}")
+    return contents
+
 class FileModifiedHandler(FileSystemEventHandler):
     def __init__(self, default_model: str):
         self.default_model = default_model
@@ -40,6 +61,7 @@ class FileModifiedHandler(FileSystemEventHandler):
         super().__init__()
 
     def on_modified(self, event):
+        debug = False
         print(event.src_path, flush=True)
         print(self.dont_trigger, flush=True)
         if event.is_directory:
@@ -53,6 +75,8 @@ class FileModifiedHandler(FileSystemEventHandler):
                 conv_txt = f.read()
             model_name = self.default_model
             system_prompt = None
+            reference = None
+            folder = None
             if conv_txt.startswith("=#["):
                 params_string, conv_txt = conv_txt.split("]",1)
                 parameters = parse_parameters(params_string[3:])
@@ -60,12 +84,51 @@ class FileModifiedHandler(FileSystemEventHandler):
                     model_name = parameters["model"]
                 if "system" in parameters:
                     system_prompt = parameters["system"]
+                if "meeting-ref" in parameters:
+                    reference = parameters["meeting-ref"]
+                    folder = "KnowledgeBot\\Meetings\\Transcriptions"
+                if "idea-ref" in parameters:
+                    reference = parameters["idea-ref"]
+                    folder = "KnowledgeBot\\Ideas\\Transcriptions"
+                if "unsorted-ref" in parameters:
+                    reference = parameters["unsorted-ref"]
+                    folder = "KnowledgeBot\\Unsorted\\Transcriptions"
+                if "daily-ref" in parameters:
+                    reference = parameters["daily-ref"]
+                    folder = "Daily Notes"
+                if "doc-ref" in parameters:
+                    reference = parameters["doc-ref"]
+                    folder = ""
+                if "pdf-ref" in parameters:
+                    reference = parameters["pdf-ref"]
+                    folder = "pdf"
+                if "md-ref" in parameters:
+                    reference = parameters["md-ref"]
+                    folder = "MarkDownload"
+                if "debug" in parameters:
+                    debug = True
             
             if not needs_answer(conv_txt):
                 print("No answer needed", flush=True)
                 return
+            
+            if reference:
+                contents = resolve_reference(reference, folder)
+                for fname, content in zip(reference.split("|"), contents):
+                    conv_txt = f"<document-title>{fname}</document-title>\n<document>{content}</document>\n{conv_txt}"
 
-            print("Answering...", flush=True)
+            if debug:
+                print("----------------------------", flush=True)
+                print("      DEBUG LOG START", flush=True)
+                print("----------------------------", flush=True)
+                print("      LLM TEXT", flush=True)
+                print("----------------------------", flush=True)
+                print(conv_txt.encode('ascii', errors='replace').decode('ascii'))
+                print("----------------------------", flush=True)
+                print("      DEBUG LOG END", flush=True)
+                print("----------------------------", flush=True)
+
+            print(f"Answering with {model_name}...", flush=True)
             messages = process_conversation(conv_txt)
 
             if system_prompt is not None:
@@ -127,7 +190,7 @@ if __name__ == "__main__":
     if args.model:
         model_name = args.model
     else:
-        model_name = "opus"
+        model_name = DEFAULT_LLM
 
     path = "conversation"
     event_handler = FileModifiedHandler(model_name)
