@@ -8,6 +8,8 @@ from ai import AI
 import asyncio
 from repeater import slow_repeater, start_repeaters
 import traceback
+import subprocess
+import assemblyai
 
 from pyannote.audio import Pipeline
 from pyannote.core import Segment
@@ -23,12 +25,28 @@ BEING_TRANSCRIBED = set()
 BEING_SUMMARISED = set()
 BEING_IMPROVED = set()
 
+with open("secrets.yml", "r") as f:
+    secrets = yaml.safe_load(f)
+
+
 gemini = AI("gemini1.5")
 gpt4o = AI("gpt4o")
-ai_model = gpt4o
+sonnet35 = AI("sonnet3.5")
+ai_model = sonnet35
+
+assemblyai.settings.api_key = secrets["assembly_ai"]
+transcriber = assemblyai.Transcriber()
+config = assemblyai.TranscriptionConfig(
+  speaker_labels=True,
+  language_detection=True
+)
 
 with open("prompts/summarise_meetings.md", "r") as f:
     SUM_MEETING_PROMPT = f.read()
+
+def convert_to_wav(input_file, output_file):
+    command = f'ffmpeg -i "{input_file}" "{output_file}"'
+    subprocess.call(command, shell=True)
 
 def change_file_extension(fname: str, new_extension: str) -> str:
     return fname.split(".")[0] + "." + new_extension
@@ -37,7 +55,10 @@ def transcribe_meeting(audio_folder:str, filename: str):
     return model.transcribe(f"{audio_folder}/{filename}")
 
 def diarize_audio(audio_path: str):
-    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        use_auth_token=secrets["hugging_face"]
+        )
     diarization = pipeline(audio_path)
     return diarization
 
@@ -47,11 +68,23 @@ def format_diarization(diarization) -> str:
         formatted += f"{speaker}: {turn.start:.1f}s - {turn.end:.1f}s\n"
     return formatted
 
+def annotation_to_dict(annotation):
+    segments = []
+    for segment, _, label in annotation.itertracks(yield_label=True):
+        segments.append({
+            "start": segment.start,
+            "end": segment.end,
+            "label": label
+        })
+    return segments
+
 def transcribe_and_diarize(audio_folder: str, filename: str):
     transcription = transcribe_meeting(audio_folder, filename)
     diarization = diarize_audio(f"{audio_folder}/{filename}")
+    print(diarization)
     formatted_diarization = format_diarization(diarization)
     transcription["diarization"] = formatted_diarization
+    transcription["diarization_segments"] = annotation_to_dict(diarization)
     return transcription
 
 def summarise_generic(typ: str, transcription: str) -> str:
@@ -62,8 +95,54 @@ def summarise_generic(typ: str, transcription: str) -> str:
 def summarise_meeting(meeting_transcription: str) -> str:
     return ai_model.message(SUM_MEETING_PROMPT + meeting_transcription)
 
+def integrate_speakers(transcription_result: Dict) -> str:
+    text = transcription_result["text"]
+    diarization_segments = transcription_result["diarization_segments"]
+    segments = transcription_result["segments"]
+
+    #speaker_annotations = diarization_segments
+    # for turn, _, speaker in diarization_segments.itertracks(yield_label=True):
+    #     speaker_annotations.append((turn.start, turn.end, speaker))
+
+    #for turn in diarization_segments:
+
+
+    annotated_text = ""
+    for segment in segments:
+        segment_start = segment["start"]
+        segment_end = segment["end"]
+        segment_text = segment["text"]
+
+        speaker = "Unknown"
+        for annotation in diarization_segments:
+            start = annotation["start"]
+            end = annotation["end"]
+            spk = annotation["label"]
+            if start <= segment_start <= end:
+                speaker = spk
+                break
+
+        annotated_text += f"{speaker}: {segment_text}\n"
+
+    return annotated_text
+
+def convert_to_wav_and_save(audio_dir: str):
+    for fname in os.listdir(audio_dir):
+        if fname.endswith(".wav"):
+            continue
+        wav_fname = change_file_extension(fname, "wav")
+        if os.path.isfile(f"{audio_dir}/{wav_fname}"):
+            continue
+        convert_to_wav(
+            f"{audio_dir}/{fname}",
+            f"{audio_dir}/{wav_fname}"
+        )
+
 def transcribe_and_save(transcription_input: str, transcription_output: str):
     for fname in os.listdir(transcription_input):
+        #if not fname.endswith(".wav"):
+            # we only process wav files
+        #    continue
         new_fname = change_file_extension(fname, "json")
         md_fname = change_file_extension(fname, "md")
         if new_fname in os.listdir(transcription_output):
@@ -74,13 +153,17 @@ def transcribe_and_save(transcription_input: str, transcription_output: str):
             continue
         BEING_TRANSCRIBED.add(fname)
         print(f"Transcribing: {fname}", flush=True)
-        result = transcribe_and_diarize(transcription_input, fname)
+        transcript = transcriber.transcribe(f"{transcription_input}/{fname}", config)
+        #result = transcribe_and_diarize(transcription_input, fname)
         with open(f"{transcription_output}/{new_fname}", "w") as f:
-            json.dump(result, f)
-        text = result["text"]
-        decoded_text = json.loads(f'"{text}"')
+            json.dump(transcript.json_response, f)
+        text_with_speakers = ""
+        for utterance in transcript.utterances:
+            text_with_speakers += f"Speaker {utterance.speaker} : {utterance.text}\n"
+        #text_with_speakers = integrate_speakers(result)
+        print(text_with_speakers)
         with open(f"{transcription_output}/{md_fname}", "w", encoding='utf-8') as f:
-            f.write(decoded_text)
+            f.write(text_with_speakers)
         BEING_TRANSCRIBED.remove(fname)
 
 def extract_temp(input: str, output: str):
@@ -157,6 +240,14 @@ def summarise_and_save(typ: str, summary_input: str, summary_output: str):
             f.write(summary)
         BEING_SUMMARISED.remove(fname)
 
+#@slow_repeater.register
+async def convert_to_wav_all():
+    for name in CATEGORIES:
+        try:
+            convert_to_wav_and_save(AUDIO_PATH.format(name=name), TRANSCRIPTIONS_PATH.format(name=name))
+        except Exception:
+            print(traceback.format_exc())
+
 @slow_repeater.register
 async def transcribe_all():
     for name in CATEGORIES:
@@ -192,13 +283,12 @@ async def summarise_all():
 async def main():
     await start_repeaters()
 
-with open("secrets.yml", "r") as f:
-    secrets = yaml.safe_load(f)
-
 if torch.cuda.is_available():
     print("Computing on GPU")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = whisper.load_model("small", device=device)
 
 if __name__ == "__main__":
+    #convert_to_wav_and_save("tests/data/transcription_in")
+    #transcribe_and_save("tests/data/transcription_in", "tests/data/transcription_out")
     asyncio.run(main())
