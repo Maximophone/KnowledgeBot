@@ -275,6 +275,9 @@ async def improve_all():
 @slow_repeater.register
 async def summarise_all():
     for name in CATEGORIES:
+        if name == "Meetings":
+            # we don't summarise meetings anymore
+            continue
         try:
             summarise_and_save(name, TRANSCRIPTIONS_PATH.format(name=name), SUMMARIES_PATH.format(name=name))
         except Exception:
