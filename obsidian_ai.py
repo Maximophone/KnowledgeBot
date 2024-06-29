@@ -68,6 +68,16 @@ def insert_file_ref(fname: str = "", folder: str = "", root: str = VAULT_PATH,
     else:
         fpath = fpath or f"{root}\\{folder}\\{fname.strip()}"
     fname = fname or fpath.rsplit("\\")[-1]
+    # At this point the fpath could still be a relative path
+    # In which case we should try to resolve it against a few stored
+    # paths
+    STORED_PATHS = [
+        "C:\\Users\\fourn\\code",
+    ]
+    for path in STORED_PATHS:
+        if os.path.isfile(path+"\\"+fpath):
+            fpath = path+"\\"+fpath
+            break
     contents = get_file(fpath)
     return f"<{typ}><filename>{fname}</filename>\n<contents>{contents}</contents></{typ}>"
 
@@ -79,6 +89,7 @@ REPLACEMENTS_OUTSIDE = {
 
 REPLACEMENTS_INSIDE = {
     "reply": remove,
+    "back": remove,
     "model": remove,
     "system": remove,
     "debug": remove,
