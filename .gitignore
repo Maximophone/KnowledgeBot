@@ -5,4 +5,5 @@ summary.json
 output/*.json
 conversation
 data
+token_count.csv
 __pycache__
