@@ -11,6 +11,7 @@ with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
 
 _MODELS_DICT = {
+    "mock": "mock-",
     "haiku": "claude-3-haiku-20240307",
     "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
@@ -23,6 +24,8 @@ _MODELS_DICT = {
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
+DEFAULT_MAX_TOKENS = 4096
+DEFAULT_TEMPERATURE = 0.0
 
 def extract_text_from_pdf(pdf_path):
     text = ""
@@ -116,6 +119,30 @@ class GPTWrapper(AIWrapper):
         )
         return response.choices[0].message.content
 
+class MockWrapper(AIWrapper):
+    def __init__(self):
+        pass
+
+    def _messages(self, model_name: str, messages: List[Dict[str, str]],
+        system_prompt: str, max_tokens: int, temperature:float) -> str:
+        response = "---PARAMETERS START---\n"
+        response += f"max_tokens: {max_tokens}\n"
+        response += f"temperature: {temperature}\n"
+        response += "---PARAMETERS END---\n"
+
+        response += "---SYSTEM PROMPT START---\n"
+        response += system_prompt + "\n"
+        response += "---SYSTEM PROMPT END---\n"
+
+        response += "---MESSAGES START---\n"
+        for message in messages:
+            response += f"role: {message['role']}\n"
+            response += "content: \n"
+            response += message["content"] + "\n"
+        response += "---MESSAGES END---\n"
+
+        return response
+
 def get_client(model_name: str) -> AIWrapper:
     model_name = get_model(model_name)
     client_name, _ = model_name.split("-", 1)
@@ -125,34 +152,38 @@ def get_client(model_name: str) -> AIWrapper:
         return GeminiWrapper(secrets["gemini_api_key"], get_model(model_name))
     elif client_name == "gpt":
         return GPTWrapper(secrets["openai_api_key"], secrets["openai_org"])
+    elif client_name == "mock":
+        return MockWrapper()
     return None
     
 def get_model(model_name: str) -> str:
     return _MODELS_DICT.get(model_name, model_name)
 
 class AI:
-    def __init__(self, model_name: str, system_prompt: str = ""):
+    def __init__(self, model_name: str, system_prompt: str = "", debug=False):
         self.model_name = get_model(model_name)
         self.client = get_client(model_name)
         self.system_prompt = system_prompt
         self._history = []
+        self.debug=debug
 
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str=None, max_tokens: int=1000, 
-                temperature: float=0.0, xml=False) -> str:
+                temperature: float=0.0, xml=False, debug=False) -> str:
         messages = [{
             "role": "user",
             "content": message
         }]
         response = self.messages(messages, system_prompt, model_override, 
-                                 max_tokens, temperature)
+                                 max_tokens, temperature, debug=debug)
         if xml:
             response = f"<response>{response}</response>"
         return response
         
     def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
                      model_override: str = None, max_tokens: int=1000, 
-                     temperature: float=0.0, xml=False) -> str:
+                     temperature: float=0.0, xml=False, debug=False) -> str:
+        debug = debug | self.debug
         if model_override:
             model_name = get_model(model_override) or self.model_name
             client = get_client(model_override) or self.client
@@ -161,20 +192,34 @@ class AI:
             client = self.client
         system_prompt = system_prompt or self.system_prompt
 
+        if debug:
+            print(f"--MODEL: {model_name}--", flush=True)
+            print("--SYSTEM PROMPT START--", flush=True)
+            print(system_prompt.encode("utf-8"), flush=True)
+            print("--SYSTEM PROMPT END--", flush=True)
+            print("--MESSAGES RECEIVED START--", flush=True)
+            for message in messages:
+                print("role: ", message["role"], flush=True)
+                print("content: ", message["content"].encode("utf-8"), flush=True)
+            print("--MESSAGES RECEIVED END--", flush=True)
         response = client.messages(model_name, messages, system_prompt, 
                                    max_tokens, temperature)
         if xml:
             response = f"<response>{response}</response>"
+        if debug:
+            print("--RESPONSE START--", flush=True)
+            print(response.encode("utf-8"), flush=True)
+            print("--RESPONSE END--", flush=True)
         return response
     
     def conversation(self, message: str, system_prompt: str = None, 
                 model_override: str=None, max_tokens: int=1000, 
-                temperature: float=0.0, xml=False):
+                temperature: float=0.0, xml=False, debug=False):
         messages = self._history + [{
             "role": "user",
             "content": message
         }]
-        response = self.messages(messages, system_prompt, model_override, max_tokens, temperature)
+        response = self.messages(messages, system_prompt, model_override, max_tokens, temperature, debug=debug)
         self._history = messages + [
             {
                 "role": "assistant",
