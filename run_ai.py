@@ -8,20 +8,21 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
 import traceback
+from beacons import *
 
 DEFAULT_LLM = "sonnet3.5"
 
-beacon_error = """----
-[ERROR]
-----"""
+# beacon_error = """----
+# [ERROR]
+# ----"""
 
-beacon_me = """----
-[ME]
-----"""
+# beacon_me = """----
+# [ME]
+# ----"""
 
-beacon_claude = """----
-[AI]
-----"""
+# beacon_claude = """----
+# [AI]
+# ----"""
 
 def parse_parameters(params_string: str) -> Dict:
     print(params_string)
@@ -35,8 +36,9 @@ def parse_parameters(params_string: str) -> Dict:
         parameters[param_name.strip()] = param_value.strip()
     return parameters
 
-def resolve_reference(reference: str, folder: str) -> List[str]:
-    path = f"G:\\My Drive\\Obsidian\\{folder}"
+def resolve_reference(reference: str, folder: str, 
+    root: str = "G:\\My Drive\\Obsidian") -> List[str]:
+    path = f"{root}\\{folder}"
     filenames = reference.split("|")
     contents = []
     for fname in filenames:
@@ -142,7 +144,7 @@ class FileModifiedHandler(FileSystemEventHandler):
             # We dont want this writing event to trigger another answer
             self.dont_trigger.add(event.src_path)
             with open(event.src_path, "a+", encoding="utf-8") as f:
-                f.write("\n" + beacon_claude + "\n" + response + "\n" + beacon_me + "\n")
+                f.write("\n" + beacon_ai + "\n" + response + "\n" + beacon_me + "\n")
         except Exception:
             self.dont_trigger.add(event.src_path)
             with open(event.src_path, "a+", encoding="utf-8") as f:
@@ -166,7 +168,7 @@ def needs_answer(txt):
     return not txt.strip().endswith(beacon_me) and txt
 
 def process_conversation(txt: str) -> List[Dict[str, str]]:
-    cut = [t.split(beacon_me) for t in txt.split(beacon_claude)]
+    cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
     # [[<claude>, <me>], [<claude>, <me>], ... ]
     assert len(cut[0]) == 1 or len(cut[0]) == 2
     assert all(len(x)==2 for x in cut[1:])
