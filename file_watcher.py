@@ -34,6 +34,7 @@ def poll_for_changes(path, callback, condition_check):
             file_path = os.path.join(root, file)
             last_modified_times[file_path] = os.path.getmtime(file_path)
 
+    print("Built index of modified times")
     while True:
         try:
             time.sleep(0.1)  # Check every 0.1 seconds
