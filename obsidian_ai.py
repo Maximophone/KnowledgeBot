@@ -11,7 +11,7 @@ import re
 from run_ai import process_conversation
 from file_packager import get_committed_files, format_for_llm, get_markdown_files
 from beacons import *
-from parser.tag_parser import parse_tags, process_tags
+from parser.tag_parser import process_tags
 
 DEFAULT_LLM = "sonnet3.5"
 VAULT_PATH = "G:\\My Drive\\Obsidian"

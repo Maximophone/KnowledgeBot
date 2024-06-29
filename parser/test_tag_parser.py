@@ -1,5 +1,5 @@
 import unittest
-from tag_parser import parse_tags, process_tags
+from tag_parser import process_tags
 
 class TestParseTags(unittest.TestCase):
 
@@ -25,20 +25,20 @@ lines</tag4!>
             ('tag3', '123', None),
             ('tag4', 'multi\nline\nvalue', 'Multiline content\nspanning multiple\nlines'),
             ('tag5', 'empty_value', None),
-            ('tag6', 'value with "escaped" quotes', None)
+            ('tag6', 'value with \\"escaped\\" quotes', None)
         ]
 
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_empty_content(self):
         content = ""
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, [])
 
     def test_no_tags(self):
         content = "This is some content without any tags."
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, [])
 
     def test_nested_tags(self):
@@ -46,7 +46,7 @@ lines</tag4!>
         expected = [
             ('outer', 'value', 'test <inner!"nested value">Inner content</inner!> more text'),
         ]
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_malformed_tags(self):
@@ -59,7 +59,7 @@ lines</tag4!>
             ('mismatched', 'value with spaces', None),
             ('correct', 'value', 'This is correct')
         ]
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_only_outermost(self):
@@ -67,7 +67,7 @@ lines</tag4!>
         expected = [
             ('name', 'value', ' test <another!>blah</another!> ')
         ]
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_no_value_tag(self):
@@ -75,7 +75,7 @@ lines</tag4!>
         expected = [
             ('name', None, 'This is a tag with no value')
         ]
-        result = parse_tags(content)
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_empty_tag(self):
@@ -83,7 +83,25 @@ lines</tag4!>
         expected = [
             ('name', None, None)
         ]
-        result = parse_tags(content)
+        _, result = process_tags(content)
+        self.assertEqual(result, expected)
+    
+    def test_obs_format(self):
+        content = """
+        <name![[value]]>
+        <name2![[value]]>text</name2!>
+        <name!"[[value]]">
+        <name2![value]>text</name2!>
+        <name![[value value]]>
+        """
+        expected = [
+            ("name", "[[value]]", None),
+            ("name2", "[[value]]", "text"),
+            ("name", "[[value]]", None),
+            ("name2", "[value]", "text"),
+            ("name", "[[value value]]", None)
+            ]
+        _, result = process_tags(content)
         self.assertEqual(result, expected)
 
     def test_no_replace(self):
