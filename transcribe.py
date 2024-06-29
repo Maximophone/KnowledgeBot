@@ -1,3 +1,15 @@
+"""
+Audio Transcription and Summarization Module
+
+This module processes audio recordings by transcribing them, extracting text,
+and generating summaries. It organizes the results into predefined categories.
+
+Key components:
+- Transcription: Using AssemblyAI API
+- Summarization: Using custom AI models (likely GPT-based)
+- Asynchronous processing: Using asyncio and custom repeaters
+"""
+
 from typing import Dict
 import yaml
 import os
@@ -8,290 +20,178 @@ from ai import AI
 import asyncio
 from repeater import slow_repeater, start_repeaters
 import traceback
-import subprocess
 import assemblyai
+from mutagen import File
+from datetime import datetime
 
-from pyannote.audio import Pipeline
-from pyannote.core import Segment
 
+# Define categories for organizing recordings
 CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
 
+# File paths for different stages of processing
 AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
 SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
 TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
 IMPROVED_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Improved"
 
-BEING_TRANSCRIBED = set()
-BEING_SUMMARISED = set()
-BEING_IMPROVED = set()
+# Sets to track files currently being processed
+FILES_IN_TRANSCRIPTION = set()
+FILES_IN_SUMMARIZATION = set()
+FILES_IN_IMPROVEMENT = set()
 
+# Load API keys and secrets
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
 
-
+# Initialize AI models
 gemini = AI("gemini1.5")
 gpt4o = AI("gpt4o")
 sonnet35 = AI("sonnet3.5")
 ai_model = sonnet35
 
+# Set up AssemblyAI transcriber
 assemblyai.settings.api_key = secrets["assembly_ai"]
 transcriber = assemblyai.Transcriber()
 config = assemblyai.TranscriptionConfig(
-  speaker_labels=True,
-  language_detection=True
+    speaker_labels=True,
+    language_detection=True
 )
 
-with open("prompts/summarise_meetings.md", "r") as f:
-    SUM_MEETING_PROMPT = f.read()
+def change_file_extension(filename: str, new_extension: str) -> str:
+    """Change the extension of a filename."""
+    return f"{os.path.splitext(filename)[0]}.{new_extension}"
 
-def convert_to_wav(input_file, output_file):
-    command = f'ffmpeg -i "{input_file}" "{output_file}"'
-    subprocess.call(command, shell=True)
-
-def change_file_extension(fname: str, new_extension: str) -> str:
-    return fname.split(".")[0] + "." + new_extension
-
-def transcribe_meeting(audio_folder:str, filename: str):
-    return model.transcribe(f"{audio_folder}/{filename}")
-
-def diarize_audio(audio_path: str):
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
-        use_auth_token=secrets["hugging_face"]
-        )
-    diarization = pipeline(audio_path)
-    return diarization
-
-def format_diarization(diarization) -> str:
-    formatted = ""
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        formatted += f"{speaker}: {turn.start:.1f}s - {turn.end:.1f}s\n"
-    return formatted
-
-def annotation_to_dict(annotation):
-    segments = []
-    for segment, _, label in annotation.itertracks(yield_label=True):
-        segments.append({
-            "start": segment.start,
-            "end": segment.end,
-            "label": label
-        })
-    return segments
-
-def transcribe_and_diarize(audio_folder: str, filename: str):
-    transcription = transcribe_meeting(audio_folder, filename)
-    diarization = diarize_audio(f"{audio_folder}/{filename}")
-    print(diarization)
-    formatted_diarization = format_diarization(diarization)
-    transcription["diarization"] = formatted_diarization
-    transcription["diarization_segments"] = annotation_to_dict(diarization)
-    return transcription
-
-def summarise_generic(typ: str, transcription: str) -> str:
-    with open(f"prompts/summarise_{typ.lower()}.md", "r") as f:
+def generate_summary(category: str, transcription: str) -> str:
+    """Generate a summary for a given transcription based on its category."""
+    with open(f"prompts/summarise_{category.lower()}.md", "r") as f:
         prompt = f.read()
     return ai_model.message(prompt + transcription)
 
-def summarise_meeting(meeting_transcription: str) -> str:
-    return ai_model.message(SUM_MEETING_PROMPT + meeting_transcription)
-
-def integrate_speakers(transcription_result: Dict) -> str:
-    text = transcription_result["text"]
-    diarization_segments = transcription_result["diarization_segments"]
-    segments = transcription_result["segments"]
-
-    #speaker_annotations = diarization_segments
-    # for turn, _, speaker in diarization_segments.itertracks(yield_label=True):
-    #     speaker_annotations.append((turn.start, turn.end, speaker))
-
-    #for turn in diarization_segments:
-
-
-    annotated_text = ""
-    for segment in segments:
-        segment_start = segment["start"]
-        segment_end = segment["end"]
-        segment_text = segment["text"]
-
-        speaker = "Unknown"
-        for annotation in diarization_segments:
-            start = annotation["start"]
-            end = annotation["end"]
-            spk = annotation["label"]
-            if start <= segment_start <= end:
-                speaker = spk
-                break
-
-        annotated_text += f"{speaker}: {segment_text}\n"
-
-    return annotated_text
-
-def convert_to_wav_and_save(audio_dir: str):
-    for fname in os.listdir(audio_dir):
-        if fname.endswith(".wav"):
+def transcribe_audio_files(input_dir: str, output_dir: str):
+    """
+    Transcribe audio files from input directory and save results in output directory.
+    
+    This function processes each audio file, generates a transcription using AssemblyAI,
+    and saves the result as both JSON and markdown files.
+    """
+    for filename in os.listdir(input_dir):
+        json_filename = change_file_extension(filename, "json")
+        md_filename = change_file_extension(filename, "md")
+        
+        if json_filename in os.listdir(output_dir) or filename in FILES_IN_TRANSCRIPTION:
             continue
-        wav_fname = change_file_extension(fname, "wav")
-        if os.path.isfile(f"{audio_dir}/{wav_fname}"):
-            continue
-        convert_to_wav(
-            f"{audio_dir}/{fname}",
-            f"{audio_dir}/{wav_fname}"
-        )
-
-def transcribe_and_save(transcription_input: str, transcription_output: str):
-    for fname in os.listdir(transcription_input):
-        #if not fname.endswith(".wav"):
-            # we only process wav files
-        #    continue
-        new_fname = change_file_extension(fname, "json")
-        md_fname = change_file_extension(fname, "md")
-        if new_fname in os.listdir(transcription_output):
-            # already transcribed, we skip it
-            continue
-        if fname in BEING_TRANSCRIBED:
-            # currently being processed, we skip it
-            continue
-        BEING_TRANSCRIBED.add(fname)
-        print(f"Transcribing: {fname}", flush=True)
-        transcript = transcriber.transcribe(f"{transcription_input}/{fname}", config)
-        #result = transcribe_and_diarize(transcription_input, fname)
-        with open(f"{transcription_output}/{new_fname}", "w") as f:
+        
+        FILES_IN_TRANSCRIPTION.add(filename)
+        print(f"Transcribing: {filename}", flush=True)
+        
+        transcript = transcriber.transcribe(f"{input_dir}/{filename}", config)
+        
+        # Save JSON response
+        with open(f"{output_dir}/{json_filename}", "w") as f:
             json.dump(transcript.json_response, f)
-        text_with_speakers = ""
-        for utterance in transcript.utterances:
-            text_with_speakers += f"Speaker {utterance.speaker} : {utterance.text}\n"
-        #text_with_speakers = integrate_speakers(result)
-        print(text_with_speakers)
-        with open(f"{transcription_output}/{md_fname}", "w", encoding='utf-8') as f:
+        
+        # Save markdown with speaker labels
+        text_with_speakers = "\n".join(f"Speaker {u.speaker} : {u.text}" for u in transcript.utterances)
+        with open(f"{output_dir}/{md_filename}", "w", encoding='utf-8') as f:
             f.write(text_with_speakers)
-        BEING_TRANSCRIBED.remove(fname)
+        
+        print(text_with_speakers)
+        FILES_IN_TRANSCRIPTION.remove(filename)
 
-def extract_temp(input: str, output: str):
-    for fname in os.listdir(input):
-        if fname.endswith("md"):
+def extract_text_from_json(input_dir: str, output_dir: str):
+    """
+    Extract plain text from JSON transcriptions and save as markdown files.
+    
+    This function processes JSON files in the input directory, extracts the 'text' field,
+    decodes any Unicode escape sequences, and saves the result as a markdown file.
+    """
+    for filename in os.listdir(input_dir):
+        if filename.endswith(".md"):
             continue
-        new_fname = change_file_extension(fname, "md")
-        if new_fname in os.listdir(output):
-            # already transcribed, we skip it
+        
+        md_filename = change_file_extension(filename, "md")
+        if md_filename in os.listdir(output_dir):
             continue
-        print(f"Temp extraction: {fname}", flush=True)
-        with open(f"{input}/{fname}", "r", encoding='utf-8') as f:
+        
+        print(f"Extracting text from: {filename}", flush=True)
+        
+        with open(f"{input_dir}/{filename}", "r", encoding='utf-8') as f:
             result = json.load(f)
-        # Decode the Unicode escape sequences
+        
         text = result["text"]
         decoded_text = json.loads(f'"{text}"')
-        with open(f"{output}/{new_fname}", "w", encoding='utf-8') as f:
+        
+        with open(f"{output_dir}/{md_filename}", "w", encoding='utf-8') as f:
             f.write(decoded_text)
 
-def prune_transcript(transcript: Dict) -> Dict:
-    """We keep only the segments and language section, and we modify the segments"""
-    new_transcript = {
-        "language": transcript["language"],
-        "segments": []
-    }
-    for segment in transcript["segments"]:
-        for key in ["id", "tokens"]:
-            segment.pop(key, None)
-        new_transcript["segments"].append(segment)
-    return new_transcript
-
-def improve_transcription(pruned_transcript_json: Dict):
-    pruned_transcript_txt = json.dumps(pruned_transcript_json)
-    with open(f"prompts/improve_transcription.md", "r") as f:
-        prompt = f.read()
-    return ai_model.message(prompt + pruned_transcript_txt)
-
-def improve_transcription_and_save(input: str, output: str):
-    for fname in os.listdir(input):
-        new_fname = change_file_extension(fname, "md")
-        if new_fname in os.listdir(output):
-            # already transcribed, we skip it
+def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
+    """
+    Generate summaries for transcriptions in a given category.
+    
+    This function processes JSON transcription files, generates summaries using AI models,
+    and saves the summaries as markdown files.
+    """
+    for filename in os.listdir(input_dir):
+        if not filename.endswith(".json"):
             continue
-        if fname in BEING_IMPROVED:
-            # currently being processed, we skip it
+        
+        md_filename = change_file_extension(filename, "md")
+        if md_filename in os.listdir(output_dir) or filename in FILES_IN_SUMMARIZATION:
             continue
-        BEING_IMPROVED.add(fname)
-        with open(f"{input}/{fname}", "r") as f:
+        
+        FILES_IN_SUMMARIZATION.add(filename)
+        print(f"Summarizing: {filename}", flush=True)
+        
+        with open(f"{input_dir}/{filename}", "r") as f:
             result = json.load(f)
-        pruned = prune_transcript(result)
-        print(f"Improving Transcription: {fname}", flush=True)
-        result = improve_transcription(pruned)
-        with open(f"{output}/{new_fname}", "w") as f:
-            f.write(result)
-        BEING_IMPROVED.remove(fname)
-
-def summarise_and_save(typ: str, summary_input: str, summary_output: str):
-    for fname in os.listdir(summary_input):
-        if not fname.endswith("json"):
-            continue
-        new_fname = change_file_extension(fname, "md")
-        if new_fname in os.listdir(summary_output):
-            # already summarised, we skip it
-            continue
-        if fname in BEING_SUMMARISED:
-            # currently being processed, we skip it
-            continue
-        BEING_SUMMARISED.add(fname)
-        with open(f"{summary_input}/{fname}", "r") as f:
-            result = json.load(f)
-        print(f"Summarising: {fname}", flush=True)
-        summary = summarise_generic(typ, result["text"])
-        with open(f"{summary_output}/{new_fname}", "w") as f:
+        
+        summary = generate_summary(category, result["text"])
+        
+        with open(f"{output_dir}/{md_filename}", "w") as f:
             f.write(summary)
-        BEING_SUMMARISED.remove(fname)
+        
+        FILES_IN_SUMMARIZATION.remove(filename)
 
-#@slow_repeater.register
-async def convert_to_wav_all():
-    for name in CATEGORIES:
+@slow_repeater.register
+async def process_all_transcriptions():
+    """Transcribe all audio files across all categories."""
+    for category in CATEGORIES:
         try:
-            convert_to_wav_and_save(AUDIO_PATH.format(name=name), TRANSCRIPTIONS_PATH.format(name=name))
+            transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category))
         except Exception:
             print(traceback.format_exc())
 
 @slow_repeater.register
-async def transcribe_all():
-    for name in CATEGORIES:
+async def extract_all_transcription_text():
+    """Extract text from all JSON transcriptions across all categories."""
+    for category in CATEGORIES:
         try:
-            transcribe_and_save(AUDIO_PATH.format(name=name), TRANSCRIPTIONS_PATH.format(name=name))
+            extract_text_from_json(TRANSCRIPTIONS_PATH.format(name=category), 
+                                   TRANSCRIPTIONS_PATH.format(name=category))
         except Exception:
             print(traceback.format_exc())
 
 @slow_repeater.register
-async def temp():
-    for name in CATEGORIES:
-        try:
-            extract_temp(TRANSCRIPTIONS_PATH.format(name=name), TRANSCRIPTIONS_PATH.format(name=name))
-        except Exception:
-            print(traceback.format_exc())
-
-#@slow_repeater.register
-async def improve_all():
-    for name in CATEGORIES:
-        try:
-            improve_transcription_and_save(TRANSCRIPTIONS_PATH.format(name=name), IMPROVED_PATH.format(name=name))
-        except Exception:
-            print(traceback.format_exc())
-
-@slow_repeater.register
-async def summarise_all():
-    for name in CATEGORIES:
-        if name == "Meetings":
-            # we don't summarise meetings anymore
+async def summarize_all_transcriptions():
+    """Generate summaries for all transcriptions across relevant categories."""
+    for category in CATEGORIES:
+        if category == "Meetings":
+            # Meetings are not summarized
             continue
         try:
-            summarise_and_save(name, TRANSCRIPTIONS_PATH.format(name=name), SUMMARIES_PATH.format(name=name))
+            summarize_transcriptions(category, TRANSCRIPTIONS_PATH.format(name=category), SUMMARIES_PATH.format(name=category))
         except Exception:
             print(traceback.format_exc())
 
 async def main():
+    """Main function to start all repeaters."""
     await start_repeaters()
 
-if torch.cuda.is_available():
-    print("Computing on GPU")
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = whisper.load_model("small", device=device)
+# Initialize Whisper model for potential use
+#if torch.cuda.is_available():
+#    print("Computing on GPU")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# model = whisper.load_model("small", device=device)
 
 if __name__ == "__main__":
-    #convert_to_wav_and_save("tests/data/transcription_in")
-    #transcribe_and_save("tests/data/transcription_in", "tests/data/transcription_out")
     asyncio.run(main())
