@@ -276,7 +276,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Obsidian AI Assistant')
     args = parser.parse_args()
 
-    def file_callback(file_path):
-        process_file(file_path)
-
-    start_file_watcher(VAULT_PATH, file_callback, needs_answer, use_polling=True)
+    start_file_watcher(VAULT_PATH, process_file, needs_answer, use_polling=True)
