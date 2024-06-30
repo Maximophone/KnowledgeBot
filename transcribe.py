@@ -34,6 +34,7 @@ SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
 TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
 IMPROVED_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Improved"
 
+TRANSCR_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
 # Sets to track files currently being processed
 FILES_IN_TRANSCRIPTION = set()
 FILES_IN_SUMMARIZATION = set()
@@ -102,7 +103,7 @@ def generate_summary(category: str, transcription: str) -> str:
         prompt = f.read()
     return ai_model.message(prompt + transcription)
 
-def transcribe_audio_files(input_dir: str, output_dir: str):
+def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
     """
     Transcribe audio files from input directory and save results in output directory.
     
@@ -112,6 +113,7 @@ def transcribe_audio_files(input_dir: str, output_dir: str):
     for filename in os.listdir(input_dir):
         file_path = os.path.join(input_dir, filename)
         recording_date = get_recording_date(file_path)
+        date_str = recording_date.strftime("%Y-%m-%d")
         
         json_filename = change_file_extension(filename, "json")
         md_filename = change_file_extension(filename, "md")
@@ -129,9 +131,18 @@ def transcribe_audio_files(input_dir: str, output_dir: str):
             json.dump(transcript.json_response, f)
         
         # Save markdown with speaker labels
+        frontmatter = """---
+tags:
+  - transcription
+""" 
+        if category != "Unsorted":
+            frontmatter += "  - " + {"Meetings": "meeting", "Ideas": "idea"}[category] + "\n"
+        frontmatter += f"""date: {date_str}
+---
+"""
         text_with_speakers = "\n".join(f"Speaker {u.speaker} : {u.text}" for u in transcript.utterances)
         with open(os.path.join(output_dir, md_filename), "w", encoding='utf-8') as f:
-            f.write(text_with_speakers)
+            f.write(frontmatter+text_with_speakers)
         
         print(text_with_speakers)
         FILES_IN_TRANSCRIPTION.remove(filename)
@@ -169,7 +180,7 @@ async def process_all_transcriptions():
     """Transcribe all audio files across all categories."""
     for category in CATEGORIES:
         try:
-            transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category))
+            transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category), category)
         except Exception:
             print(traceback.format_exc())
 
