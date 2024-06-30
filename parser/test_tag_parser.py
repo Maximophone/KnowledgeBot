@@ -143,5 +143,17 @@ lines</tag4!>
         self.assertEqual(result_txt, expected_txt)
         self.assertEqual(params, expected_params)
 
+    def test_same_names(self):
+        content = """
+        <ai!rep>test</ai!>
+        <ai!>test2</ai!>
+        """
+        expected_params = [
+            ("ai", "rep", "test"),
+            ("ai", None, "test2")
+        ]
+        _, params = process_tags(content)
+        self.assertEqual(params, expected_params)
+
 if __name__ == '__main__':
     unittest.main()

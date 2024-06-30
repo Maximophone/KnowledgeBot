@@ -218,9 +218,22 @@ def escape_response(response: str) -> str:
     Returns:
         str: Escaped response
     """
-    for keyword in ["ai", "reply", "help", "this"]:
-        response = response.replace(f"<{keyword}!>", f"<{keyword.upper()}!>")
-    return response
+    def create_replacement_func(key):
+        def func(v, t, c):
+            mod_key = key.upper()
+            v = v or ""
+            if t is None:
+                return f"<{mod_key}!{v}>"
+            else:
+                return f"<{mod_key}!{v}>{t}</{mod_key}!>"
+        return func
+    
+    replacements = {}
+    names = list(REPLACEMENTS_OUTSIDE.keys()) + list(REPLACEMENTS_INSIDE.keys())
+    for k in names:
+        replacements[k] = create_replacement_func(k)
+    new_response, _ = process_tags(response, replacements)
+    return new_response
 
 def process_file(file_path: str):
     """
@@ -314,6 +327,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                                     max_tokens=max_tokens, system_prompt=system_prompt, 
                                     temperature=temperature, debug=debug)
 
+        response = escape_response(response)
         if option is None:
             new_block = f"{block}{beacon_ai}\n{response}\n{beacon_me}\n"
         elif option == "rep":
