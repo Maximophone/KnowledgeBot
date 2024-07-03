@@ -24,9 +24,17 @@ import assemblyai
 from mutagen import File
 from datetime import datetime
 
+from gdoc_utils import GoogleDocUtils
+
 
 # Define categories for organizing recordings
 CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
+
+VAULT_PATH = "G:\\My Drive\\Obsidian"
+MARKDOWNLOAD_PATH = f"{VAULT_PATH}\\MarkDownload"
+GDOC_PATH = f"{VAULT_PATH}\\gdoc"
+SOURCES_PATH = f"{VAULT_PATH}\\Source"
+SOURCE_TEMPLATE_PATH = f"{VAULT_PATH}\\Templates\\source.md"
 
 # File paths for different stages of processing
 AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
@@ -57,6 +65,50 @@ config = assemblyai.TranscriptionConfig(
     speaker_labels=True,
     language_detection=True
 )
+
+GDU = GoogleDocUtils()
+
+def parse_frontmatter(txt: str) -> Dict:
+    """Returns None if it cannot be parsed"""
+    pieces = txt.split("---")
+    if len(pieces) < 3:
+        return None
+    frontmatter_txt = pieces[1]
+    try:
+        frontmatter = yaml.safe_load(frontmatter_txt)
+    except yaml.YAMLError:
+        return None
+    return frontmatter
+
+def frontmatter_to_text(frontmatter: Dict) -> str:
+    """"""
+    text = yaml.dump(frontmatter)
+    return "---\n" + text + "\n---\n"
+
+def write_gdoc(text: str, filename: str, frontmatter: Dict):
+    """Overwrites a gdoc file with the text pulled from the google doc"""
+    final_text = frontmatter_to_text(frontmatter) + text
+    file_path = f"{GDOC_PATH}\\{filename}"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(final_text)
+    os.utime(file_path, None)
+
+def write_md_summary(summary: str, filename: str, new_filename: str, frontmatter: Dict):
+    """Creates a new "source" note containing the summary of the 
+    MarkDownloaded document"""
+    with open(SOURCE_TEMPLATE_PATH, "r") as f:
+        template = f.read()
+
+    fname = filename.split(".")[0]
+
+    if frontmatter:
+        url = frontmatter.get("url", "")
+        template = template.replace("url: ", f"url: {url}")
+        template = template.replace("{{title}}", new_filename.split(".")[0])
+        template = template.replace("markdownload:", f'markdownload: "[[{fname}]]"')
+
+    with open(f"{SOURCES_PATH}\\{new_filename}", "w", encoding="utf-8") as f:
+        f.write(template + "\n" + summary)
 
 def change_file_extension(filename: str, new_extension: str) -> str:
     """Change the extension of a filename."""
@@ -118,7 +170,7 @@ def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
         json_filename = change_file_extension(filename, "json")
         md_filename = change_file_extension(filename, "md")
         
-        if json_filename in os.listdir(output_dir) or filename in FILES_IN_TRANSCRIPTION:
+        if md_filename in os.listdir(output_dir) or filename in FILES_IN_TRANSCRIPTION:
             continue
         
         FILES_IN_TRANSCRIPTION.add(filename)
@@ -183,6 +235,68 @@ async def process_all_transcriptions():
             transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category), category)
         except Exception:
             print(traceback.format_exc())
+
+@slow_repeater.register
+async def pull_gdocs():
+    """Downloads and turns google docs into markdown"""
+    try:
+        for filename in os.listdir(GDOC_PATH):
+            if not filename.endswith(".md"):
+                continue
+            with open(f"{GDOC_PATH}\\{filename}", "r", encoding="utf-8") as f:
+                text = f.read()
+            frontmatter = parse_frontmatter(text)
+            if frontmatter.get("synced", True):
+                continue
+            url = frontmatter.get("url")
+            if not url:
+                continue
+            FILES_IN_SUMMARIZATION.add(filename)
+
+            # Downloading google doc as html
+            gdoc_content_html = GDU.get_clean_document(url)
+
+            print(f"Summarizing: {filename}", flush=True)
+            gdoc_content_md = generate_summary("gdoc", gdoc_content_html)
+
+            frontmatter["synced"] = True
+
+            write_gdoc(gdoc_content_md, filename, frontmatter)
+
+            print("DONE", flush=True)
+
+            FILES_IN_SUMMARIZATION.remove(filename)
+
+    except Exception:
+        print(traceback.format_exc())
+
+@slow_repeater.register
+async def summarize_markdownloads():
+    """Generate summaries for all the markdownload documents, and
+    saves as a "source" note in Obsidian"""
+    try:
+        for filename in os.listdir(MARKDOWNLOAD_PATH):
+            if not (filename.startswith("markdownload_") 
+                    and filename.endswith(".md")):
+                continue
+            new_filename = filename[13:]
+            if new_filename in os.listdir(SOURCES_PATH) or filename in FILES_IN_SUMMARIZATION:
+                continue
+            FILES_IN_SUMMARIZATION.add(filename)
+            print(f"Summarizing: {filename}", flush=True)
+
+            with open(f"{MARKDOWNLOAD_PATH}\\{filename}", "r", encoding="utf-8") as f:
+                text = f.read()
+
+            frontmatter = parse_frontmatter(text)
+            
+            summary = generate_summary("markdownload", text)
+
+            write_md_summary(summary, filename, new_filename, frontmatter)
+
+            FILES_IN_SUMMARIZATION.remove(filename)
+    except Exception:
+        print(traceback.format_exc())
 
 @slow_repeater.register
 async def summarize_all_transcriptions():
