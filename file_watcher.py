@@ -32,6 +32,8 @@ def poll_for_changes(path, callback, condition_check):
     for root, _, files in os.walk(path):
         for file in files:
             file_path = os.path.join(root, file)
+            if ".smart-connections" in file_path:
+                continue
             last_modified_times[file_path] = os.path.getmtime(file_path)
 
     print("Built index of modified times")
@@ -41,14 +43,20 @@ def poll_for_changes(path, callback, condition_check):
             for root, _, files in os.walk(path):
                 for file in files:
                     file_path = os.path.join(root, file)
+                    if ".smart-connections" in file_path:
+                        continue
                     current_mtime = os.path.getmtime(file_path)
                     if file_path in last_modified_times:
                         if current_mtime > last_modified_times[file_path]:
                             print("file modified!", flush=True)
-                            if condition_check(file_path):
-                                print("condition checked!", flush=True)
-                                callback(file_path)
-                            last_modified_times[file_path] = current_mtime
+                            try:
+                                if condition_check(file_path):
+                                    print("condition checked!", flush=True)
+                                    callback(file_path)
+                                last_modified_times[file_path] = current_mtime
+                            except Exception:
+                                print(f"Error when checking condition for file {file_path}")
+                                print(traceback.format_exc())
                     else:
                         last_modified_times[file_path] = current_mtime
         except Exception:
