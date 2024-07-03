@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import anthropic
 import google.generativeai as genai
 import yaml
@@ -8,6 +8,11 @@ import sys
 import PyPDF2
 import fitz
 import re
+import imghdr
+import os
+import base64
+from PIL import Image
+from io import BytesIO
 
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
@@ -37,7 +42,23 @@ DEFAULT_TEMPERATURE = 0.0
 #             text += page.extract_text()
 #     return text
 
-def extract_text_from_pdf(pdf_path):
+def encode_image(image_path: str) -> Tuple[str, str]:
+    with open(image_path, "rb") as image_file:
+        file_content = image_file.read()
+        image_type = imghdr.what(None, file_content)
+        if image_type is None:
+            raise ValueError(f"Unsupported image format for file: {image_path}")
+        return base64.b64encode(file_content).decode('utf-8'), f"image/{image_type}"
+
+def validate_image(image_path: str, max_size: int = 20 * 1024 * 1024) -> None:
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    if os.path.getsize(image_path) > max_size:
+        raise ValueError(f"Image file too large: {image_path}")
+    if imghdr.what(image_path) is None:
+        raise ValueError(f"Unsupported image format: {image_path}")
+
+def extract_text_from_pdf(pdf_path: str) -> str:
     text = ""
     with fitz.open(pdf_path) as doc:
         for page in doc:
@@ -61,11 +82,44 @@ def extract_text_from_pdf(pdf_path):
 def n_tokens(text: str) -> int:
     return len(text) // 4
 
+def n_tokens_images(images: List[Dict]) -> int:
+    total = 0
+    for image in images:
+        width, height = get_image_dimensions_from_base64(image["data"])
+        total += width*height // 750 # (anthropic's estimation of # of tokens)
+    return total
+
+def get_image_dimensions_from_base64(base64_string):
+    # Remove the MIME type prefix if present
+    if ',' in base64_string:
+        base64_string = base64_string.split(',', 1)[1]
+    
+    # Decode the base64 string
+    image_data = base64.b64decode(base64_string)
+    
+    # Create a file-like object from the decoded data
+    image_file = BytesIO(image_data)
+    
+    # Open the image using PIL
+    with Image.open(image_file) as img:
+        # Get the dimensions
+        width, height = img.size
+    
+    return width, height
+
 def count_tokens_input(messages: str, system_prompt: str) -> int:
     text = system_prompt
+    images = []
     for m in messages:
-        text += m["content"]
-    return n_tokens(text)
+        if isinstance(m["content"], str):
+            text += m["content"]
+        else:
+            for content in m["content"]:
+                if content["type"] == "text":
+                    text += content["text"]
+                elif content["type"] == "image":
+                    images.append(content["source"])
+    return n_tokens(text) + n_tokens_images(images)
 
 def count_tokens_output(response: str):
     return n_tokens(response)
@@ -161,7 +215,8 @@ class MockWrapper(AIWrapper):
         for message in messages:
             response += f"role: {message['role']}\n"
             response += "content: \n"
-            response += message["content"] + "\n"
+            response += str(message["content"])
+            response += "\n"
         response += "---MESSAGES END---\n"
 
         return response
@@ -190,13 +245,39 @@ class AI:
         self._history = []
         self.debug=debug
 
-    def message(self, message: str, system_prompt: str = None, 
-                model_override: str=None, max_tokens: int=DEFAULT_MAX_TOKENS, 
-                temperature: float=0.0, xml=False, debug=False) -> str:
-        messages = [{
+    def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Dict[str, str]]:
+        content = []
+        if image_paths:
+            for image_path in image_paths:
+                try:
+                    validate_image(image_path)
+                    encoded_image, media_type = encode_image(image_path)
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": encoded_image
+                        }
+                    })
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Error processing image {image_path}: {str(e)}")
+        
+        content.append({
+            "type": "text",
+            "text": message
+        })
+
+        return [{
             "role": "user",
-            "content": message
+            "content": content if image_paths else message
         }]
+
+    def message(self, message: str, system_prompt: str = None, 
+                model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
+                temperature: float = 0.0, xml: bool = False, debug: bool = False,
+                image_paths: List[str] = None) -> str:
+        messages = self._prepare_messages(message, image_paths)
         response = self.messages(messages, system_prompt, model_override, 
                                  max_tokens, temperature, debug=debug)
         if xml:
@@ -204,8 +285,8 @@ class AI:
         return response
         
     def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
-                     model_override: str = None, max_tokens: int=DEFAULT_MAX_TOKENS, 
-                     temperature: float=0.0, xml=False, debug=False) -> str:
+                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
+                 temperature: float = 0.0, xml: bool = False, debug: bool = False) -> str:
         debug = debug | self.debug
         if model_override:
             model_name = get_model(model_override) or self.model_name
@@ -223,8 +304,16 @@ class AI:
             print("--MESSAGES RECEIVED START--", flush=True)
             for message in messages:
                 print("role: ", message["role"], flush=True)
-                print("content: ", message["content"].encode("utf-8"), flush=True)
+                if isinstance(message["content"], list):
+                    for item in message["content"]:
+                        if item["type"] == "text":
+                            print("content (text): ", item["text"].encode("utf-8"), flush=True)
+                        elif item["type"] == "image":
+                            print("content (image): [base64 encoded image]", flush=True)
+                else:
+                    print("content: ", message["content"].encode("utf-8"), flush=True)
             print("--MESSAGES RECEIVED END--", flush=True)
+
         response = client.messages(model_name, messages, system_prompt, 
                                    max_tokens, temperature)
         if xml:
@@ -236,12 +325,10 @@ class AI:
         return response
     
     def conversation(self, message: str, system_prompt: str = None, 
-                model_override: str=None, max_tokens: int=DEFAULT_MAX_TOKENS, 
-                temperature: float=0.0, xml=False, debug=False):
-        messages = self._history + [{
-            "role": "user",
-            "content": message
-        }]
+                     model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
+                     temperature: float = 0.0, xml: bool = False, debug: bool = False,
+                     image_paths: List[str] = None):
+        messages = self._history + self._prepare_messages(message, image_paths)
         response = self.messages(messages, system_prompt, model_override, max_tokens, temperature, debug=debug)
         self._history = messages + [
             {

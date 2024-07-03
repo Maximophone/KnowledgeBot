@@ -23,6 +23,7 @@ Date: [Current Date]
 
 import argparse
 import ai
+from ai import encode_image, validate_image
 from typing import List, Dict, Tuple, Callable
 import yaml
 import anthropic
@@ -31,7 +32,6 @@ import glob
 import traceback
 from file_watcher import start_file_watcher
 import re
-from run_ai import process_conversation
 from file_packager import get_committed_files, format_for_llm, get_markdown_files
 from beacons import *
 from parser.tag_parser import process_tags
@@ -300,7 +300,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
 
         model_name = params.get("model", DEFAULT_LLM)
         system_prompt = params.get("system")
-        debug = params.get("debug") == ""
+        debug = ("debug" in params)
         temperature = float(params.get("temperature", ai.DEFAULT_TEMPERATURE))
         max_tokens = int(params.get("max_tokens", ai.DEFAULT_MAX_TOKENS))
         if "mock" in params:
@@ -344,6 +344,49 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
     except Exception:
         new_block = f"{block}{beacon_error}\n```sh\n{traceback.format_exc()}```\n"
     return f"<ai!{option_txt}>{new_block}</ai!>"
+
+def process_conversation(txt: str) -> List[Dict[str, str]]:
+    cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
+    # [[<claude>, <me>], [<claude>, <me>], ... ]
+    assert len(cut[0]) == 1 or len(cut[0]) == 2
+    assert all(len(x)==2 for x in cut[1:])
+    if len(cut[0]) == 1:
+        cut[0] = ["", cut[0][0]]
+    assert cut[0][0] == ""
+
+    def process_user_message(message: str) -> Dict[str, str]:
+        processed, results = process_tags(message, {"image": remove })
+        image_paths = [v for n, v, _ in results if n == "image"]
+        if image_paths:
+            content = []
+            for image_path in image_paths:
+                try:
+                    validate_image(image_path)
+                    encoded_image, media_type = encode_image(image_path)
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": encoded_image
+                        }
+                    })
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Error processing image {image_path}: {str(e)}")
+            content.append({"type": "text", "text": processed.strip()})
+            return {"role": "user", "content": content}
+        else:
+            return {"role": "user", "content": processed.strip()}
+
+    messages = sum([[
+        {"role": "assistant", "content": cl.strip()},
+        process_user_message(me)
+    ] for cl, me in cut], [])[1:]
+    
+    assert messages[0]["role"] == "user"
+    assert messages[-1]["role"] == "user"
+    return messages
+
 
 def needs_answer(file_path: str) -> bool:
     """
