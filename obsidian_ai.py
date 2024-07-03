@@ -39,7 +39,7 @@ from parser.tag_parser import process_tags
 # Constants
 DEFAULT_LLM = "sonnet3.5"
 VAULT_PATH = "G:\\My Drive\\Obsidian"
-VAULT_EXCLUDE = ["KnowledgeBot\\Meetings", "AI Chats", "MarkDownload"]
+VAULT_EXCLUDE = ["KnowledgeBot\\Meetings", "AI Chats", "MarkDownload", "gdoc", ".smart-connections"]
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
 
 # Load secrets
@@ -95,8 +95,8 @@ def get_file(fpath) -> str:
         if fpath.endswith(".pdf"):
             contents = ai.extract_text_from_pdf(fpath)
         else:
-            with open(fpath, "r", encoding="utf-8") as f:
-                contents = f.read()
+            with open(fpath, "rb") as f:
+                contents = f.read().decode('utf-8', errors='replace')
     else:
         print(f"Error: can't find document {fpath}")
         contents = f"Error: can't find document {fpath}"
@@ -118,7 +118,8 @@ def insert_file_ref(fname: str = "", folder: str = "", root: str = VAULT_PATH,
         str: Formatted file reference
     """
     if fname.startswith("[[") and fname.endswith("]]"):
-        fpath = resolve_vault_fname(fname[2:-2])
+        fname = fname[2:-2].split("|")[0]
+        fpath = resolve_vault_fname(fname)
     else:
         fpath = fpath or f"{root}\\{folder}\\{fname.strip()}"
     fname = fname or fpath.rsplit("\\")[-1]
@@ -177,7 +178,8 @@ def get_markdown_files(directory: str) -> List[str]:
 
 def find_matching_path(file_list: List[str], end_path: str) -> str:
     """
-    Find a matching file path from a list of paths.
+    Find a matching file path from a list of paths. If multiple paths 
+    match, the shortest one is returned
 
     Args:
         file_list (List[str]): List of file paths
@@ -187,11 +189,15 @@ def find_matching_path(file_list: List[str], end_path: str) -> str:
         str: Matching file path or None
     """
     normalized_end = os.path.normpath(end_path)
+    candidates = []
     for full_path in file_list:
         normalized_full = os.path.normpath(full_path)
         if normalized_full.endswith(normalized_end):
-            return full_path
-    return None
+            candidates.append(full_path)
+    if len(candidates) == 0:
+        return None
+    # We pick the shortest path out of the candidates
+    return min(candidates, key=lambda x: len(x))
 
 def resolve_vault_fname(fname: str, vault_path: str = VAULT_PATH) -> str:
     """
@@ -362,6 +368,8 @@ def needs_answer(file_path: str) -> bool:
         return False
     ai_results = [r for r in results if r[0] == "ai"]
     for name, value, txt in ai_results:
+        if txt is None:
+            continue
         _, results = process_tags(txt)
         if "reply" in set(n for n,v,t in results):
             return True
