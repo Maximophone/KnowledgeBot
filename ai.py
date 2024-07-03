@@ -6,6 +6,8 @@ from openai import OpenAI
 from datetime import datetime as dt
 import sys
 import PyPDF2
+import fitz
+import re
 
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
@@ -27,12 +29,33 @@ TOKEN_COUNT_FILE = "token_count.csv"
 DEFAULT_MAX_TOKENS = 4096
 DEFAULT_TEMPERATURE = 0.0
 
+# def extract_text_from_pdf(pdf_path):
+#     text = ""
+#     with open(pdf_path, 'rb') as file:
+#         reader = PyPDF2.PdfReader(file)
+#         for page in reader.pages:
+#             text += page.extract_text()
+#     return text
+
 def extract_text_from_pdf(pdf_path):
     text = ""
-    with open(pdf_path, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            text += page.extract_text()
+    with fitz.open(pdf_path) as doc:
+        for page in doc:
+            blocks = page.get_text("blocks")
+            for block in blocks:
+                block_text = block[4]
+                # Remove hyphens at the end of lines
+                block_text = re.sub(r'-\n', '', block_text)
+                # Replace single newlines with spaces, but keep paragraph breaks
+                block_text = re.sub(r'(?<!\n)\n(?!\n)', ' ', block_text)
+                # Normalize spaces
+                block_text = re.sub(r'\s+', ' ', block_text)
+                text += block_text.strip() + "\n\n"
+    
+    # Final cleanup
+    text = re.sub(r'\n{3,}', '\n\n', text)  # Replace multiple newlines with double newlines
+    text = text.strip()  # Remove leading/trailing whitespace
+    
     return text
 
 def n_tokens(text: str) -> int:
@@ -168,7 +191,7 @@ class AI:
         self.debug=debug
 
     def message(self, message: str, system_prompt: str = None, 
-                model_override: str=None, max_tokens: int=1000, 
+                model_override: str=None, max_tokens: int=DEFAULT_MAX_TOKENS, 
                 temperature: float=0.0, xml=False, debug=False) -> str:
         messages = [{
             "role": "user",
@@ -181,7 +204,7 @@ class AI:
         return response
         
     def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
-                     model_override: str = None, max_tokens: int=1000, 
+                     model_override: str = None, max_tokens: int=DEFAULT_MAX_TOKENS, 
                      temperature: float=0.0, xml=False, debug=False) -> str:
         debug = debug | self.debug
         if model_override:
@@ -213,7 +236,7 @@ class AI:
         return response
     
     def conversation(self, message: str, system_prompt: str = None, 
-                model_override: str=None, max_tokens: int=1000, 
+                model_override: str=None, max_tokens: int=DEFAULT_MAX_TOKENS, 
                 temperature: float=0.0, xml=False, debug=False):
         messages = self._history + [{
             "role": "user",
