@@ -298,7 +298,7 @@ async def summarize_markdownloads():
     except Exception:
         print(traceback.format_exc())
 
-@slow_repeater.register
+# @slow_repeater.register
 async def summarize_all_transcriptions():
     """Generate summaries for all transcriptions across relevant categories."""
     for category in CATEGORIES:

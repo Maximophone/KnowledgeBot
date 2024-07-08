@@ -3,6 +3,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
 import traceback
+import asyncio
 
 class FileModifiedHandler(FileSystemEventHandler):
     def __init__(self, callback, condition_check, ignore_set=None):
@@ -27,7 +28,7 @@ class FileModifiedHandler(FileSystemEventHandler):
             print("And condition triggered", flush=True)
             self.callback(event.src_path)
 
-def poll_for_changes(path, callback, condition_check):
+async def poll_for_changes(path, callback, condition_check):
     last_modified_times = {}
     for root, _, files in os.walk(path):
         for file in files:
@@ -39,7 +40,7 @@ def poll_for_changes(path, callback, condition_check):
     print("Built index of modified times")
     while True:
         try:
-            time.sleep(0.1)  # Check every 0.1 seconds
+            await asyncio.sleep(0.1)  # Check every 0.1 seconds
             for root, _, files in os.walk(path):
                 for file in files:
                     file_path = os.path.join(root, file)
@@ -64,10 +65,10 @@ def poll_for_changes(path, callback, condition_check):
             print(traceback.format_exc())
 
 
-def start_file_watcher(path, callback, condition_check, ignore_set=None, use_polling=False):
+async def start_file_watcher(path, callback, condition_check, ignore_set=None, use_polling=False):
     if use_polling:
         print("Starting file polling.", flush=True)
-        poll_for_changes(path, callback, condition_check)
+        await poll_for_changes(path, callback, condition_check)
     else:
         event_handler = FileModifiedHandler(callback, condition_check, ignore_set)
         observer = Observer()
@@ -77,7 +78,7 @@ def start_file_watcher(path, callback, condition_check, ignore_set=None, use_pol
         
         try:
             while True:
-                time.sleep(1)
+                await asyncio.sleep(1)
         except KeyboardInterrupt:
             observer.stop()
         observer.join()
