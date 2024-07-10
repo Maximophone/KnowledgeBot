@@ -31,9 +31,8 @@ import os
 import glob
 import traceback
 from file_watcher import start_file_watcher
-import re
-from file_packager import get_committed_files, format_for_llm, get_markdown_files
-from beacons import *
+from file_packager import get_committed_files, format_for_llm
+from beacons import beacon_ai, beacon_error, beacon_me
 from parser.tag_parser import process_tags
 
 # Constants
@@ -89,7 +88,7 @@ def get_file(fpath) -> str:
     """
     contents = ""
     fname = fpath.rsplit("\\")[-1]
-    if not "." in fname:
+    if "." not in fname:
         fpath = fpath + ".md"
     if os.path.isfile(fpath):
         if fpath.endswith(".pdf"):
@@ -160,7 +159,7 @@ REPLACEMENTS_INSIDE = {
     "doc": lambda v, t, c: insert_file_ref(v, ""),
     "pdf": lambda v, t, c: insert_file_ref(v, "pdf"),
     "md": lambda v, t, c: insert_file_ref(v, "MarkDownload"),
-    "file": lambda v, t, c: insert_file_ref(fpath=v)
+    "file": lambda v, t, c: insert_file_ref(fpath=v),
 }
 
 def get_markdown_files(directory: str) -> List[str]:
