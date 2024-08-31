@@ -24,7 +24,7 @@ Date: [Current Date]
 import argparse
 import ai
 from ai import encode_image, validate_image
-from typing import List, Dict, Tuple, Callable
+from typing import List, Dict, Tuple, Callable, Optional
 import yaml
 import anthropic
 import os
@@ -41,6 +41,12 @@ VAULT_PATH = "G:\\My Drive\\Obsidian"
 VAULT_EXCLUDE = ["KnowledgeBot\\Meetings", "AI Chats", "MarkDownload", "gdoc", ".smart-connections"]
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
 
+SEARCH_PATHS = [
+    VAULT_PATH,
+    "C:\\Users\\fourn\\code",
+    # Add any other paths you want to search
+]
+
 # Load secrets
 with open("secrets.yml", "r") as f:
     secrets = yaml.safe_load(f)
@@ -49,6 +55,9 @@ with open("secrets.yml", "r") as f:
 api_key = secrets["claude_api_key"]
 client = anthropic.Client(api_key=api_key)
 model = ai.AI("claude-haiku")
+
+def remove_frontmatter(contents: str) -> str:
+    return contents.split("---")[2]
 
 def pack_repo(path: str) -> str:
     """
@@ -76,63 +85,76 @@ def pack_vault() -> str:
     packaged_txt = format_for_llm(packaged)
     return f"<vault>{packaged_txt}</vault>\n"
 
-def get_file(fpath) -> str:
+def resolve_file_path(fname: str, subfolder: str = "") -> Optional[str]:
     """
-    Read the contents of a file.
-
+    Resolve a file path based on various input formats.
+    
     Args:
-        fpath (str): Path to the file
-
+        fname (str): Filename or path
+        subfolder (str): Subfolder to search within each search path
+    
     Returns:
-        str: File contents or error message
-    """
-    contents = ""
-    fname = fpath.rsplit("\\")[-1]
-    if "." not in fname:
-        fpath = fpath + ".md"
-    if os.path.isfile(fpath):
-        if fpath.endswith(".pdf"):
-            contents = ai.extract_text_from_pdf(fpath)
-        else:
-            with open(fpath, "rb") as f:
-                contents = f.read().decode('utf-8', errors='replace')
-    else:
-        print(f"Error: can't find document {fpath}")
-        contents = f"Error: can't find document {fpath}"
-    return contents
-
-def insert_file_ref(fname: str = "", folder: str = "", root: str = VAULT_PATH, 
-        fpath: str = None, typ: str = "document") -> str:
-    """
-    Insert a reference to a file in the AI context.
-
-    Args:
-        fname (str): Filename
-        folder (str): Folder path
-        root (str): Root path
-        fpath (str): Full file path
-        typ (str): Type of document
-
-    Returns:
-        str: Formatted file reference
+        Optional[str]: Resolved file path or None if not found
     """
     if fname.startswith("[[") and fname.endswith("]]"):
         fname = fname[2:-2].split("|")[0]
-        fpath = resolve_vault_fname(fname)
-    else:
-        fpath = fpath or f"{root}\\{folder}\\{fname.strip()}"
-    fname = fname or fpath.rsplit("\\")[-1]
+        return resolve_vault_fname(fname)
     
-    STORED_PATHS = [
-        "C:\\Users\\fourn\\code",
-    ]
-    for path in STORED_PATHS:
-        if os.path.isfile(path+"\\"+fpath):
-            fpath = path+"\\"+fpath
-            break
-    contents = get_file(fpath)
-    return f"<{typ}><filename>{fname}</filename>\n<contents>{contents}</contents></{typ}>"
+    potential_names = [fname, f"{fname}.md"]
+    
+    for base_path in SEARCH_PATHS:
+        for name in potential_names:
+            full_path = os.path.join(base_path, subfolder, name)
+            if os.path.isfile(full_path):
+                return full_path
+    
+    return None
 
+def get_file_contents(fpath: str) -> str:
+    """
+    Read the contents of a file.
+    
+    Args:
+        fpath (str): Path to the file
+    
+    Returns:
+        str: File contents or error message
+    """
+    if fpath.endswith(".pdf"):
+        return ai.extract_text_from_pdf(fpath)
+    
+    try:
+        with open(fpath, "rb") as f:
+            return f.read().decode('utf-8', errors='replace')
+    except Exception as e:
+        return f"Error reading file {fpath}: {str(e)}"
+
+def insert_file_ref(fname: str = "", subfolder: str = "", typ: str = "document") -> str:
+    """
+    Insert a reference to a file in the AI context.
+    
+    Args:
+        fname (str): Filename
+        subfolder (str): Subfolder to search within each search path
+        typ (str): Type of document
+    
+    Returns:
+        str: Formatted file reference
+    """
+    resolved_path = resolve_file_path(fname, subfolder)
+    
+    if not resolved_path:
+        return f"Error: Cannot find file {fname}"
+    
+    file_name = os.path.basename(resolved_path)
+    contents = get_file_contents(resolved_path)
+
+    if typ=="prompt":
+        # we remove the frontmatter, and insert the prompt as is
+        contents = remove_frontmatter(contents)
+        return contents
+    
+    return f"<{typ}><filename>{file_name}</filename>\n<contents>{contents}</contents></{typ}>"
 # Define replacement functions
 remove = lambda *_: ""
 REPLACEMENTS_OUTSIDE = {
@@ -156,10 +178,11 @@ REPLACEMENTS_INSIDE = {
     "daily": lambda v, t, c: insert_file_ref(v, "Daily Notes"),
     "idea": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Ideas\\Transcriptions"),
     "unsorted": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Unsorted\\Transcriptions"),
-    "doc": lambda v, t, c: insert_file_ref(v, ""),
-    "pdf": lambda v, t, c: insert_file_ref(v, "pdf"),
+    "doc": lambda v, t, c: insert_file_ref(v),
+    "pdf": lambda v, t, c: insert_file_ref(v, "pdf", typ="pdf"),
     "md": lambda v, t, c: insert_file_ref(v, "MarkDownload"),
-    "file": lambda v, t, c: insert_file_ref(fpath=v),
+    "file": lambda v, t, c: insert_file_ref(v),
+    "prompt": lambda v, t, c: insert_file_ref(v, "Prompts", "prompt")
 }
 
 def get_markdown_files(directory: str) -> List[str]:
