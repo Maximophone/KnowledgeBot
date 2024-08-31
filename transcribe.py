@@ -28,7 +28,8 @@ from gdoc_utils import GoogleDocUtils
 
 
 # Define categories for organizing recordings
-CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
+CATEGORIES = ["Meetings", "Ideas", "Unsorted", "Meditations"]
+TRANSCRIPTION_CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
 
 VAULT_PATH = "G:\\My Drive\\Obsidian"
 MARKDOWNLOAD_PATH = f"{VAULT_PATH}\\MarkDownload"
@@ -40,7 +41,6 @@ SOURCE_TEMPLATE_PATH = f"{VAULT_PATH}\\Templates\\source.md"
 AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
 SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
 TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
-IMPROVED_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Improved"
 
 TRANSCR_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
 # Sets to track files currently being processed
@@ -155,6 +155,30 @@ def generate_summary(category: str, transcription: str) -> str:
         prompt = f.read()
     return ai_model.message(prompt + transcription)
 
+def generate_meditation_title(transcription: str) -> str:
+    """Generate a short title for a meditation based on its transcription."""
+    prompt = "Generate a very short title (3-6 words) that captures the essence of this meditation. ONLY OUTPUT THE TITLE, nothing else. Meditation transcript: \n\n"
+    return ai_model.message(prompt + transcription).strip()
+
+def generate_meditation_summary(transcription: str) -> str:
+    """Generate a summary for a meditation (max 100 words)."""
+    prompt = "Summarize this meditation in 100 words or less. ONLY OUTPUT THE SUMMARY, nothing else. Meditation transcript: \n\n"
+    return ai_model.message(prompt + transcription).strip()
+
+def create_meditation_markdown(title: str, date: str, audio_link: str, summary: str, transcription: str) -> str:
+    """Create a markdown file for a meditation."""
+    return f"""# {title}
+
+Date: {date}
+[Audio Recording]({audio_link})
+
+## Summary
+{summary}
+
+## Transcription
+{transcription}
+"""
+
 def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
     """
     Transcribe audio files from input directory and save results in output directory.
@@ -229,8 +253,8 @@ def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
 
 @slow_repeater.register
 async def process_all_transcriptions():
-    """Transcribe all audio files across all categories."""
-    for category in CATEGORIES:
+    """Transcribe all audio files across relevant categories."""
+    for category in TRANSCRIPTION_CATEGORIES:
         try:
             transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category), category)
         except Exception:
@@ -310,8 +334,72 @@ async def summarize_all_transcriptions():
         except Exception:
             print(traceback.format_exc())
 
+@slow_repeater.register
+async def process_meditations():
+    """Process meditation audio files."""
+    input_dir = AUDIO_PATH.format(name="Meditations")
+    output_dir = SUMMARIES_PATH.format(name="Meditations")
+
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    for filename in os.listdir(input_dir):
+        if filename in FILES_IN_TRANSCRIPTION or filename in FILES_IN_SUMMARIZATION:
+            continue
+
+        file_path = os.path.join(input_dir, filename)
+        recording_date = get_recording_date(file_path)
+        date_str = recording_date.strftime("%Y-%m-%d")
+
+        # Transcribe
+        FILES_IN_TRANSCRIPTION.add(filename)
+        print(f"Transcribing meditation: {filename}", flush=True)
+        transcript = transcriber.transcribe(file_path, config)
+        FILES_IN_TRANSCRIPTION.remove(filename)
+
+        # Generate title and summary
+        FILES_IN_SUMMARIZATION.add(filename)
+        print(f"Summarizing meditation: {filename}", flush=True)
+        title = generate_meditation_title(transcript.text)
+        summary = generate_meditation_summary(transcript.text)
+        FILES_IN_SUMMARIZATION.remove(filename)
+
+        # Create markdown content
+        sanitized_filename = filename.replace(" ", "%20")
+        audio_link = f"G:/My Drive/Projects/KnowledgeBot/Audio/Meditations/{sanitized_filename}"
+        markdown_content = create_meditation_markdown(title, date_str, audio_link, summary, transcript.text)
+
+        # Save markdown file
+        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        markdown_filename = f"{date_str} - {safe_title}.md"
+        with open(os.path.join(output_dir, markdown_filename), "w", encoding='utf-8') as f:
+            f.write(markdown_content)
+
+        print(f"Processed meditation: {markdown_filename}", flush=True)
+
+# Add this function to create necessary directories
+def create_required_directories():
+    """Create all required directories if they don't exist."""
+    directories = [
+        AUDIO_PATH.format(name=category) for category in CATEGORIES
+    ] + [
+        SUMMARIES_PATH.format(name=category) for category in CATEGORIES
+    ] + [
+        TRANSCRIPTIONS_PATH.format(name=category) for category in TRANSCRIPTION_CATEGORIES
+    ] + [
+        MARKDOWNLOAD_PATH,
+        GDOC_PATH,
+        SOURCES_PATH,
+        TRANSCR_PATH
+    ]
+
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+
+# Update the main function to create directories before starting repeaters
 async def main():
-    """Main function to start all repeaters."""
+    """Main function to create directories and start all repeaters."""
+    create_required_directories()
     await start_repeaters()
 
 # Initialize Whisper model for potential use
