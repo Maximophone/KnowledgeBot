@@ -27,7 +27,8 @@ _MODELS_DICT = {
     "gemini1.5": "gemini-1.5-pro-latest",
     "gpt3.5": "gpt-3.5-turbo",
     "gpt4": "gpt-4-turbo-preview",
-    "gpt4o": "gpt-4o"
+    "gpt4o": "gpt-4o",
+    "mini": "gpt-4o-mini"
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
