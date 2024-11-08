@@ -20,9 +20,10 @@ with open("secrets.yml", "r") as f:
 _MODELS_DICT = {
     "mock": "mock-",
     "haiku": "claude-3-haiku-20240307",
-    "sonnet": "claude-3-5-sonnet-latest",
+    "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
-    "sonnet3.5": "claude-3-5-sonnet-20240620",
+    "sonnet3.5": "claude-3-5-sonnet-latest",
+    "haiku3.5": "claude-3-5-haiku-latest",
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
     "gpt3.5": "gpt-3.5-turbo",
