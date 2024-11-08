@@ -13,8 +13,6 @@ Key components:
 from typing import Dict
 import yaml
 import os
-import whisper
-import torch
 import json
 from ai import AI
 import asyncio
@@ -43,6 +41,9 @@ SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
 TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
 
 TRANSCR_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
+
+PROCESSED_FILES_TRACKER = "G:\\My Drive\\Obsidian\\KnowledgeBot\\processed_files_tracker.md"
+
 # Sets to track files currently being processed
 FILES_IN_TRANSCRIPTION = set()
 FILES_IN_SUMMARIZATION = set()
@@ -251,6 +252,38 @@ def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
         
         FILES_IN_SUMMARIZATION.remove(filename)
 
+
+def load_processed_files():
+    processed_files = {}
+    if os.path.exists(PROCESSED_FILES_TRACKER):
+        with open(PROCESSED_FILES_TRACKER, 'r', encoding='utf-8') as f:
+            current_category = None
+            for line in f:
+                line = line.strip()
+                if line.startswith('## '):
+                    current_category = line[3:]
+                    processed_files[current_category] = {}
+                elif line.startswith('- '):
+                    parts = line[2:].split(' -> ')
+                    if len(parts) == 2 and current_category:
+                        processed_files[current_category][parts[0]] = parts[1]
+    return processed_files
+
+def save_processed_file(category, original_filename, processed_filename):
+    processed_files = load_processed_files()
+    if category not in processed_files:
+        processed_files[category] = {}
+    processed_files[category][original_filename] = processed_filename
+    
+    with open(PROCESSED_FILES_TRACKER, 'w', encoding='utf-8') as f:
+        f.write("# Processed Files Tracker\n\n")
+        f.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        for cat, files in processed_files.items():
+            f.write(f"## {cat}\n\n")
+            for orig, proc in files.items():
+                f.write(f"- {orig} -> {proc}\n")
+            f.write("\n")
+
 @slow_repeater.register
 async def process_all_transcriptions():
     """Transcribe all audio files across relevant categories."""
@@ -322,28 +355,21 @@ async def summarize_markdownloads():
     except Exception:
         print(traceback.format_exc())
 
-# @slow_repeater.register
-async def summarize_all_transcriptions():
-    """Generate summaries for all transcriptions across relevant categories."""
-    for category in CATEGORIES:
-        if category == "Meetings":
-            # Meetings are not summarized
-            continue
-        try:
-            summarize_transcriptions(category, TRANSCRIPTIONS_PATH.format(name=category), SUMMARIES_PATH.format(name=category))
-        except Exception:
-            print(traceback.format_exc())
-
 @slow_repeater.register
 async def process_meditations():
     """Process meditation audio files."""
     input_dir = AUDIO_PATH.format(name="Meditations")
     output_dir = SUMMARIES_PATH.format(name="Meditations")
+    processed_files = load_processed_files()
+    processed_meditations = processed_files.get("Meditations", {})
 
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
     for filename in os.listdir(input_dir):
+        if filename in processed_meditations:
+            continue  # Skip already processed files
+
         if filename in FILES_IN_TRANSCRIPTION or filename in FILES_IN_SUMMARIZATION:
             continue
 
@@ -354,14 +380,28 @@ async def process_meditations():
         # Transcribe
         FILES_IN_TRANSCRIPTION.add(filename)
         print(f"Transcribing meditation: {filename}", flush=True)
-        transcript = transcriber.transcribe(file_path, config)
+        try:
+            transcript = transcriber.transcribe(file_path, config)
+            if transcript is None or transcript.text is None:
+                print(f"Error: Transcription failed for {filename}", flush=True)
+                FILES_IN_TRANSCRIPTION.remove(filename)
+                continue
+        except Exception as e:
+            print(f"Error transcribing {filename}: {str(e)}", flush=True)
+            FILES_IN_TRANSCRIPTION.remove(filename)
+            continue
         FILES_IN_TRANSCRIPTION.remove(filename)
 
         # Generate title and summary
         FILES_IN_SUMMARIZATION.add(filename)
         print(f"Summarizing meditation: {filename}", flush=True)
-        title = generate_meditation_title(transcript.text)
-        summary = generate_meditation_summary(transcript.text)
+        try:
+            title = generate_meditation_title(transcript.text)
+            summary = generate_meditation_summary(transcript.text)
+        except Exception as e:
+            print(f"Error generating title or summary for {filename}: {str(e)}", flush=True)
+            FILES_IN_SUMMARIZATION.remove(filename)
+            continue
         FILES_IN_SUMMARIZATION.remove(filename)
 
         # Create markdown content
@@ -372,8 +412,12 @@ async def process_meditations():
         # Save markdown file
         safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
         markdown_filename = f"{date_str} - {safe_title}.md"
-        with open(os.path.join(output_dir, markdown_filename), "w", encoding='utf-8') as f:
+        markdown_path = os.path.join(output_dir, markdown_filename)
+        with open(markdown_path, "w", encoding='utf-8') as f:
             f.write(markdown_content)
+
+        # Update the tracker
+        save_processed_file("Meditations", filename, markdown_filename)
 
         print(f"Processed meditation: {markdown_filename}", flush=True)
 
@@ -401,12 +445,6 @@ async def main():
     """Main function to create directories and start all repeaters."""
     create_required_directories()
     await start_repeaters()
-
-# Initialize Whisper model for potential use
-#if torch.cuda.is_available():
-#    print("Computing on GPU")
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# model = whisper.load_model("small", device=device)
 
 if __name__ == "__main__":
     asyncio.run(main())
