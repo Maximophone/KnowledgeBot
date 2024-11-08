@@ -20,7 +20,7 @@ with open("secrets.yml", "r") as f:
 _MODELS_DICT = {
     "mock": "mock-",
     "haiku": "claude-3-haiku-20240307",
-    "sonnet": "claude-3-sonnet-20240229",
+    "sonnet": "claude-3-5-sonnet-latest",
     "opus": "claude-3-opus-20240229",
     "sonnet3.5": "claude-3-5-sonnet-20240620",
     "gemini1.0": "gemini-1.0-pro-latest",
@@ -28,7 +28,9 @@ _MODELS_DICT = {
     "gpt3.5": "gpt-3.5-turbo",
     "gpt4": "gpt-4-turbo-preview",
     "gpt4o": "gpt-4o",
-    "mini": "gpt-4o-mini"
+    "mini": "gpt-4o-mini",
+    "o1-preview": "o1-preview",
+    "o1-mini": "o1-mini"
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
@@ -229,7 +231,7 @@ def get_client(model_name: str) -> AIWrapper:
         return ClaudeWrapper(secrets["claude_api_key"])
     elif client_name == "gemini":
         return GeminiWrapper(secrets["gemini_api_key"], get_model(model_name))
-    elif client_name == "gpt":
+    elif client_name == "gpt" or client_name == "o1":
         return GPTWrapper(secrets["openai_api_key"], secrets["openai_org"])
     elif client_name == "mock":
         return MockWrapper()
