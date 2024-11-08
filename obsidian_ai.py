@@ -175,6 +175,7 @@ REPLACEMENTS_INSIDE = {
     "repo": pack_repo,
     "vault": lambda *_: pack_vault(),
     "meeting": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Meetings\\Transcriptions"),
+    "transcription": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Transcriptions"),
     "daily": lambda v, t, c: insert_file_ref(v, "Daily Notes"),
     "idea": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Ideas\\Transcriptions"),
     "unsorted": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Unsorted\\Transcriptions"),

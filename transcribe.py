@@ -26,8 +26,22 @@ import aiohttp
 
 from gdoc_utils import GoogleDocUtils
 
+AUDIO_INPUT_PATH = "G:\\My Drive\\KnowledgeBot\\Audio\\Incoming"
+AUDIO_PROCESSED_PATH = "G:\\My Drive\\KnowledgeBot\\Audio\\Processed"
+TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
 
 # Define categories for organizing recordings
+CATEGORIES_PROMPT = """
+Based on this transcription, classify it into one of these categories: 
+    - meeting (if it's a conversation between multiple people discussing work-related topics)
+    - idea (if it's a monologue about new ideas, projects, or creative thoughts)
+    - meditation (if it's the recording of a guided meditation)
+    - unsorted (if it doesn't fit the other categories)
+    
+    Only respond with the category name, nothing else.
+    
+    Transcription:
+"""
 CATEGORIES = ["Meetings", "Ideas", "Unsorted", "Meditations"]
 TRANSCRIPTION_CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
 
@@ -40,7 +54,7 @@ SOURCE_TEMPLATE_PATH = f"{VAULT_PATH}\\Templates\\source.md"
 # File paths for different stages of processing
 AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
 SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
-TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
+#TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
 
 TRANSCR_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
 
@@ -59,7 +73,9 @@ with open("secrets.yml", "r") as f:
 gemini = AI("gemini1.5")
 gpt4o = AI("gpt4o")
 sonnet35 = AI("sonnet3.5")
+haiku35 = AI("haiku3.5")
 ai_model = sonnet35
+small_ai_model = haiku35
 
 # Set up AssemblyAI transcriber
 assemblyai.settings.api_key = secrets["assembly_ai"]
@@ -152,6 +168,24 @@ def get_recording_date(file_path):
         # Return file modification time as a last resort
         return datetime.fromtimestamp(os.path.getmtime(file_path))
 
+###############################
+# AI MODEL FUNCTIONS
+###############################
+
+def classify_transcription(text: str) -> str:
+    """Classify the transcription into a category based on its content."""
+    prompt = CATEGORIES_PROMPT
+    return small_ai_model.message(prompt + text)
+
+def generate_title(text: str) -> str:
+    """Generate a short, descriptive title for the transcription."""
+    prompt = """Generate a very short title (1-5 words) that captures the main topic or essence of this transcription.
+    Only output the title, nothing else.
+    
+    Transcription:
+    """
+    return small_ai_model.message(prompt + text)
+
 def generate_summary(category: str, transcription: str) -> str:
     """Generate a summary for a given transcription based on its category."""
     with open(f"prompts/summarise_{category.lower()}.md", "r") as f:
@@ -168,6 +202,10 @@ def generate_meditation_summary(transcription: str) -> str:
     prompt = "Summarize this meditation in 100 words or less. ONLY OUTPUT THE SUMMARY, nothing else. Meditation transcript: \n\n"
     return ai_model.message(prompt + transcription).strip()
 
+###############################
+# END OF AI MODEL FUNCTIONS
+###############################
+
 def create_meditation_markdown(title: str, date: str, audio_link: str, summary: str, transcription: str) -> str:
     """Create a markdown file for a meditation."""
     return f"""# {title}
@@ -182,6 +220,80 @@ Date: {date}
 {transcription}
 """
 
+async def process_single_file(file_path: str, output_dir: str, original_filename: str):
+    """Process a single audio file: transcribe, classify, and save."""
+    try:
+        # Get recording date
+        recording_date = get_recording_date(file_path)
+        date_str = recording_date.strftime("%Y-%m-%d")
+        
+        # Transcribe
+        transcript = await transcribe_audio_file(file_path, config)
+        
+        # Classify and generate title
+        category = classify_transcription(transcript.text)
+        title = None
+        # Check if original filename starts with date pattern
+        filename_without_ext = os.path.splitext(original_filename)[0]
+        if filename_without_ext.startswith(date_str):
+            # Extract everything after the date as title
+            title_parts = filename_without_ext[len(date_str):].strip()
+            if title_parts.startswith("-"):
+                title = title_parts[1:].strip()  # Remove the " - " separator
+                print(f"Using existing title from filename: {title}", flush=True)
+        if title is None:
+            # Otherwise, generate a new title
+            title = generate_title(transcript.text)
+
+        print(f"Classified as: {category}, Title: {title}", flush=True)
+        
+        # Create safe filename base (without extension)
+        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        base_filename = f"{date_str} - {category} - {safe_title}"
+        
+        # Save JSON response
+        json_filename = f"{base_filename}.json"
+        async with aiofiles.open(os.path.join(output_dir, json_filename), "w") as f:
+            await f.write(json.dumps(transcript.json_response, indent=2))
+        
+        print(f"Saved JSON: {json_filename}", flush=True)
+
+        # Prepare frontmatter
+        frontmatter = f"""---
+tags:
+  - transcription
+  - {category}
+date: {date_str}
+original_file: "{original_filename}"
+title: "{title}"
+json_data: "{json_filename}"
+AutoNoteMover: "disable"
+---
+"""
+        # Save markdown with speaker labels
+        text_with_speakers = "\n".join(f"Speaker {u.speaker} : {u.text}" for u in transcript.utterances)
+        full_content = frontmatter + "\n" + text_with_speakers
+        
+        md_filename = f"{base_filename}.md"
+
+        async with aiofiles.open(os.path.join(output_dir, md_filename), "w", encoding='utf-8') as f:
+            await f.write(full_content)
+        
+        print(f"Saved MD: {md_filename}", flush=True)
+
+        # Move original file to processed folder
+        os.makedirs(AUDIO_PROCESSED_PATH, exist_ok=True)
+        os.rename(file_path, os.path.join(AUDIO_PROCESSED_PATH, original_filename))
+        
+        print(f"Processed: {original_filename} -> {md_filename}", flush=True)
+        
+    except Exception as e:
+        print(f"Error processing {original_filename}: {str(e)}", flush=True)
+        traceback.print_exc()
+    finally:
+        FILES_IN_TRANSCRIPTION.remove(original_filename)
+
+
 async def transcribe_audio_file(file_path: str, config: assemblyai.TranscriptionConfig) -> assemblyai.Transcript:
     """Asynchronously transcribe a single audio file."""
     async with aiohttp.ClientSession():
@@ -189,7 +301,7 @@ async def transcribe_audio_file(file_path: str, config: assemblyai.Transcription
         transcript = transcriber.transcribe(file_path, config)
     return transcript
 
-async def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
+async def transcribe_audio_files(input_dir: str, output_dir: str):
     """
     Transcribe audio files from input directory and save results in output directory.
     
@@ -199,51 +311,18 @@ async def transcribe_audio_files(input_dir: str, output_dir: str, category: str)
     tasks = []
     for filename in os.listdir(input_dir):
         file_path = os.path.join(input_dir, filename)
-        recording_date = get_recording_date(file_path)
-        date_str = recording_date.strftime("%Y-%m-%d")
         
-        json_filename = change_file_extension(filename, "json")
-        md_filename = change_file_extension(filename, "md")
-        
-        if md_filename in os.listdir(output_dir) or filename in FILES_IN_TRANSCRIPTION:
+        # Skip if already being processed
+        if filename in FILES_IN_TRANSCRIPTION:
             continue
         
         FILES_IN_TRANSCRIPTION.add(filename)
         print(f"Queuing transcription: {filename}", flush=True)
 
-        task = asyncio.create_task(transcribe_and_save(file_path, output_dir, json_filename, md_filename, date_str, category, filename))
+        task = asyncio.create_task(process_single_file(file_path, output_dir, filename))
         tasks.append(task)
     
     await asyncio.gather(*tasks)
-        
-async def transcribe_and_save(file_path, output_dir, json_filename, md_filename, date_str, category, filename):
-    try:
-        transcript = await transcribe_audio_file(file_path, config)
-        
-        # Save JSON response
-        async with aiofiles.open(os.path.join(output_dir, json_filename), "w") as f:
-            await f.write(json.dumps(transcript.json_response))
-        
-        
-        # Save markdown with speaker labels
-        frontmatter = """---
-tags:
-  - transcription
-""" 
-        if category != "Unsorted":
-            frontmatter += "  - " + {"Meetings": "meeting", "Ideas": "idea"}[category] + "\n"
-        frontmatter += f"""date: {date_str}
----
-"""
-        text_with_speakers = "\n".join(f"Speaker {u.speaker} : {u.text}" for u in transcript.utterances)
-        async with aiofiles.open(os.path.join(output_dir, md_filename), "w", encoding='utf-8') as f:
-            await f.write(frontmatter + text_with_speakers)
-        
-        print(f"Transcribed: {filename}", flush=True)
-    except Exception as e:
-        print(f"Error transcribing {filename}: {str(e)}", flush=True)
-    finally:
-        FILES_IN_TRANSCRIPTION.remove(filename)
 
 def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
     """
@@ -308,15 +387,10 @@ def save_processed_file(category, original_filename, processed_filename):
 @slow_repeater.register
 async def process_all_transcriptions():
     """Transcribe all audio files across relevant categories."""
-    tasks = []
-    for category in TRANSCRIPTION_CATEGORIES:
-        task = asyncio.create_task(transcribe_audio_files(
-            AUDIO_PATH.format(name=category),
-            TRANSCRIPTIONS_PATH.format(name=category),
-            category
-        ))
-        tasks.append(task)
-    await asyncio.gather(*tasks)
+    try:
+        await transcribe_audio_files(AUDIO_INPUT_PATH, TRANSCRIPTIONS_PATH)
+    except Exception:
+        print(traceback.format_exc())
 
 @slow_repeater.register
 async def pull_gdocs():
@@ -450,6 +524,9 @@ async def process_meditations():
 def create_required_directories():
     """Create all required directories if they don't exist."""
     directories = [
+        AUDIO_INPUT_PATH,
+        AUDIO_PROCESSED_PATH
+    ] + [
         AUDIO_PATH.format(name=category) for category in CATEGORIES
     ] + [
         SUMMARIES_PATH.format(name=category) for category in CATEGORIES
@@ -462,6 +539,7 @@ def create_required_directories():
         TRANSCR_PATH
     ]
 
+    print("Creating directories...", flush=True)
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
