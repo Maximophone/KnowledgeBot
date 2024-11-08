@@ -2,9 +2,6 @@ import asyncio
 from obsidian_ai import process_file, needs_answer, VAULT_PATH
 from file_watcher import start_file_watcher
 from transcribe import (
-    process_all_transcriptions,
-    pull_gdocs,
-    summarize_markdownloads,
     start_repeaters
 )
 

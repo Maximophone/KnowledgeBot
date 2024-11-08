@@ -21,6 +21,8 @@ import traceback
 import assemblyai
 from mutagen import File
 from datetime import datetime
+import aiofiles
+import aiohttp
 
 from gdoc_utils import GoogleDocUtils
 
@@ -180,13 +182,21 @@ Date: {date}
 {transcription}
 """
 
-def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
+async def transcribe_audio_file(file_path: str, config: assemblyai.TranscriptionConfig) -> assemblyai.Transcript:
+    """Asynchronously transcribe a single audio file."""
+    async with aiohttp.ClientSession():
+        #TODO: Not async, to be fixed
+        transcript = transcriber.transcribe(file_path, config)
+    return transcript
+
+async def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
     """
     Transcribe audio files from input directory and save results in output directory.
     
     This function processes each audio file, generates a transcription using AssemblyAI,
     and saves the result as both JSON and markdown files.
     """
+    tasks = []
     for filename in os.listdir(input_dir):
         file_path = os.path.join(input_dir, filename)
         recording_date = get_recording_date(file_path)
@@ -199,13 +209,21 @@ def transcribe_audio_files(input_dir: str, output_dir: str, category: str):
             continue
         
         FILES_IN_TRANSCRIPTION.add(filename)
-        print(f"Transcribing: {filename}", flush=True)
+        print(f"Queuing transcription: {filename}", flush=True)
+
+        task = asyncio.create_task(transcribe_and_save(file_path, output_dir, json_filename, md_filename, date_str, category, filename))
+        tasks.append(task)
+    
+    await asyncio.gather(*tasks)
         
-        transcript = transcriber.transcribe(file_path, config)
+async def transcribe_and_save(file_path, output_dir, json_filename, md_filename, date_str, category, filename):
+    try:
+        transcript = await transcribe_audio_file(file_path, config)
         
         # Save JSON response
-        with open(os.path.join(output_dir, json_filename), "w") as f:
-            json.dump(transcript.json_response, f)
+        async with aiofiles.open(os.path.join(output_dir, json_filename), "w") as f:
+            await f.write(json.dumps(transcript.json_response))
+        
         
         # Save markdown with speaker labels
         frontmatter = """---
@@ -218,10 +236,13 @@ tags:
 ---
 """
         text_with_speakers = "\n".join(f"Speaker {u.speaker} : {u.text}" for u in transcript.utterances)
-        with open(os.path.join(output_dir, md_filename), "w", encoding='utf-8') as f:
-            f.write(frontmatter+text_with_speakers)
+        async with aiofiles.open(os.path.join(output_dir, md_filename), "w", encoding='utf-8') as f:
+            await f.write(frontmatter + text_with_speakers)
         
-        print(text_with_speakers)
+        print(f"Transcribed: {filename}", flush=True)
+    except Exception as e:
+        print(f"Error transcribing {filename}: {str(e)}", flush=True)
+    finally:
         FILES_IN_TRANSCRIPTION.remove(filename)
 
 def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
@@ -287,11 +308,15 @@ def save_processed_file(category, original_filename, processed_filename):
 @slow_repeater.register
 async def process_all_transcriptions():
     """Transcribe all audio files across relevant categories."""
+    tasks = []
     for category in TRANSCRIPTION_CATEGORIES:
-        try:
-            transcribe_audio_files(AUDIO_PATH.format(name=category), TRANSCRIPTIONS_PATH.format(name=category), category)
-        except Exception:
-            print(traceback.format_exc())
+        task = asyncio.create_task(transcribe_audio_files(
+            AUDIO_PATH.format(name=category),
+            TRANSCRIPTIONS_PATH.format(name=category),
+            category
+        ))
+        tasks.append(task)
+    await asyncio.gather(*tasks)
 
 @slow_repeater.register
 async def pull_gdocs():
