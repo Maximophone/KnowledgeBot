@@ -42,23 +42,13 @@ Based on this transcription, classify it into one of these categories:
     
     Transcription:
 """
-CATEGORIES = ["Meetings", "Ideas", "Unsorted", "Meditations"]
-TRANSCRIPTION_CATEGORIES = ["Meetings", "Ideas", "Unsorted"]
 
 VAULT_PATH = "G:\\My Drive\\Obsidian"
+KNOWLEDGEBOT_PATH = f"{VAULT_PATH}\\KnowledgeBot"
 MARKDOWNLOAD_PATH = f"{VAULT_PATH}\\MarkDownload"
 GDOC_PATH = f"{VAULT_PATH}\\gdoc"
 SOURCES_PATH = f"{VAULT_PATH}\\Source"
 SOURCE_TEMPLATE_PATH = f"{VAULT_PATH}\\Templates\\source.md"
-
-# File paths for different stages of processing
-AUDIO_PATH = "G:\\My Drive\\Projects\\KnowledgeBot\\Audio\\{name}"
-SUMMARIES_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}"
-#TRANSCRIPTIONS_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\{name}\\Transcriptions"
-
-TRANSCR_PATH = "G:\\My Drive\\Obsidian\\KnowledgeBot\\Transcriptions"
-
-PROCESSED_FILES_TRACKER = "G:\\My Drive\\Obsidian\\KnowledgeBot\\processed_files_tracker.md"
 
 # Sets to track files currently being processed
 FILES_IN_TRANSCRIPTION = set()
@@ -324,66 +314,6 @@ async def transcribe_audio_files(input_dir: str, output_dir: str):
     
     await asyncio.gather(*tasks)
 
-def summarize_transcriptions(category: str, input_dir: str, output_dir: str):
-    """
-    Generate summaries for transcriptions in a given category.
-    
-    This function processes JSON transcription files, generates summaries using AI models,
-    and saves the summaries as markdown files.
-    """
-    for filename in os.listdir(input_dir):
-        if not filename.endswith(".json"):
-            continue
-        
-        md_filename = change_file_extension(filename, "md")
-        if md_filename in os.listdir(output_dir) or filename in FILES_IN_SUMMARIZATION:
-            continue
-        
-        FILES_IN_SUMMARIZATION.add(filename)
-        print(f"Summarizing: {filename}", flush=True)
-        
-        with open(f"{input_dir}/{filename}", "r") as f:
-            result = json.load(f)
-        
-        summary = generate_summary(category, result["text"])
-        
-        with open(f"{output_dir}/{md_filename}", "w") as f:
-            f.write(summary)
-        
-        FILES_IN_SUMMARIZATION.remove(filename)
-
-
-def load_processed_files():
-    processed_files = {}
-    if os.path.exists(PROCESSED_FILES_TRACKER):
-        with open(PROCESSED_FILES_TRACKER, 'r', encoding='utf-8') as f:
-            current_category = None
-            for line in f:
-                line = line.strip()
-                if line.startswith('## '):
-                    current_category = line[3:]
-                    processed_files[current_category] = {}
-                elif line.startswith('- '):
-                    parts = line[2:].split(' -> ')
-                    if len(parts) == 2 and current_category:
-                        processed_files[current_category][parts[0]] = parts[1]
-    return processed_files
-
-def save_processed_file(category, original_filename, processed_filename):
-    processed_files = load_processed_files()
-    if category not in processed_files:
-        processed_files[category] = {}
-    processed_files[category][original_filename] = processed_filename
-    
-    with open(PROCESSED_FILES_TRACKER, 'w', encoding='utf-8') as f:
-        f.write("# Processed Files Tracker\n\n")
-        f.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        for cat, files in processed_files.items():
-            f.write(f"## {cat}\n\n")
-            for orig, proc in files.items():
-                f.write(f"- {orig} -> {proc}\n")
-            f.write("\n")
-
 @slow_repeater.register
 async def process_all_transcriptions():
     """Transcribe all audio files across relevant categories."""
@@ -456,87 +386,175 @@ async def summarize_markdownloads():
 
 @slow_repeater.register
 async def process_meditations():
-    """Process meditation audio files."""
-    input_dir = AUDIO_PATH.format(name="Meditations")
-    output_dir = SUMMARIES_PATH.format(name="Meditations")
-    processed_files = load_processed_files()
-    processed_meditations = processed_files.get("Meditations", {})
-
-    # Ensure output directory exists
+    """Process transcriptions categorized as meditations.
+    Creates a simplified, summarized version in the Meditations folder."""
+    
+    input_dir = TRANSCRIPTIONS_PATH
+    output_dir = f"{KNOWLEDGEBOT_PATH}\\Meditations"
     os.makedirs(output_dir, exist_ok=True)
-
+    
     for filename in os.listdir(input_dir):
-        if filename in processed_meditations:
-            continue  # Skip already processed files
-
-        if filename in FILES_IN_TRANSCRIPTION or filename in FILES_IN_SUMMARIZATION:
+        if not filename.endswith('.md'):
             continue
-
-        file_path = os.path.join(input_dir, filename)
-        recording_date = get_recording_date(file_path)
-        date_str = recording_date.strftime("%Y-%m-%d")
-
-        # Transcribe
-        FILES_IN_TRANSCRIPTION.add(filename)
-        print(f"Transcribing meditation: {filename}", flush=True)
+            
+        # Check if this is a meditation transcription
+        if "- meditation -" not in filename.lower():
+            continue
+            
+        # Generate output filename (same as input but in different folder)
+        output_file = os.path.join(output_dir, filename)
+        if os.path.exists(output_file):
+            continue
+            
+        if filename in FILES_IN_IMPROVEMENT:
+            continue
+            
+        FILES_IN_IMPROVEMENT.add(filename)
+        print(f"Processing meditation: {filename}", flush=True)
+        
         try:
-            transcript = transcriber.transcribe(file_path, config)
-            if transcript is None or transcript.text is None:
-                print(f"Error: Transcription failed for {filename}", flush=True)
-                FILES_IN_TRANSCRIPTION.remove(filename)
-                continue
+            # Read the transcription
+            with open(os.path.join(input_dir, filename), 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Parse frontmatter and transcript
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
+            
+            # Generate title and summary
+            title = generate_meditation_title(transcript)
+            summary = generate_meditation_summary(transcript)
+            
+            # Create markdown content
+            date_str = frontmatter.get('date', '')
+            original_file = frontmatter.get('original_file', '')
+            sanitized_filename = original_file.replace(" ", "%20")
+            audio_link = f"G:/My Drive/KnowledgeBot/Audio/Processed/{sanitized_filename}"
+            
+            markdown_content = create_meditation_markdown(
+                title=title,
+                date=date_str,
+                audio_link=audio_link,
+                summary=summary,
+                transcription=transcript
+            )
+            
+            # Save processed file
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(markdown_content)
+                
+            print(f"Processed meditation: {filename}", flush=True)
+            
         except Exception as e:
-            print(f"Error transcribing {filename}: {str(e)}", flush=True)
-            FILES_IN_TRANSCRIPTION.remove(filename)
-            continue
-        FILES_IN_TRANSCRIPTION.remove(filename)
+            print(f"Error processing {filename}: {str(e)}", flush=True)
+            traceback.print_exc()
+        finally:
+            FILES_IN_IMPROVEMENT.remove(filename)
 
-        # Generate title and summary
-        FILES_IN_SUMMARIZATION.add(filename)
-        print(f"Summarizing meditation: {filename}", flush=True)
+@slow_repeater.register
+async def process_ideas():
+    """Process transcriptions categorized as ideas.
+    Extracts individual ideas and adds them to the ideas directory."""
+    
+    input_dir = TRANSCRIPTIONS_PATH
+    ideas_directory_path = f"{KNOWLEDGEBOT_PATH}\\Ideas Directory.md"
+    
+    # Create ideas directory if it doesn't exist
+    os.makedirs(os.path.dirname(ideas_directory_path), exist_ok=True)
+    if not os.path.exists(ideas_directory_path):
+        # Initialize the ideas directory with frontmatter
+        with open(ideas_directory_path, "w", encoding="utf-8") as f:
+            f.write("""---
+tags:
+  - ideas
+  - directory
+---
+# Ideas Directory
+
+""")
+
+    # Read existing directory to check which files have been processed
+    with open(ideas_directory_path, "r", encoding="utf-8") as f:
+        directory_content = f.read()
+    
+    for filename in os.listdir(input_dir):
+        if not filename.endswith('.md'):
+            continue
+            
+        # Check if this is an idea transcription
+        if "- idea -" not in filename.lower():
+            continue
+            
+        # Skip if this file has already been processed
+        if f"[[{filename}]]" in directory_content:
+            continue
+            
+        if filename in FILES_IN_IMPROVEMENT:
+            continue
+            
+        FILES_IN_IMPROVEMENT.add(filename)
+        print(f"Processing ideas from: {filename}", flush=True)
+        
         try:
-            title = generate_meditation_title(transcript.text)
-            summary = generate_meditation_summary(transcript.text)
+            # Read the transcription
+            with open(os.path.join(input_dir, filename), 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Parse frontmatter and transcript
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
+            
+            # Extract individual ideas
+            ideas_prompt = """Analyze this transcript and extract ALL distinct ideas, even if some are only briefly mentioned.
+            
+            Important guidelines:
+            - Only split into multiple ideas if the transcript clearly discusses completely different, unrelated topics
+            - Most transcripts should result in just one idea
+            - For each idea, provide:
+                1. A specific, searchable title (3-7 words)
+                2. A concise summary that captures the essence in 1-2 short sentences
+            
+            Format your response as:
+            ### {Title}
+            {Concise summary focusing on the core concept, written in clear, direct language}
+            
+            Example format:
+            ### Spaced Repetition for Habit Formation
+            Using spaced repetition algorithms to optimize habit trigger timing, adapting intervals based on adherence data.
+            
+            ### Personal Knowledge Graph with Emergence
+            A note-taking system where connections between notes evolve automatically based on semantic similarity and usage patterns.
+            
+            Transcript:
+            """
+            ideas_text = ai_model.message(ideas_prompt + transcript)
+            
+            # Prepare the content to append
+            date_str = frontmatter.get('date', '')
+            append_content = f"\n## Ideas from [[{filename}]] - {date_str}\n\n{ideas_text}\n\n---\n"
+            
+            # Append to ideas directory
+            with open(ideas_directory_path, "a", encoding="utf-8") as f:
+                f.write(append_content)
+                
+            print(f"Processed ideas from: {filename}", flush=True)
+            
         except Exception as e:
-            print(f"Error generating title or summary for {filename}: {str(e)}", flush=True)
-            FILES_IN_SUMMARIZATION.remove(filename)
-            continue
-        FILES_IN_SUMMARIZATION.remove(filename)
-
-        # Create markdown content
-        sanitized_filename = filename.replace(" ", "%20")
-        audio_link = f"G:/My Drive/Projects/KnowledgeBot/Audio/Meditations/{sanitized_filename}"
-        markdown_content = create_meditation_markdown(title, date_str, audio_link, summary, transcript.text)
-
-        # Save markdown file
-        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        markdown_filename = f"{date_str} - {safe_title}.md"
-        markdown_path = os.path.join(output_dir, markdown_filename)
-        with open(markdown_path, "w", encoding='utf-8') as f:
-            f.write(markdown_content)
-
-        # Update the tracker
-        save_processed_file("Meditations", filename, markdown_filename)
-
-        print(f"Processed meditation: {markdown_filename}", flush=True)
+            print(f"Error processing {filename}: {str(e)}", flush=True)
+            traceback.print_exc()
+        finally:
+            FILES_IN_IMPROVEMENT.remove(filename)
 
 # Add this function to create necessary directories
 def create_required_directories():
     """Create all required directories if they don't exist."""
     directories = [
         AUDIO_INPUT_PATH,
-        AUDIO_PROCESSED_PATH
-    ] + [
-        AUDIO_PATH.format(name=category) for category in CATEGORIES
-    ] + [
-        SUMMARIES_PATH.format(name=category) for category in CATEGORIES
-    ] + [
-        TRANSCRIPTIONS_PATH.format(name=category) for category in TRANSCRIPTION_CATEGORIES
-    ] + [
+        AUDIO_PROCESSED_PATH,
         MARKDOWNLOAD_PATH,
         GDOC_PATH,
         SOURCES_PATH,
-        TRANSCR_PATH
+        TRANSCRIPTIONS_PATH,
     ]
 
     print("Creating directories...", flush=True)
