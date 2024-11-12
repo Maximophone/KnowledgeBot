@@ -10,6 +10,7 @@ from .utils import get_recording_date
 from ..common.frontmatter import frontmatter_to_text
 
 from ai import AI, get_prompt
+import re
 
 
 class AudioTranscriber:
@@ -70,6 +71,36 @@ class AudioTranscriber:
             # Transcribe
             transcript = await self.transcribe_audio_file(file_path)
             
+            # Process speaker labels with LeMUR
+            text_with_speaker_labels = "\n".join(
+                f"Speaker {utt.speaker}:\n{utt.text}\n" 
+                for utt in transcript.utterances
+            )
+            
+            unique_speakers = set(utt.speaker for utt in transcript.utterances)
+            questions = [
+                assemblyai.LemurQuestion(
+                    question=f"Who is speaker {speaker}?",
+                    answer_format="<First Name>"
+                )
+                for speaker in unique_speakers
+            ]
+            
+            result = assemblyai.Lemur().question(
+                questions,
+                input_text=text_with_speaker_labels,
+                context="Your task is to infer the speaker's name from the speaker-labelled transcript"
+            )
+            
+            speaker_mapping = {}
+            for qa_response in result.response:
+                pattern = r"Who is speaker (\w)\?"
+                match = re.search(pattern, qa_response.question)
+                if match:
+                    speaker_label = match.group(1)
+                    speaker_name = qa_response.answer.strip() or f"Speaker {speaker_label}"
+                    speaker_mapping[speaker_label] = speaker_name
+            
             # classification and title generation
             category = self.classify_transcription(transcript.text)
             
@@ -84,7 +115,7 @@ class AudioTranscriber:
             
             if title is None:
                 # Generate new title if none found in filename
-                title = self.generate_title(transcript.text)  # You'll need to implement this
+                title = self.generate_title(transcript.text)
 
             print(f"Classified as: {category}, Title: {title}", flush=True)
             
@@ -110,10 +141,10 @@ class AudioTranscriber:
                 "AutoNoteMover": "disable"
             }
             
-            # Save markdown with speaker labels
+            # Save markdown with speaker names
             text_with_speakers = "\n".join(
-                f"Speaker {u.speaker}: {u.text}" 
-                for u in transcript.utterances
+                f"{speaker_mapping.get(utt.speaker, f'Speaker {utt.speaker}')}: {utt.text}" 
+                for utt in transcript.utterances
             )
             full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speakers
             
