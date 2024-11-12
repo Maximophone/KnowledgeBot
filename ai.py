@@ -13,9 +13,8 @@ import os
 import base64
 from PIL import Image
 from io import BytesIO
+from config import secrets
 
-with open("secrets.yml", "r") as f:
-    secrets = yaml.safe_load(f)
 
 _MODELS_DICT = {
     "mock": "mock-",
@@ -45,6 +44,10 @@ DEFAULT_TEMPERATURE = 0.0
 #         for page in reader.pages:
 #             text += page.extract_text()
 #     return text
+
+def get_prompt(prompt_name: str) -> str:
+    with open(f"prompts/{prompt_name}.md", "r") as f:
+        return f.read()
 
 def encode_image(image_path: str) -> Tuple[str, str]:
     with open(image_path, "rb") as image_file:
@@ -229,11 +232,11 @@ def get_client(model_name: str) -> AIWrapper:
     model_name = get_model(model_name)
     client_name, _ = model_name.split("-", 1)
     if client_name == "claude":
-        return ClaudeWrapper(secrets["claude_api_key"])
+        return ClaudeWrapper(secrets.CLAUDE_API_KEY)
     elif client_name == "gemini":
-        return GeminiWrapper(secrets["gemini_api_key"], get_model(model_name))
+        return GeminiWrapper(secrets.GEMINI_API_KEY, get_model(model_name))
     elif client_name == "gpt" or client_name == "o1":
-        return GPTWrapper(secrets["openai_api_key"], secrets["openai_org"])
+        return GPTWrapper(secrets.OPENAI_API_KEY, secrets.OPENAI_ORG)
     elif client_name == "mock":
         return MockWrapper()
     return None

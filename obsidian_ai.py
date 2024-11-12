@@ -34,6 +34,7 @@ from file_watcher import start_file_watcher
 from file_packager import get_committed_files, format_for_llm
 from beacons import beacon_ai, beacon_error, beacon_me
 from parser.tag_parser import process_tags
+from config import secrets
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -47,12 +48,8 @@ SEARCH_PATHS = [
     # Add any other paths you want to search
 ]
 
-# Load secrets
-with open("secrets.yml", "r") as f:
-    secrets = yaml.safe_load(f)
-
 # Initialize AI model
-api_key = secrets["claude_api_key"]
+api_key = secrets.CLAUDE_API_KEY
 client = anthropic.Client(api_key=api_key)
 model = ai.AI("claude-haiku")
 
