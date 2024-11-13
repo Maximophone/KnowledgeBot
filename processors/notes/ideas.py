@@ -10,6 +10,9 @@ class IdeaProcessor(NoteProcessor):
     
     def __init__(self, input_dir: Path, directory_file: Path):
         super().__init__(input_dir)
+        self.stage_name = "ideas_extracted"
+        self.required_stage = "speakers_identified"
+
         self.directory_file = directory_file
         self.directory_file.parent.mkdir(parents=True, exist_ok=True)
         
@@ -25,8 +28,6 @@ tags:
 """)
         
     def should_process(self, filename: str) -> bool:
-        if not filename.endswith('.md'):
-            return False
         if "- idea -" not in filename.lower():
             return False
             

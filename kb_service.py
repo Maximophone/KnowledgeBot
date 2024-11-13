@@ -8,6 +8,7 @@ from processors.notes.meditation import MeditationProcessor
 from processors.notes.ideas import IdeaProcessor
 from processors.notes.gdoc import GDocProcessor
 from processors.notes.markdownload import MarkdownloadProcessor
+from processors.notes.speaker_identifier import SpeakerIdentifier
 
 # Import existing services
 from obsidian_ai import process_file, needs_answer, VAULT_PATH
@@ -48,6 +49,10 @@ async def setup_processors():
         output_dir=PATHS.sources_path,
         template_path=PATHS.source_template_path
     )
+
+    speaker_identifier_processor = SpeakerIdentifier(
+        input_dir=PATHS.transcriptions
+    )
     
     # Register all processors with the repeater
     slow_repeater.register(transcriber.process_all)
@@ -55,6 +60,7 @@ async def setup_processors():
     slow_repeater.register(idea_processor.process_all)
     slow_repeater.register(gdoc_processor.process_all)
     slow_repeater.register(markdownload_processor.process_all)
+    slow_repeater.register(speaker_identifier_processor.process_all)
 
 async def run_processor_services():
     """Setup and start all processor services."""

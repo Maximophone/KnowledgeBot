@@ -10,13 +10,13 @@ class MeditationProcessor(NoteProcessor):
     
     def __init__(self, input_dir: Path, output_dir: Path):
         super().__init__(input_dir)
+        self.stage_name = "meditation_processed"
+        self.required_stage = "speakers_identified"
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.meditation_prompt = get_prompt("process_meditation")
         
     def should_process(self, filename: str) -> bool:
-        if not filename.endswith('.md'):
-            return False
         if "- meditation -" not in filename.lower():
             return False
         # Check if output file exists

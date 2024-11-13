@@ -11,22 +11,24 @@ class GDocProcessor(NoteProcessor):
     
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
+        self.stage_name = "gdoc_synced"
         self.gdu = GoogleDocUtils()
         
-    def should_process(self, filename: str) -> bool:
-        if not filename.endswith('.md'):
-            return False
-            
-        # Read frontmatter to check sync status
+    def should_process(self, filename: str) -> bool:    
+        # Read frontmatter
         with open(self.input_dir / filename, 'r', encoding='utf-8') as f:
             content = f.read()
         frontmatter = parse_frontmatter(content)
         
         if not frontmatter:
             return False
-            
-        # Process if not synced and has URL
-        return (not frontmatter.get("synced", True)) and frontmatter.get("url")
+
+        # Deprecated, here for backward-compatibility
+        if frontmatter.get("synced"):
+            return False
+        
+        # Process if it has a URL
+        return frontmatter.get("url")
         
     async def process_file(self, filename: str) -> None:
         print(f"Processing gdoc: {filename}", flush=True)

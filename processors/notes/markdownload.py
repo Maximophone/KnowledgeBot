@@ -10,6 +10,7 @@ class MarkdownloadProcessor(NoteProcessor):
     
     def __init__(self, input_dir: Path, output_dir: Path, template_path: Path):
         super().__init__(input_dir)
+        self.stage_name = "markdownload_summarised"
         self.output_dir = output_dir
         self.template_path = template_path
         self.output_dir.mkdir(parents=True, exist_ok=True)

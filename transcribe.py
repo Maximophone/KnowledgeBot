@@ -24,6 +24,8 @@ from datetime import datetime
 import aiofiles
 import aiohttp
 
+from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text
+
 from gdoc_utils import GoogleDocUtils
 
 AUDIO_INPUT_PATH = "G:\\My Drive\\KnowledgeBot\\Audio\\Incoming"
@@ -76,23 +78,6 @@ config = assemblyai.TranscriptionConfig(
 )
 
 GDU = GoogleDocUtils()
-
-def parse_frontmatter(txt: str) -> Dict:
-    """Returns None if it cannot be parsed"""
-    pieces = txt.split("---")
-    if len(pieces) < 3:
-        return None
-    frontmatter_txt = pieces[1]
-    try:
-        frontmatter = yaml.safe_load(frontmatter_txt)
-    except yaml.YAMLError:
-        return None
-    return frontmatter
-
-def frontmatter_to_text(frontmatter: Dict) -> str:
-    """"""
-    text = yaml.dump(frontmatter)
-    return "---\n" + text + "\n---\n"
 
 def write_gdoc(text: str, filename: str, frontmatter: Dict):
     """Overwrites a gdoc file with the text pulled from the google doc"""

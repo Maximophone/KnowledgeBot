@@ -33,7 +33,8 @@ class AudioTranscriber:
         self.transcriber = assemblyai.Transcriber()
         self.config = assemblyai.TranscriptionConfig(
             speaker_labels=True,
-            language_detection=True
+            language_detection=True,
+            word_boost=["Pause IA", "Pause AI", "Moiri"],
         )
         
         # Create necessary directories
@@ -77,29 +78,29 @@ class AudioTranscriber:
                 for utt in transcript.utterances
             )
             
-            unique_speakers = set(utt.speaker for utt in transcript.utterances)
-            questions = [
-                assemblyai.LemurQuestion(
-                    question=f"Who is speaker {speaker}?",
-                    answer_format="<First Name>"
-                )
-                for speaker in unique_speakers
-            ]
+            # unique_speakers = set(utt.speaker for utt in transcript.utterances)
+            # questions = [
+            #     assemblyai.LemurQuestion(
+            #         question=f"Who is speaker {speaker}?",
+            #         answer_format="<First Name>"
+            #     )
+            #     for speaker in unique_speakers
+            # ]
             
-            result = assemblyai.Lemur().question(
-                questions,
-                input_text=text_with_speaker_labels,
-                context="Your task is to infer the speaker's name from the speaker-labelled transcript"
-            )
+            # result = assemblyai.Lemur().question(
+            #     questions,
+            #     input_text=text_with_speaker_labels,
+            #     context="Your task is to infer the speaker's name from the speaker-labelled transcript"
+            # )
             
-            speaker_mapping = {}
-            for qa_response in result.response:
-                pattern = r"Who is speaker (\w)\?"
-                match = re.search(pattern, qa_response.question)
-                if match:
-                    speaker_label = match.group(1)
-                    speaker_name = qa_response.answer.strip() or f"Speaker {speaker_label}"
-                    speaker_mapping[speaker_label] = speaker_name
+            # speaker_mapping = {}
+            # for qa_response in result.response:
+            #     pattern = r"Who is speaker (\w)\?"
+            #     match = re.search(pattern, qa_response.question)
+            #     if match:
+            #         speaker_label = match.group(1)
+            #         speaker_name = qa_response.answer.strip() or f"Speaker {speaker_label}"
+            #         speaker_mapping[speaker_label] = speaker_name
             
             # classification and title generation
             category = self.classify_transcription(transcript.text)
@@ -138,16 +139,19 @@ class AudioTranscriber:
                 "original_file": filename,
                 "title": title,
                 "json_data": json_filename,
-                "AutoNoteMover": "disable"
+                "AutoNoteMover": "disable",
+                "processing_stages": ["transcribed"]  # Initialize as list
             }
             
             # Save markdown with speaker names
-            text_with_speakers = "\n".join(
-                f"{speaker_mapping.get(utt.speaker, f'Speaker {utt.speaker}')}: {utt.text}" 
-                for utt in transcript.utterances
-            )
-            full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speakers
+            # text_with_speakers = "\n".join(
+            #     f"{speaker_mapping.get(utt.speaker, f'Speaker {utt.speaker}')}: {utt.text}" 
+            #     for utt in transcript.utterances
+            # )
+            # full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speakers
             
+            full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speaker_labels
+
             md_filename = f"{base_filename}.md"
             md_path = self.output_dir / md_filename
 

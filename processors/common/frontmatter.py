@@ -1,6 +1,52 @@
 import yaml
 from typing import Dict, Any, Optional
 
+def read_front_matter(file_path):
+    front_matter = {}
+    with open(file_path, 'r', encoding='utf-8') as f:
+        # Check for the start of front matter
+        line = f.readline()
+        if line.strip() != '---':
+            return front_matter  # No front matter present
+        # Read lines until the end of front matter
+        yaml_lines = []
+        for line in f:
+            if line.strip() == '---':
+                break  # End of front matter
+            yaml_lines.append(line)
+        # Parse the YAML content
+        yaml_content = ''.join(yaml_lines)
+        try:
+            front_matter = yaml.safe_load(yaml_content)
+        except yaml.YAMLError as e:
+            print(f"Error parsing YAML front matter in {file_path}: {e}")
+            front_matter = {}
+    return front_matter
+
+def update_front_matter(file_path, new_front_matter):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    # Check if the file has front matter
+    if lines[0].strip() != '---':
+        # No front matter, so add it
+        front_matter_str = '---\n' + yaml.dump(new_front_matter) + '---\n'
+        new_content = front_matter_str + ''.join(lines)
+    else:
+        # Replace existing front matter
+        end_index = None
+        for i, line in enumerate(lines[1:], start=1):
+            if line.strip() == '---':
+                end_index = i
+                break
+        if end_index is None:
+            print(f"Error: Closing '---' not found in {file_path}")
+            return
+        front_matter_str = '---\n' + yaml.dump(new_front_matter) + '---\n'
+        new_content = front_matter_str + ''.join(lines[end_index+1:])
+    # Write the updated content back to the file
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(new_content)
+
 def parse_frontmatter(content: str) -> Optional[Dict[str, Any]]:
     """
     Extract and parse YAML frontmatter from markdown content.
