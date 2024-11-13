@@ -20,6 +20,8 @@ class Paths:
     markdownload_path: Path = vault_path / "MarkDownload"
     sources_path: Path = vault_path / "Source"
     source_template_path: Path = vault_path / "Templates" / "source.md"
+    meetings: Path = vault_path / "Meetings"
+    meeting_template: Path = vault_path / "Templates" / "meeting.md"
     
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
