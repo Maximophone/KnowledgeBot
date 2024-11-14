@@ -41,14 +41,9 @@ class AudioTranscriber:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
-        # Add small AI model for classification and title generation
+        # Add small AI model for title generation
         self.ai_model = AI("haiku3.5")
         self.prompt_title = get_prompt("transcript_title")
-        self.prompt_classify = get_prompt("classify_transcript")
-
-    def classify_transcription(self, text: str) -> str:
-        """Classify the transcription into a category based on its content."""
-        return self.ai_model.message(self.prompt_classify + text)
 
     def generate_title(self, text: str) -> str:
         """Generate a short, descriptive title for the transcription."""
@@ -78,9 +73,6 @@ class AudioTranscriber:
                 for utt in transcript.utterances
             )
             
-            # classification and title generation
-            category = self.classify_transcription(transcript.text)
-            
             title = None
             # Check if original filename starts with date pattern
             filename_without_ext = file_path.stem
@@ -94,7 +86,7 @@ class AudioTranscriber:
                 # Generate new title if none found in filename
                 title = self.generate_title(transcript.text)
 
-            print(f"Classified as: {category}, Title: {title}", flush=True)
+            print(f"Title: {title}", flush=True)
             
             # Create safe filename base
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -110,13 +102,12 @@ class AudioTranscriber:
 
             # Prepare frontmatter
             frontmatter = {
-                "tags": ["transcription", category],
+                "tags": ["transcription"],
                 "date": date_str,
                 "original_file": filename,
                 "title": title,
                 "json_data": json_filename,
                 "AutoNoteMover": "disable",
-                "category": category,
                 "processing_stages": ["transcribed"]  # Initialize as list
             }
             

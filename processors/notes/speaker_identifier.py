@@ -13,7 +13,7 @@ class SpeakerIdentifier(NoteProcessor):
         super().__init__(input_dir)
         self.ai_model = AI("sonnet3.5")
         self.tiny_model = AI("haiku")
-        self.required_stage = "transcribed"
+        self.required_stage = "classified"
         self.stage_name = "speakers_identified"
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:

@@ -11,6 +11,7 @@ from processors.notes.markdownload import MarkdownloadProcessor
 from processors.notes.speaker_identifier import SpeakerIdentifier
 from processors.notes.meeting import MeetingProcessor
 from processors.notes.meeting_summary import MeetingSummaryProcessor
+from processors.notes.transcript_classifier import TranscriptClassifier
 
 # Import existing services
 from obsidian_ai import process_file, needs_answer, VAULT_PATH
@@ -66,6 +67,10 @@ async def setup_processors():
         input_dir=PATHS.meetings,
         transcript_dir=PATHS.transcriptions
     )
+
+    transcript_classifier_processor = TranscriptClassifier(
+        input_dir=PATHS.transcriptions
+    )
     
     # Register all processors with the repeater
     slow_repeater.register(transcriber.process_all)
@@ -76,6 +81,7 @@ async def setup_processors():
     slow_repeater.register(speaker_identifier_processor.process_all)
     slow_repeater.register(meeting_processor.process_all)
     slow_repeater.register(meeting_summary_processor.process_all)
+    slow_repeater.register(transcript_classifier_processor.process_all)
 
 async def run_processor_services():
     """Setup and start all processor services."""
