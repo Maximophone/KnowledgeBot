@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
@@ -15,7 +16,7 @@ class SpeakerIdentifier(NoteProcessor):
         self.required_stage = "transcribed"
         self.stage_name = "speakers_identified"
         
-    def should_process(self, filename: str) -> bool:
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
         return True
                  
     async def identify_speaker(self, transcript: str, speaker_label: str) -> str:

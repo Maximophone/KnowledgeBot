@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, read_front_matter
+from ..common.frontmatter import parse_frontmatter
 
 
 class MeetingProcessor(NoteProcessor):
@@ -16,9 +17,8 @@ class MeetingProcessor(NoteProcessor):
         self.template_path = template_path
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-    def should_process(self, filename: str) -> bool:
-        # Check if it's a meeting transcript
-        if "- meeting -" not in filename.lower():
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
+        if frontmatter.get("category") != "meeting":
             return False
             
         # Check if meeting note already exists

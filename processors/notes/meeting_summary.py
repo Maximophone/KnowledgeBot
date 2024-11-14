@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
@@ -12,7 +13,7 @@ class MeetingSummaryProcessor(NoteProcessor):
         self.transcript_dir = transcript_dir
         self.stage_name = "meeting_summarized"
         
-    def should_process(self, filename: str) -> bool:            
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:            
         # Check if transcript exists and get its frontmatter            
         transcript_path = self.transcript_dir / filename
         if not transcript_path.exists():

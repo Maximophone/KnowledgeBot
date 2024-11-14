@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter
+from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ..common.markdown import create_wikilink
 
 
@@ -27,8 +28,8 @@ tags:
 
 """)
         
-    def should_process(self, filename: str) -> bool:
-        if "- idea -" not in filename.lower():
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
+        if frontmatter.get("category") != "idea":
             return False
             
         # Check if file is already referenced in directory

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
@@ -14,12 +15,7 @@ class GDocProcessor(NoteProcessor):
         self.stage_name = "gdoc_synced"
         self.gdu = GoogleDocUtils()
         
-    def should_process(self, filename: str) -> bool:    
-        # Read frontmatter
-        with open(self.input_dir / filename, 'r', encoding='utf-8') as f:
-            content = f.read()
-        frontmatter = parse_frontmatter(content)
-        
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:        
         if not frontmatter:
             return False
 

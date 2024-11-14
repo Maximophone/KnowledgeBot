@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
@@ -16,8 +17,8 @@ class MeditationProcessor(NoteProcessor):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.meditation_prompt = get_prompt("process_meditation")
         
-    def should_process(self, filename: str) -> bool:
-        if "- meditation -" not in filename.lower():
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
+        if frontmatter.get("category") != "meditation":
             return False
         # Check if output file exists
         return not (self.output_dir / filename).exists()

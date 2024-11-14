@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 import aiofiles
 from ..common.frontmatter import read_front_matter, update_front_matter, parse_frontmatter
 import traceback
@@ -40,13 +40,13 @@ class NoteProcessor(ABC):
             return False
 
         # Additional validation specific to the processor
-        if not self.should_process(filename):
+        if not self.should_process(filename, frontmatter):
             return False
             
         return True
 
     @abstractmethod
-    def should_process(self, filename: str) -> bool:
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
         """Determine if a file should be processed."""
         pass
         

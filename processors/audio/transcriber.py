@@ -78,30 +78,6 @@ class AudioTranscriber:
                 for utt in transcript.utterances
             )
             
-            # unique_speakers = set(utt.speaker for utt in transcript.utterances)
-            # questions = [
-            #     assemblyai.LemurQuestion(
-            #         question=f"Who is speaker {speaker}?",
-            #         answer_format="<First Name>"
-            #     )
-            #     for speaker in unique_speakers
-            # ]
-            
-            # result = assemblyai.Lemur().question(
-            #     questions,
-            #     input_text=text_with_speaker_labels,
-            #     context="Your task is to infer the speaker's name from the speaker-labelled transcript"
-            # )
-            
-            # speaker_mapping = {}
-            # for qa_response in result.response:
-            #     pattern = r"Who is speaker (\w)\?"
-            #     match = re.search(pattern, qa_response.question)
-            #     if match:
-            #         speaker_label = match.group(1)
-            #         speaker_name = qa_response.answer.strip() or f"Speaker {speaker_label}"
-            #         speaker_mapping[speaker_label] = speaker_name
-            
             # classification and title generation
             category = self.classify_transcription(transcript.text)
             
@@ -122,7 +98,7 @@ class AudioTranscriber:
             
             # Create safe filename base
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            base_filename = f"{date_str} - {category} - {safe_title}"
+            base_filename = f"{date_str}-{safe_title}"
             
             # Save JSON response
             json_filename = f"{base_filename}.json"
@@ -140,15 +116,9 @@ class AudioTranscriber:
                 "title": title,
                 "json_data": json_filename,
                 "AutoNoteMover": "disable",
+                "category": category,
                 "processing_stages": ["transcribed"]  # Initialize as list
             }
-            
-            # Save markdown with speaker names
-            # text_with_speakers = "\n".join(
-            #     f"{speaker_mapping.get(utt.speaker, f'Speaker {utt.speaker}')}: {utt.text}" 
-            #     for utt in transcript.utterances
-            # )
-            # full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speakers
             
             full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speaker_labels
 

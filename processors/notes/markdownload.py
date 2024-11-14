@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
@@ -16,7 +17,7 @@ class MarkdownloadProcessor(NoteProcessor):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.prompt_summary = get_prompt("summarise_markdownload")
         
-    def should_process(self, filename: str) -> bool:
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
         if not (filename.startswith("markdownload_") and filename.endswith(".md")):
             return False
             
