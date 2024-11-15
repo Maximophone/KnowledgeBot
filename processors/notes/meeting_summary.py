@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, parse_frontmatter
+from ..common.frontmatter import read_front_matter
 
 
 class MeetingSummaryProcessor(NoteProcessor):

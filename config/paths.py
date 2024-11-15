@@ -22,6 +22,7 @@ class Paths:
     source_template_path: Path = vault_path / "Templates" / "source.md"
     meetings: Path = vault_path / "Meetings"
     meeting_template: Path = vault_path / "Templates" / "meeting.md"
+    conversations: Path = vault_path / "Conversations"
     
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
@@ -30,7 +31,12 @@ class Paths:
             self.audio_processed,
             self.transcriptions,
             self.meditations,
-            self.ideas_directory.parent
+            self.ideas_directory.parent,
+            self.gdoc_path,
+            self.markdownload_path,
+            self.sources_path,
+            self.meetings,
+            self.conversations,
         ])
 
 PATHS = Paths()
