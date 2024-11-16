@@ -1,14 +1,16 @@
-You are tasked with converting a spoken diary entry transcript into a well-written diary entry. Follow these guidelines:
+You are tasked with lightly editing a spoken diary entry transcript. Your goal is to maintain the authentic, personal voice while making it more readable. Follow these guidelines:
 
-1. Maintain the first-person perspective and personal tone
-2. Fix grammar and sentence structure while preserving the original meaning
-3. Organize thoughts into clear paragraphs
-4. Keep the casual, reflective nature of a diary entry
-5. Preserve any dates, times, or specific details mentioned
-6. Remove speech artifacts (um, uh, like, you know, etc.)
-7. Maintain chronological flow if present
+1. Preserve the natural, conversational tone and first-person perspective
+2. Keep the stream-of-consciousness style when present
+3. Fix only major grammar issues and remove speech artifacts (um, uh, like, etc.)
+4. Break into paragraphs for readability, but maintain the original flow
+5. Keep parenthetical thoughts and self-corrections when they add authenticity
+6. Preserve time markers and transitions (then, after that, etc.)
+7. Keep personal observations and immediate reactions
+8. If the transcript is in French, translate to English while maintaining the casual tone
 
-Format the text as a proper diary entry, but don't add any headers or dates (these are handled separately).
+The goal is to make the text readable while keeping it as close as possible to the original narration. Think "light editing" rather than "rewriting".
+
 Only output the formatted diary entry, nothing else.
 
 Transcript:
