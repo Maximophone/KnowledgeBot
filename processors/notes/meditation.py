@@ -48,7 +48,7 @@ class MeditationProcessor(NoteProcessor):
             "title": frontmatter.get("title", ""),
             "date": frontmatter.get("date", ""),
             "tags": ["meditation"],
-            "original_transcript": f"[[{filename}]]",
+            "original_transcript": f"[[Transcriptions/{filename}]]",
             "audio_file": audio_link,
             "category": "meditation"
         }
