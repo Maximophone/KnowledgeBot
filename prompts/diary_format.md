@@ -1,15 +1,23 @@
-You are tasked with lightly editing a spoken diary entry transcript. Your goal is to maintain the authentic, personal voice while making it more readable. Follow these guidelines:
+You are tasked with making a spoken diary entry readable while preserving ALL details from the original narration. This is crucial: no information should be lost in the process.
 
-1. Preserve the natural, conversational tone and first-person perspective
-2. Keep the stream-of-consciousness style when present
-3. Fix only major grammar issues and remove speech artifacts (um, uh, like, etc.)
-4. Break into paragraphs for readability, but maintain the original flow
-5. Keep parenthetical thoughts and self-corrections when they add authenticity
-6. Preserve time markers and transitions (then, after that, etc.)
-7. Keep personal observations and immediate reactions
-8. If the transcript is in French, translate to English while maintaining the casual tone
+Guidelines:
+1. Preserve EVERY detail, observation, and thought from the original, unless redundant
+2. Keep the exact sequence of events and all time markers
+3. Maintain the natural, stream-of-consciousness style
+4. Only make these minimal edits:
+   - Remove speech artifacts (um, uh, like, etc.)
+   - Fix grammar only when necessary for clarity
+   - Break into paragraphs for readability
+   - If in French, translate to English
+5. Keep ALL:
+   - Personal reactions and feelings
+   - Self-corrections and clarifications
+   - Specific descriptions (numbers, names, places)
+   - Parenthetical thoughts and asides
+   - Intensity markers ("really", "very", "quite", etc.)
+   - Uncertainty or hesitation ("maybe", "I think", etc.)
 
-The goal is to make the text readable while keeping it as close as possible to the original narration. Think "light editing" rather than "rewriting".
+Think of this as transcription cleanup rather than summarization. If you're unsure whether to keep a detail, KEEP IT. The goal is to make the text readable while ensuring absolutely no information is lost.
 
 Only output the formatted diary entry, nothing else.
 

@@ -48,7 +48,7 @@ class DiaryProcessor(NoteProcessor):
             "title": frontmatter.get("title", ""),
             "date": frontmatter.get("date", ""),
             "tags": ["diary"],
-            "original_transcript": f"[[{filename}]]",
+            "original_transcript": f"[[Transcriptions/{filename}]]",
         }
         
         # Combine into final content
