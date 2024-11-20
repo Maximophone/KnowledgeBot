@@ -17,6 +17,7 @@ from processors.notes.diary import DiaryProcessor
 from processors.notes.idea_cleanup import IdeaCleanupProcessor
 from processors.audio.video_to_audio import VideoToAudioProcessor
 
+from keyboard_listener import main as keyboard_listener_main
 
 # Import existing services
 from obsidian_ai import process_file, needs_answer, VAULT_PATH
@@ -125,7 +126,9 @@ async def main():
     obsidian_ai_task = asyncio.create_task(run_obsidian_ai())
     processor_task = asyncio.create_task(run_processor_services())
 
-    await asyncio.gather(obsidian_ai_task, processor_task)
+    keyboard_listener_task = asyncio.create_task(keyboard_listener_main())
+
+    await asyncio.gather(obsidian_ai_task, processor_task, keyboard_listener_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
