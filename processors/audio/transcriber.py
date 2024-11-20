@@ -3,7 +3,7 @@ import json
 import asyncio
 import aiofiles
 import assemblyai
-from typing import Set
+from typing import Set, Dict
 from datetime import datetime
 
 from .utils import get_recording_date
@@ -11,6 +11,7 @@ from ..common.frontmatter import frontmatter_to_text
 
 from ai import AI, get_prompt
 import re
+import os
 
 
 class AudioTranscriber:
@@ -54,7 +55,11 @@ class AudioTranscriber:
         # TODO: Make this properly async when AssemblyAI supports it
         transcript = self.transcriber.transcribe(str(file_path), self.config)
         return transcript
-
+    
+    def should_process(self, filename: str, frontmatter: Dict) -> bool:
+        _, ext = os.path.splitext(filename)
+        return ext.lower() not in ['.mkv', '.mp4', '.avi']
+    
     async def process_single_file(self, filename: str) -> None:
         """Process a single audio file: transcribe and save outputs."""
         file_path = self.input_dir / filename
@@ -137,6 +142,8 @@ class AudioTranscriber:
         tasks = []
         for file_path in self.input_dir.iterdir():
             filename = file_path.name
+            if not self.should_process(filename, None):
+                continue
             # Skip if already being processed
             if filename in self.files_in_process:
                 continue

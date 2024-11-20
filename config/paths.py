@@ -15,6 +15,7 @@ class Paths:
     
     # Note processing paths
     meditations: Path = vault_knowledgebot_path / "Meditations"
+    ideas: Path = vault_knowledgebot_path / "Ideas"
     ideas_directory: Path = vault_knowledgebot_path / "Ideas Directory.md"
     gdoc_path: Path = vault_path / "gdoc"
     markdownload_path: Path = vault_path / "MarkDownload"
@@ -32,6 +33,7 @@ class Paths:
             self.audio_processed,
             self.transcriptions,
             self.meditations,
+            self.ideas,
             self.ideas_directory.parent,
             self.gdoc_path,
             self.markdownload_path,

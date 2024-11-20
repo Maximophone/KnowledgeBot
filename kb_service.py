@@ -14,6 +14,9 @@ from processors.notes.meeting_summary import MeetingSummaryProcessor
 from processors.notes.transcript_classifier import TranscriptClassifier
 from processors.notes.conversation import ConversationProcessor
 from processors.notes.diary import DiaryProcessor
+from processors.notes.idea_cleanup import IdeaCleanupProcessor
+from processors.audio.video_to_audio import VideoToAudioProcessor
+
 
 # Import existing services
 from obsidian_ai import process_file, needs_answer, VAULT_PATH
@@ -82,8 +85,19 @@ async def setup_processors():
         input_dir=PATHS.transcriptions,
         output_dir=PATHS.diary
     )
+
+    idea_cleanup_processor = IdeaCleanupProcessor(
+    input_dir=PATHS.transcriptions,
+    output_dir=PATHS.ideas
+    )
+
+    video_to_audio_processor = VideoToAudioProcessor(
+        input_dir=PATHS.audio_input,
+        output_dir=PATHS.audio_input
+    )
     
     # Register all processors with the repeater
+    slow_repeater.register(video_to_audio_processor.process_all)
     slow_repeater.register(transcriber.process_all)
     slow_repeater.register(meditation_processor.process_all)
     slow_repeater.register(idea_processor.process_all)
@@ -95,6 +109,7 @@ async def setup_processors():
     slow_repeater.register(transcript_classifier_processor.process_all)
     slow_repeater.register(conversation_processor.process_all)
     slow_repeater.register(diary_processor.process_all)
+    slow_repeater.register(idea_cleanup_processor.process_all)
 
 async def run_processor_services():
     """Setup and start all processor services."""
