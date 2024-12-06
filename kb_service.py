@@ -15,6 +15,7 @@ from processors.notes.transcript_classifier import TranscriptClassifier
 from processors.notes.conversation import ConversationProcessor
 from processors.notes.diary import DiaryProcessor
 from processors.notes.idea_cleanup import IdeaCleanupProcessor
+from processors.notes.todo import TodoProcessor
 from processors.audio.video_to_audio import VideoToAudioProcessor
 
 from keyboard_listener import main as keyboard_listener_main
@@ -47,6 +48,11 @@ async def setup_processors():
     idea_processor = IdeaProcessor(
         input_dir=PATHS.transcriptions,
         directory_file=PATHS.ideas_directory
+    )
+
+    todo_processor = TodoProcessor(
+        input_dir=PATHS.transcriptions,
+        directory_file=PATHS.todo_directory
     )
 
     gdoc_processor = GDocProcessor(
@@ -102,6 +108,7 @@ async def setup_processors():
     slow_repeater.register(transcriber.process_all)
     slow_repeater.register(meditation_processor.process_all)
     slow_repeater.register(idea_processor.process_all)
+    slow_repeater.register(todo_processor.process_all)
     slow_repeater.register(gdoc_processor.process_all)
     slow_repeater.register(markdownload_processor.process_all)
     slow_repeater.register(speaker_identifier_processor.process_all)

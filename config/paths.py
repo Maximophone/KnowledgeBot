@@ -17,6 +17,7 @@ class Paths:
     meditations: Path = vault_knowledgebot_path / "Meditations"
     ideas: Path = vault_knowledgebot_path / "Ideas"
     ideas_directory: Path = vault_knowledgebot_path / "Ideas Directory.md"
+    todo_directory: Path = vault_knowledgebot_path / "Todo Directory.md"
     gdoc_path: Path = vault_path / "gdoc"
     markdownload_path: Path = vault_path / "MarkDownload"
     sources_path: Path = vault_path / "Source"
