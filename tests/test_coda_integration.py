@@ -12,7 +12,7 @@ class TestCodaClient(unittest.TestCase):
         cls.test_doc = cls.coda_client.create_doc('Test Doc')
         cls.doc_id = cls.test_doc['id']
         cls.coda_client.get_doc(cls.doc_id)
-        cls.page_content = '# This is a new page.'
+        cls.page_content = '# This is a new page.\n\n <table></table>'
         cls.test_page = cls.coda_client.create_page(cls.doc_id, "Test Page", cls.page_content, content_format = "markdown")
         cls.page_id = cls.test_page['id']
 
@@ -62,6 +62,25 @@ class TestCodaClient(unittest.TestCase):
         self.assertIsInstance(retrieved_content, bytes)
         self.assertEqual(retrieved_content.decode('utf-8'), self.page_content)
 
+    def test_list_tables(self):
+        # Act
+        tables = self.coda_client.list_tables(self.doc_id)
+
+        # Assert
+        self.assertIsInstance(tables, list)
+        self.assertEqual(len(tables), 1)  # Expecting one table on the test page
+
+    def test_get_table(self):
+        # Arrange
+        tables = self.coda_client.list_tables(self.doc_id)
+        table_id = tables[0]['id']  # Get the ID of the first (and only) table
+
+        # Act
+        table_details = self.coda_client.get_table(self.doc_id, table_id)
+
+        # Assert
+        self.assertIsInstance(table_details, dict)
+        self.assertEqual(table_details['id'], table_id)
 
 if __name__ == '__main__':
     unittest.main()

@@ -260,6 +260,74 @@ class CodaClient:
         url = f'{self.base_url}/docs/{doc_id}'
         response = self._make_request('DELETE', url, max_retries=max_retries, retry_delay=retry_delay)
         return response.json()
+    
+    def list_tables(self, doc_id, max_retries=_MAX_RETRIES, retry_delay=_RETRY_DELAY):
+        """
+        List all tables in a Coda doc.
+
+        Args:
+            doc_id (str): ID of the Coda doc.
+            max_retries (int, optional): Maximum number of retries. Defaults to _MAX_RETRIES.
+            retry_delay (int, optional): Delay in seconds between retries. Defaults to _RETRY_DELAY.
+
+        Returns:
+            list: List of table objects in the doc.
+        """
+        url = f'{self.base_url}/docs/{doc_id}/tables'
+        response = self._make_request('GET', url, max_retries=max_retries, retry_delay=retry_delay)
+        return response.json()['items']
+
+    def get_table(self, doc_id, table_id, max_retries=_MAX_RETRIES, retry_delay=_RETRY_DELAY):
+        """
+        Get details of a specific table in a Coda doc.
+
+        Args:
+            doc_id (str): ID of the Coda doc.
+            table_id (str): ID of the table.
+            max_retries (int, optional): Maximum number of retries. Defaults to _MAX_RETRIES.
+            retry_delay (int, optional): Delay in seconds between retries. Defaults to _RETRY_DELAY.
+
+        Returns:
+            dict: The table object with its details.
+        """
+        url = f'{self.base_url}/docs/{doc_id}/tables/{table_id}'
+        response = self._make_request('GET', url, max_retries=max_retries, retry_delay=retry_delay)
+        return response.json()
+
+    def list_columns(self, doc_id, table_id, max_retries=_MAX_RETRIES, retry_delay=_RETRY_DELAY):
+        """
+        List all columns in a specific table.
+
+        Args:
+            doc_id (str): ID of the Coda doc.
+            table_id (str): ID of the table.
+            max_retries (int, optional): Maximum number of retries. Defaults to _MAX_RETRIES.
+            retry_delay (int, optional): Delay in seconds between retries. Defaults to _RETRY_DELAY.
+
+        Returns:
+            list: List of column objects in the table.
+        """
+        url = f'{self.base_url}/docs/{doc_id}/tables/{table_id}/columns'
+        response = self._make_request('GET', url, max_retries=max_retries, retry_delay=retry_delay)
+        return response.json()['items']
+
+    def get_column(self, doc_id, table_id, column_id, max_retries=_MAX_RETRIES, retry_delay=_RETRY_DELAY):
+        """
+        Get details of a specific column in a table.
+
+        Args:
+            doc_id (str): ID of the Coda doc.
+            table_id (str): ID of the table.
+            column_id (str): ID of the column.
+            max_retries (int, optional): Maximum number of retries. Defaults to _MAX_RETRIES.
+            retry_delay (int, optional): Delay in seconds between retries. Defaults to _RETRY_DELAY.
+
+        Returns:
+            dict: The column object with its details.
+        """
+        url = f'{self.base_url}/docs/{doc_id}/tables/{table_id}/columns/{column_id}'
+        response = self._make_request('GET', url, max_retries=max_retries, retry_delay=retry_delay)
+        return response.json()
 
 if __name__ == "__main__":
     coda_client = CodaClient(CODA_API_KEY)
