@@ -105,11 +105,13 @@ class AudioTranscriber:
             
             print(f"Saved JSON: {json_filename}", flush=True)
 
+            new_filename = date_str + "_" + filename
+
             # Prepare frontmatter
             frontmatter = {
                 "tags": ["transcription"],
                 "date": date_str,
-                "original_file": filename,
+                "original_file": new_filename,
                 "title": title,
                 "json_data": json_filename,
                 "AutoNoteMover": "disable",
@@ -127,7 +129,7 @@ class AudioTranscriber:
             print(f"Saved MD: {md_filename}", flush=True)
 
             # Move original file to processed folder
-            file_path.rename(self.processed_dir / filename)
+            file_path.rename(self.processed_dir / new_filename)
             
             print(f"Processed: {filename} -> {md_filename}", flush=True)
             
