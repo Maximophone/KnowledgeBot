@@ -27,6 +27,9 @@ class Paths:
     conversations: Path = vault_path / "Conversations"
     diary: Path = vault_path / "Diary"
 
+    # prompts
+    prompts_library: Path = vault_path / "Prompts"
+
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
         return iter([
