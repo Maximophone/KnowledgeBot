@@ -30,7 +30,8 @@ _MODELS_DICT = {
     "gpt4o": "gpt-4o",
     "mini": "gpt-4o-mini",
     "o1-preview": "o1-preview",
-    "o1-mini": "o1-mini"
+    "o1-mini": "o1-mini",
+    "o1": "o1-2024-12-17"
 }
 
 TOKEN_COUNT_FILE = "token_count.csv"
@@ -195,12 +196,19 @@ class GPTWrapper(AIWrapper):
                  temperature: float) -> str:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
-        response = self.client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
+        if model_name.startswith("o1"):
+            response = self.client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_completion_tokens=max_tokens
+            )
+        else :
+            response = self.client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
         return response.choices[0].message.content
 
 class MockWrapper(AIWrapper):
