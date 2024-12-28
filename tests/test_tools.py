@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-from tools import (
+from ai.tools import (
     Tool, ToolCall, ToolResult, tool, ToolProvider,
     ToolParameter
 )
