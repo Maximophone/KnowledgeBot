@@ -286,7 +286,7 @@ async def extract_authors(document) -> Dict[str, Any]:
             "authors": [],
             "error": "No article text in parse_result"
         }
-    response = haiku.message(PROMPT + text)
+    response = haiku.message(PROMPT + text).content
     try:
         tree = etree.ElementTree(etree.fromstring("<response>" + response + "</response>"))
     except etree.XMLSyntaxError:

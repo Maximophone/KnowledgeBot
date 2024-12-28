@@ -349,9 +349,9 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         for i in range(n_replies):
             if n_replies > 1:
                 response += f"==[VERSION-{i}]==\n"
-            response += model.messages(messages, model_override=model_name, 
-                                    max_tokens=max_tokens, system_prompt=system_prompt, 
-                                    temperature=temperature, debug=debug)
+            ai_response = model.messages(messages, model_override=model_name,
+                                    max_tokens=max_tokens, temperature=temperature)
+            response += ai_response.content
 
         response = escape_response(response)
         if option is None:

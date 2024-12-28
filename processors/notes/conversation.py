@@ -34,15 +34,15 @@ class ConversationProcessor(NoteProcessor):
             }
             text = content.strip()
         
-        # Generate formatted conversation
+        # Format the conversation using AI
         formatted_conversation = self.ai_model.message(
-            self.prompt_format + text
-        )
+            self.prompt_format + "\n\nTranscript:\n" + text
+        ).content
         
         # Generate summary
         summary = self.ai_model.message(
-            self.prompt_summary + text
-        )
+            self.prompt_summary + "\n\nTranscript:\n" + text
+        ).content
         
         # Update frontmatter
         frontmatter['tags'] = frontmatter.get('tags', [])

@@ -55,31 +55,8 @@ tags:
         weekday = calendar.day_name[recording_date.weekday()]
 
         # Extract todos using AI
-        todos_prompt = f"""
-Analyze this transcript and extract ALL distinct todo items, even if some are only briefly mentioned.
-
-Important guidelines:
-- For each todo item, provide:
-    1. A concise description of the task
-    2. The due date, if explicitly stated or if it can be inferred from the context (e.g., "in 3 days", "by Monday")
-- If no due date is mentioned or can be inferred, leave the due date blank
-- Format each todo item as follows:
-    - [ ] {{Task description}} 📅 {{Due date}}
-
-- Use the "Tasks" plugin formatting for Obsidian
-- The recording date for this transcript is {recording_date.strftime('%Y-%m-%d')} ({weekday})
-
-Format your response as a list of todo items, nothing else.
-
-Example format:
-- [ ] Finish coding the todo processor 📅 2023-06-15
-- [ ] Test the todo processor
-- [ ] Deploy the todo processor to production 📅 2023-06-20
-
-Transcript:
-"""
-
-        todos_text = self.ai_model.message(todos_prompt + transcript)
+        todos_prompt = self.prompt_todos + "\n\nTranscript:\n" + transcript
+        todos_text = self.ai_model.message(todos_prompt + transcript).content
 
         # Prepare the content to append
         append_content = f"\n## Todos from [[{filename}]] - {date_str}\n\n{todos_text}\n\n---\n"

@@ -35,8 +35,8 @@ class MeditationProcessor(NoteProcessor):
             
         transcript = content.split('---', 2)[2].strip()
         
-        # Generate meditation content using AI        
-        ai_response = self.ai_model.message(self.meditation_prompt + transcript)
+        # Generate meditation summary
+        ai_response = self.ai_model.message(self.meditation_prompt + transcript).content
         
         # Create audio link
         original_file = frontmatter.get('original_file', '')

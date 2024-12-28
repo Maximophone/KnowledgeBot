@@ -9,7 +9,7 @@ from ai import (
     encode_image, validate_image, extract_text_from_pdf, n_tokens,
     count_tokens_input, count_tokens_output, log_token_use,
     AIWrapper, ClaudeWrapper, GeminiWrapper, GPTWrapper, MockWrapper,
-    get_client, get_model, AI
+    get_client, get_model, AI, AIResponse
 )
 
 IMG1_PATH = "G:\\My Drive\\Obsidian\\Images\\cube.png"
@@ -156,17 +156,17 @@ class TestAIClass(unittest.TestCase):
 
     @patch('ai.AIWrapper.messages')
     def test_ai_message(self, mock_messages):
-        mock_messages.return_value = 'Response'
+        mock_messages.return_value = AIResponse(content='Response')
         ai = AI('mock')
         response = ai.message('Hello', image_paths=[IMG1_PATH])
-        self.assertEqual(response, 'Response')
+        self.assertEqual(response.content, 'Response')
 
     @patch('ai.AIWrapper.messages')
     def test_ai_conversation(self, mock_messages):
-        mock_messages.return_value = 'Response'
+        mock_messages.return_value = AIResponse(content='Response')
         ai = AI('mock')
         response = ai.conversation('Hello', image_paths=[IMG1_PATH])
-        self.assertEqual(response, 'Response')
+        self.assertEqual(response.content, 'Response')
         self.assertEqual(len(ai._history), 2)
 
 if __name__ == '__main__':

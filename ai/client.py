@@ -14,7 +14,11 @@ import base64
 from PIL import Image
 from io import BytesIO
 from config import secrets
+from dataclasses import dataclass
 
+@dataclass
+class AIResponse:
+    content: str
 
 _MODELS_DICT = {
     "mock": "mock-",
@@ -145,14 +149,14 @@ def log_token_use(model: str, n_tokens: int, input: bool = True,
 class AIWrapper:
     def messages(self, model_name: str, messages: List[Dict[str,str]], 
                  system_prompt: str, max_tokens: int, 
-                 temperature: float) -> str:
+                 temperature: float) -> AIResponse:
         response = self._messages(model_name, messages, system_prompt, max_tokens, temperature)
         log_token_use(model_name, count_tokens_input(messages, system_prompt))
-        log_token_use(model_name, count_tokens_output(response), input=False)
+        log_token_use(model_name, count_tokens_output(response.content), input=False)
         return response
     
     def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> str:
+                 temperature: float) -> AIResponse:
         raise NotImplementedError
 
 class ClaudeWrapper(AIWrapper):
@@ -160,7 +164,7 @@ class ClaudeWrapper(AIWrapper):
         self.client = anthropic.Client(api_key=api_key)
 
     def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> str:
+                 temperature: float) -> AIResponse:
         message = self.client.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -168,7 +172,7 @@ class ClaudeWrapper(AIWrapper):
             system=system_prompt,
             messages=messages
         )
-        return message.content[0].text
+        return AIResponse(content=message.content[0].text)
     
 class GeminiWrapper(AIWrapper):
     def __init__(self, api_key: str, model_name:str):
@@ -176,7 +180,7 @@ class GeminiWrapper(AIWrapper):
         self.model = genai.GenerativeModel(model_name)
     
     def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> str:
+                 temperature: float) -> AIResponse:
         if model_name:
             model = genai.GenerativeModel(model_name)
         else:
@@ -186,14 +190,14 @@ class GeminiWrapper(AIWrapper):
         response = model.generate_content(
             messages
         )
-        return response.text
+        return AIResponse(content=response.text)
     
 class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
         self.client = OpenAI(api_key = api_key, organization=org)
 
     def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> str:
+                 temperature: float) -> AIResponse:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
         if model_name.startswith("o1"):
@@ -209,14 +213,14 @@ class GPTWrapper(AIWrapper):
                 max_tokens=max_tokens,
                 temperature=temperature
             )
-        return response.choices[0].message.content
+        return AIResponse(content=response.choices[0].message.content)
 
 class MockWrapper(AIWrapper):
     def __init__(self):
         pass
 
     def _messages(self, model_name: str, messages: List[Dict[str, str]],
-        system_prompt: str, max_tokens: int, temperature:float) -> str:
+        system_prompt: str, max_tokens: int, temperature:float) -> AIResponse:
         response = "---PARAMETERS START---\n"
         response += f"max_tokens: {max_tokens}\n"
         response += f"temperature: {temperature}\n"
@@ -234,7 +238,7 @@ class MockWrapper(AIWrapper):
             response += "\n"
         response += "---MESSAGES END---\n"
 
-        return response
+        return AIResponse(content=response)
 
 def get_client(model_name: str) -> AIWrapper:
     model_name = get_model(model_name)
@@ -291,17 +295,17 @@ class AI:
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                 temperature: float = 0.0, xml: bool = False, debug: bool = False,
-                image_paths: List[str] = None) -> str:
+                image_paths: List[str] = None) -> AIResponse:
         messages = self._prepare_messages(message, image_paths)
         response = self.messages(messages, system_prompt, model_override, 
                                  max_tokens, temperature, debug=debug)
         if xml:
-            response = f"<response>{response}</response>"
+            response.content = f"<response>{response.content}</response>"
         return response
         
     def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
                  model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
-                 temperature: float = 0.0, xml: bool = False, debug: bool = False) -> str:
+                 temperature: float = 0.0, xml: bool = False, debug: bool = False) -> AIResponse:
         debug = debug | self.debug
         if model_override:
             model_name = get_model(model_override) or self.model_name
@@ -331,11 +335,16 @@ class AI:
 
         response = client.messages(model_name, messages, system_prompt, 
                                    max_tokens, temperature)
+        
+        # If we already have an AIResponse, use it directly
+        if not isinstance(response, AIResponse):
+            response = AIResponse(content=response)
+            
         if xml:
-            response = f"<response>{response}</response>"
+            response.content = f"<response>{response.content}</response>"
         if debug:
             print("--RESPONSE START--", flush=True)
-            print(response.encode("utf-8"), flush=True)
+            print(response.content.encode("utf-8"), flush=True)
             print("--RESPONSE END--", flush=True)
         return response
     
@@ -348,9 +357,9 @@ class AI:
         self._history = messages + [
             {
                 "role": "assistant",
-                "content": response
+                "content": response.content
             }
         ]
         if xml:
-            response = f"<response>{response}</response>"
+            response.content = f"<response>{response.content}</response>"
         return response

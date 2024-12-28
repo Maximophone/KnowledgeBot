@@ -40,8 +40,8 @@ class IdeaCleanupProcessor(NoteProcessor):
         
         # Generate formatted idea entry
         formatted_entry = self.ai_model.message(
-            self.prompt_format + transcript
-        )
+            self.prompt_format + "\n\nEntry:\n" + transcript
+        ).content
         
         # Create new frontmatter
         new_frontmatter = {

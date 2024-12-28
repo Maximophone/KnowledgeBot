@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         else:
             prompt = get_prompt(ACTIONS[action])
             self.prompt_text_area.setPlainText(prompt)
-        new_text = ai_model.message(prompt + text)
+        new_text = ai_model.message(prompt + text).content
         self.input_text_area.setPlainText(new_text)
         pyperclip.copy(new_text)
 

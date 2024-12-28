@@ -160,7 +160,10 @@ if __name__ == "__main__":
                 subtask_in_context = subtask
             print("SUBTASK IN CONTEXT")
             print(subtask_in_context)
-            answer = actor.message(subtask_in_context)
+            xml_response = context.message(
+                subtask_in_context, xml=True
+            ).content
+            answer = actor.message(subtask_in_context).content
             print("ANSWER")
             print(answer)
             answers.append(answer)
@@ -187,7 +190,7 @@ if __name__ == "__main__":
         prompt = prompt.text.strip()
         assert prompt
 
-        response = actor.message(prompt)
+        response = actor.message(prompt).content
         print("-----")
         print("FINAL RESPONSE: ")
         print(response)

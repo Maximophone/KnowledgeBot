@@ -84,3 +84,11 @@ class SpeakerIdentifier(NoteProcessor):
         os.utime(self.input_dir / filename, None)
 
         print(f"Completed speaker identification for: {filename}", flush=True)
+
+    def identify_speakers(self, text: str) -> str:
+        prompt = self.prompt_identify + text
+        return self.ai_model.message(prompt).content.strip()
+
+    def identify_speakers_tiny(self, text: str) -> str:
+        prompt = self.prompt_identify_tiny + text
+        return self.tiny_model.message(prompt).content.strip()

@@ -83,7 +83,7 @@ class MeetingSummaryProcessor(NoteProcessor):
         Transcript:
         """
         
-        summary = self.ai_model.message(summary_prompt + transcript_content)
+        summary = self.ai_model.message(summary_prompt + transcript_content).content
         
         # Generate next steps
         next_steps_prompt = f"""Review this meeting transcript and extract all action items and next steps.
@@ -100,7 +100,7 @@ class MeetingSummaryProcessor(NoteProcessor):
         Transcript:
         """
         
-        next_steps = self.ai_model.message(next_steps_prompt + transcript_content)
+        next_steps = self.ai_model.message(next_steps_prompt + transcript_content).content
         
         # Prepare new summary section
         new_summary = f"""## Executive Summary

@@ -19,9 +19,8 @@ class TranscriptClassifier(NoteProcessor):
         # Process if it's a transcription and hasn't been classified
         return "transcription" in frontmatter.get("tags", [])
         
-    def classify_transcription(self, text: str) -> str:
-        """Classify the transcription into a category based on its content."""
-        return self.ai_model.message(self.prompt_classify + text)
+    def classify(self, text: str) -> str:
+        return self.ai_model.message(self.prompt_classify + text).content
         
     async def process_file(self, filename: str) -> None:
         print(f"Classifying transcript: {filename}", flush=True)
@@ -33,7 +32,7 @@ class TranscriptClassifier(NoteProcessor):
         text = content.split('---', 2)[2].strip()
         
         # Classify the transcript
-        category = self.classify_transcription(text)
+        category = self.classify(text)
         print(f"Classified as: {category}", flush=True)
         
         # Update frontmatter

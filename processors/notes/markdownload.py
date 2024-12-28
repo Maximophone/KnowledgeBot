@@ -34,8 +34,8 @@ class MarkdownloadProcessor(NoteProcessor):
         
         # Generate summary
         summary = self.ai_model.message(
-            self.prompt_summary + content
-        )
+            self.prompt_summary + "\n\nContent:\n" + content
+        ).content
         
         # Read template
         async with aiofiles.open(self.template_path, 'r', encoding='utf-8') as f:

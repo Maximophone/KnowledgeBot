@@ -46,9 +46,8 @@ class AudioTranscriber:
         self.ai_model = AI("haiku3.5")
         self.prompt_title = get_prompt("transcript_title")
 
-    def generate_title(self, text: str) -> str:
-        """Generate a short, descriptive title for the transcription."""
-        return self.ai_model.message(self.prompt_title + text)
+    def get_title(self, text: str) -> str:
+        return self.ai_model.message(self.prompt_title + text).content
         
     async def transcribe_audio_file(self, file_path: Path) -> assemblyai.Transcript:
         """Transcribe a single audio file using AssemblyAI."""

@@ -79,7 +79,7 @@ def multi_answer_question(texts: List[str], question: str, n_retries=2, model=No
     texts_xml = "\n".join([SINGLE_TEXT.format(i=i+1, text=text) 
                           for i, text in enumerate(texts)])
     prompt = MULTI_PROMPT.format(question=question, texts_xml=texts_xml)
-    response = model.message(prompt, max_tokens = 2000)
+    response = model.message(prompt, max_tokens = 2000).content
     xml_response_str = "<response>" + response + "</response>"
     multi_answer = MultiAnswer()
     multi_answer.full_answer = xml_response_str
@@ -105,7 +105,7 @@ def answer_question(article: str, question: str, n_retries=2, model=None) -> Ans
     assert n_retries >= 1, "N retries can't be < 1"
     model = model or gemini
     prompt = PROMPT.format(question = question, article = article)
-    response = model.message(prompt)
+    response = model.message(prompt).content
     xml_response_str = "<response>" + response + "</response>"
     answer = Answer()
     answer.full_answer = xml_response_str
@@ -136,7 +136,7 @@ def get_article_text_ai(raw_text: str, n_retries=2, model=None) -> Text:
     assert n_retries >= 1, "N retries can't be < 1"
     model = model or gemini
     prompt = PROMPT_REFINE_TEXT + raw_text
-    response = model.message(prompt)
+    response = model.message(prompt).content
     xml_response_str = "<response>" + response + "</response>"
     text = Text()
     text.full_answer = response

@@ -60,7 +60,7 @@ def get_authors(article: Article, source: str) -> List[str]:
     article_text = get_article_text(article, source)
     if not article_text:
         raise AuthorsException("Could not find article text")
-    response = haiku.message(PROMPT + article_text)
+    response = haiku.message(PROMPT + article_text).content
     try:
         tree = etree.ElementTree(etree.fromstring("<response>" + response + "</response>"))
     except etree.XMLSyntaxError:

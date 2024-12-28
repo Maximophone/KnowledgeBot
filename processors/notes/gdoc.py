@@ -38,7 +38,7 @@ class GDocProcessor(NoteProcessor):
         prompt = get_prompt("summarise_gdoc")
         gdoc_content_md = self.ai_model.message(
             prompt + gdoc_content_html
-        )
+        ).content
         
         # Update frontmatter and save
         frontmatter["synced"] = True
