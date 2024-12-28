@@ -15,7 +15,7 @@ from PIL import Image
 from io import BytesIO
 from config import secrets
 from dataclasses import dataclass
-from .tools import Tool, ToolCall
+from .tools import Tool, ToolCall, ToolResult
 import json
 
 @dataclass
@@ -194,12 +194,29 @@ class ClaudeWrapper(AIWrapper):
                 }
             } for tool in tools]
 
+        # Convert messages to Claude's format, including tool results
+        claude_messages = []
+        for message in messages:
+            if message["role"] == "tool":
+                tool_result: ToolResult = message["content"]
+                claude_messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_result.tool_call_id,
+                        "content": str(tool_result.result) if tool_result.result is not None 
+                                 else f"Error: {tool_result.error}"
+                    }]
+                })
+            else:
+                claude_messages.append(message)
+
         response = self.client.messages.create(
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             system=system_prompt,
-            messages=messages,
+            messages=claude_messages,
             tools=claude_tools
         )
 
@@ -277,30 +294,52 @@ class GPTWrapper(AIWrapper):
                 }
             } for tool in tools]
 
+        # Convert messages to OpenAI's format, including tool results
+        openai_messages = []
+        for message in messages:
+            if message["role"] == "tool":
+                tool_result: ToolResult = message["content"]
+                openai_messages.append({
+                    "role": "tool",
+                    "content": json.dumps({
+                        "result": tool_result.result,
+                        "error": tool_result.error
+                    }),
+                    "tool_call_id": tool_result.tool_call_id
+                })
+            else:
+                openai_messages.append(message)
+
         if model_name.startswith("o1"):
             response = self.client.chat.completions.create(
                 model=model_name,
-                messages=messages,
+                messages=openai_messages,
                 max_completion_tokens=max_tokens,
                 tools=openai_tools
             )
-        else :
+        else:
             response = self.client.chat.completions.create(
                 model=model_name,
-                messages=messages,
+                messages=openai_messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 tools=openai_tools
             )
 
         # Check if the model wants to use a tool
-        if response.choices[0].finish_reason == "tool_calls":
-            tool_calls = response.choices[0].message.tool_calls
-            # Here we would need to:
-            # 1. Execute the tool(s)
-            # 2. Send the result(s) back to GPT
-            # 3. Get the final response
-            raise NotImplementedError("Tool execution not yet implemented")
+        if response.choices[0].message.tool_calls:
+            tool_calls = [
+                ToolCall(
+                    id=tool_call.id,
+                    name=tool_call.function.name,
+                    arguments=json.loads(tool_call.function.arguments)
+                )
+                for tool_call in response.choices[0].message.tool_calls
+            ]
+            return AIResponse(
+                content=response.choices[0].message.content or "",
+                tool_calls=tool_calls
+            )
 
         return AIResponse(content=response.choices[0].message.content)
 
@@ -448,6 +487,8 @@ class AI:
                             print("content (text): ", item["text"].encode("utf-8"), flush=True)
                         elif item["type"] == "image":
                             print("content (image): [base64 encoded image]", flush=True)
+                elif isinstance(message["content"], ToolResult):
+                    print("content (tool result): ", str(message["content"]), flush=True)
                 else:
                     print("content: ", message["content"].encode("utf-8"), flush=True)
             print("--MESSAGES RECEIVED END--", flush=True)

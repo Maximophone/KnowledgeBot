@@ -32,9 +32,10 @@ import glob
 import traceback
 from file_watcher import start_file_watcher
 from file_packager import get_committed_files, format_for_llm
-from beacons import beacon_ai, beacon_error, beacon_me
+from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
 from parser.tag_parser import process_tags
 from config import secrets
+from ai.tools import test_get_weather, ToolCall, ToolResult
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -349,9 +350,62 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         for i in range(n_replies):
             if n_replies > 1:
                 response += f"==[VERSION-{i}]==\n"
+            
+            # Get available tools from the parameters
+            tools = [test_get_weather]  # TODO: Get tools from parameters/config
+            
             ai_response = model.messages(messages, model_override=model_name,
-                                    max_tokens=max_tokens, temperature=temperature)
+                                    max_tokens=max_tokens, temperature=temperature,
+                                    tools=tools)
             response += ai_response.content
+
+            # Handle tool calls if present
+            if ai_response.tool_calls:
+                for tool_call in ai_response.tool_calls:
+                    try:
+                        # Find the matching tool from provided tools
+                        tool = next(t for t in tools if t.tool.name == tool_call.name)
+                        # Execute the tool
+                        result = tool.tool.func(**tool_call.arguments)
+                        # Format the result
+                        tool_result = ToolResult(
+                            name=tool_call.name,
+                            result=result,
+                            tool_call_id=tool_call.id
+                        )
+                    except Exception as e:
+                        tool_result = ToolResult(
+                            name=tool_call.name,
+                            result=None,
+                            tool_call_id=tool_call.id,
+                            error=str(e)
+                        )
+                    
+                    # Add tool result to response for UI
+                    response += f"\n{beacon_tool}\n"
+                    response += f"Tool: {tool_result.name}\n"
+                    if tool_result.error:
+                        response += f"Error: {tool_result.error}\n"
+                    else:
+                        response += f"Result: {tool_result.result}\n"
+                    
+                    # Add tool result to messages for context
+                    messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
+                    messages.append({
+                        "role": "tool",  # New role type for tool results
+                        "tool_call_id": tool_result.tool_call_id,
+                        "name": tool_result.name,
+                        "content": tool_result  # Pass the entire ToolResult object
+                    })
+                    
+                    # Get AI's response to tool result
+                    ai_response = model.messages(messages, model_override=model_name,
+                                            max_tokens=max_tokens, temperature=temperature,
+                                            tools=tools)  # Keep passing tools
+                    response += f"\n{beacon_ai}\n{ai_response.content}\n"
 
         response = escape_response(response)
         if option is None:
