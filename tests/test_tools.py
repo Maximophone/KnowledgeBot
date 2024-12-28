@@ -1,154 +1,150 @@
 import unittest
-from unittest.mock import Mock, patch
-from ai.tools import (
-    Tool, ToolCall, ToolResult, tool, ToolProvider,
-    ToolParameter
-)
+from typing import Literal
+from enum import Enum
+from ai.tools import tool, Tool, ToolParameter, ToolCall, ToolResult
 
-class TestToolParameter(unittest.TestCase):
-    def test_tool_parameter_creation(self):
-        param = ToolParameter(
-            type="string",
-            description="Test parameter",
-            required=True,
-            enum=["a", "b", "c"]
+class TestToolDecorator(unittest.TestCase):
+    def test_basic_types(self):
+        @tool(
+            description="Test function with basic types",
+            name="The person's name",
+            age="The person's age",
+            height="The person's height",
+            is_student="Whether the person is a student"
         )
-        self.assertEqual(param.type, "string")
-        self.assertEqual(param.description, "Test parameter")
-        self.assertTrue(param.required)
-        self.assertEqual(param.enum, ["a", "b", "c"])
+        def person_info(
+            name: str,
+            age: int,
+            height: float,
+            is_student: bool = False
+        ) -> str:
+            return f"{name}, {age}, {height}, {is_student}"
 
-class TestTool(unittest.TestCase):
-    def setUp(self):
-        self.mock_func = Mock()
-        self.tool = Tool(
-            func=self.mock_func,
-            name="test_tool",
-            description="A test tool",
-            parameters={
-                "param1": ToolParameter(
-                    type="string",
-                    description="First parameter",
-                    required=True
-                ),
-                "param2": ToolParameter(
-                    type="string",
-                    description="Second parameter",
-                    required=False,
-                    enum=["a", "b"]
-                )
-            }
+        self.assertTrue(hasattr(person_info, "tool"))
+        tool_obj = person_info.tool
+        
+        # Check basic tool attributes
+        self.assertEqual(tool_obj.name, "person_info")
+        self.assertEqual(tool_obj.description, "Test function with basic types")
+        
+        # Check parameters
+        params = tool_obj.parameters
+        self.assertEqual(len(params), 4)
+        
+        # Check string parameter
+        self.assertEqual(params["name"].type, "string")
+        self.assertEqual(params["name"].description, "The person's name")
+        self.assertTrue(params["name"].required)
+        self.assertIsNone(params["name"].enum)
+        
+        # Check integer parameter
+        self.assertEqual(params["age"].type, "integer")
+        self.assertTrue(params["age"].required)
+        
+        # Check float parameter
+        self.assertEqual(params["height"].type, "number")
+        self.assertTrue(params["height"].required)
+        
+        # Check boolean parameter with default
+        self.assertEqual(params["is_student"].type, "boolean")
+        self.assertFalse(params["is_student"].required)
+
+    def test_literal_enum(self):
+        @tool(
+            description="Test function with literal enum",
+            color="The color to use",
+            size="The size option"
         )
+        def style_config(
+            color: Literal["red", "blue", "green"],
+            size: Literal["small", "medium", "large"] = "medium"
+        ) -> None:
+            pass
 
-    def test_anthropic_schema(self):
-        schema = self.tool.to_provider_schema(ToolProvider.ANTHROPIC)
-        self.assertEqual(schema["name"], "test_tool")
-        self.assertEqual(schema["description"], "A test tool")
+        tool_obj = style_config.tool
+        params = tool_obj.parameters
+        
+        # Check color parameter
+        self.assertEqual(params["color"].type, "string")
+        self.assertEqual(params["color"].enum, ["red", "blue", "green"])
+        self.assertTrue(params["color"].required)
+        
+        # Check size parameter
+        self.assertEqual(params["size"].type, "string")
+        self.assertEqual(params["size"].enum, ["small", "medium", "large"])
+        self.assertFalse(params["size"].required)
+
+    def test_enum_class(self):
+        class Direction(Enum):
+            NORTH = "N"
+            SOUTH = "S"
+            EAST = "E"
+            WEST = "W"
+
+        @tool(
+            description="Test function with enum class",
+            direction="The direction to move",
+            steps="Number of steps"
+        )
+        def move(direction: Direction, steps: int = 1) -> None:
+            pass
+
+        tool_obj = move.tool
+        params = tool_obj.parameters
+        
+        # Check direction parameter
+        self.assertEqual(params["direction"].type, "string")
         self.assertEqual(
-            schema["input_schema"]["required"],
-            ["param1"]
+            set(params["direction"].enum),
+            {"NORTH", "SOUTH", "EAST", "WEST"}
         )
-        self.assertEqual(
-            schema["input_schema"]["properties"]["param2"]["enum"],
-            ["a", "b"]
-        )
+        self.assertTrue(params["direction"].required)
 
-    def test_openai_schema(self):
-        schema = self.tool.to_provider_schema(ToolProvider.OPENAI)
-        self.assertEqual(schema["type"], "function")
-        self.assertEqual(schema["function"]["name"], "test_tool")
-        self.assertEqual(
-            schema["function"]["parameters"]["required"],
-            ["param1"]
-        )
+    def test_missing_description(self):
+        with self.assertRaises(ValueError):
+            @tool(
+                description="Test function",
+                param1="First parameter"
+                # Missing description for param2
+            )
+            def test_func(param1: str, param2: int):
+                pass
 
 class TestToolCall(unittest.TestCase):
-    def test_from_anthropic_response(self):
-        mock_response = Mock()
-        mock_response.stop_reason = "tool_use"
-        mock_response.content = [{
-            "type": "tool_use",
-            "id": "123",
-            "name": "test_tool",
-            "input": {"param": "value"}
-        }]
-
-        tool_call = ToolCall.from_provider_response(
-            mock_response, 
-            ToolProvider.ANTHROPIC
+    def test_tool_call_creation(self):
+        tool_call = ToolCall(
+            name="test_tool",
+            arguments={"param": "value"},
+            id="123"
         )
         
+        self.assertEqual(tool_call.name, "test_tool")
+        self.assertEqual(tool_call.arguments, {"param": "value"})
         self.assertEqual(tool_call.id, "123")
-        self.assertEqual(tool_call.name, "test_tool")
-        self.assertEqual(tool_call.arguments, {"param": "value"})
-
-    def test_from_openai_response(self):
-        mock_message = Mock()
-        mock_message.function_call.name = "test_tool"
-        mock_message.function_call.arguments = '{"param": "value"}'
-        
-        mock_response = Mock()
-        mock_response.choices = [Mock(message=mock_message)]
-
-        tool_call = ToolCall.from_provider_response(
-            mock_response, 
-            ToolProvider.OPENAI
-        )
-        
-        self.assertEqual(tool_call.name, "test_tool")
-        self.assertEqual(tool_call.arguments, {"param": "value"})
 
 class TestToolResult(unittest.TestCase):
-    def test_anthropic_format(self):
+    def test_success_result(self):
         result = ToolResult(
             name="test_tool",
             result="success",
             tool_call_id="123"
         )
         
-        formatted = result.to_provider_format(ToolProvider.ANTHROPIC)
-        self.assertEqual(formatted["type"], "tool_result")
-        self.assertEqual(formatted["tool_use_id"], "123")
-        self.assertEqual(formatted["content"], "success")
-        self.assertFalse(formatted["is_error"])
+        self.assertEqual(result.name, "test_tool")
+        self.assertEqual(result.result, "success")
+        self.assertEqual(result.tool_call_id, "123")
+        self.assertIsNone(result.error)
 
-    def test_openai_format(self):
+    def test_error_result(self):
         result = ToolResult(
             name="test_tool",
-            result="success"
+            result=None,
+            error="Operation failed"
         )
         
-        formatted = result.to_provider_format(ToolProvider.OPENAI)
-        self.assertEqual(formatted["role"], "function")
-        self.assertEqual(formatted["name"], "test_tool")
-        self.assertEqual(formatted["content"], "success")
-
-class TestToolDecorator(unittest.TestCase):
-    def test_tool_decorator(self):
-        @tool(
-            description="Test function",
-            parameters={
-                "param1": {
-                    "type": "string",
-                    "description": "First param",
-                    "required": True
-                },
-                "param2": {
-                    "type": "string",
-                    "description": "Second param",
-                    "enum": ["a", "b"],
-                    "required": False
-                }
-            }
-        )
-        def test_func(param1: str, param2: str = "a"):
-            return f"{param1} {param2}"
-
-        self.assertTrue(hasattr(test_func, "tool"))
-        self.assertIsInstance(test_func.tool, Tool)
-        self.assertEqual(test_func.tool.name, "test_func")
-        self.assertEqual(test_func.tool.description, "Test function")
-        self.assertEqual(len(test_func.tool.parameters), 2)
+        self.assertEqual(result.name, "test_tool")
+        self.assertIsNone(result.result)
+        self.assertEqual(result.error, "Operation failed")
 
 if __name__ == '__main__':
     unittest.main()
