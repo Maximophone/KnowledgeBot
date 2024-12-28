@@ -432,9 +432,10 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
 
 def process_conversation(txt: str) -> List[Message]:
     cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
-    # [[<claude>, <me>], [<claude>, <me>], ... ]
-    assert len(cut[0]) == 1 or len(cut[0]) == 2
-    assert all(len(x)==2 for x in cut[1:])
+    # Now with tool calls, the structure might be:
+    # [[<initial_prompt>], [<ai_response>, <user_input>], [<ai_response_with_tool>, <tool_result>], [<final_ai_response>, <user_input>]]
+    
+    # Remove the assumption about exactly 2 parts after the first split
     if len(cut[0]) == 1:
         cut[0] = ["", cut[0][0]]
     assert cut[0][0] == ""
@@ -467,11 +468,21 @@ def process_conversation(txt: str) -> List[Message]:
         ))
         return Message(role="user", content=content)
 
-    messages = sum([[
-        Message(role="assistant", content=[MessageContent(type="text", text=cl.strip())]),
-        process_user_message(me)
-    ] for cl, me in cut], [])[1:]
+    messages = []
+    for i, parts in enumerate(cut):
+        if i == 0:
+            if parts[1].strip():  # Only add if there's content
+                messages.append(process_user_message(parts[1]))
+        else:
+            if parts[0].strip():  # AI response
+                messages.append(Message(
+                    role="assistant",
+                    content=[MessageContent(type="text", text=parts[0].strip())]
+                ))
+            if len(parts) > 1 and parts[1].strip():  # User message
+                messages.append(process_user_message(parts[1]))
     
+    # Ensure conversation starts with user and ends with user
     assert messages[0].role == "user"
     assert messages[-1].role == "user"
     return messages
