@@ -15,11 +15,13 @@ from PIL import Image
 from io import BytesIO
 from config import secrets
 from dataclasses import dataclass
-from .tools import Tool
+from .tools import Tool, ToolCall
+import json
 
 @dataclass
 class AIResponse:
     content: str
+    tool_calls: Optional[List[ToolCall]] = None
 
 _MODELS_DICT = {
     "mock": "mock-",
@@ -201,17 +203,24 @@ class ClaudeWrapper(AIWrapper):
             tools=claude_tools
         )
 
-        # Check if Claude wants to use a tool
-        if response.stop_reason == "tool_use":
-            # Extract tool use request
-            tool_use = response.content[0].text  # We need to handle the actual structure
-            # Here we would need to:
-            # 1. Execute the tool
-            # 2. Send the result back to Claude
-            # 3. Get the final response
-            raise NotImplementedError("Tool execution not yet implemented")
+        # Extract content and any tool calls
+        content = ""
+        tool_calls = []
+        
+        for block in response.content:
+            if block.type == "text":
+                content += block.text
+            elif block.type == "tool_use":
+                tool_calls.append(ToolCall(
+                    id=block.id,
+                    name=block.name,
+                    arguments=block.input
+                ))
 
-        return AIResponse(content=response.content[0].text)
+        return AIResponse(
+            content=content,
+            tool_calls=tool_calls if tool_calls else None
+        )
     
 class GeminiWrapper(AIWrapper):
     def __init__(self, api_key: str, model_name:str):
