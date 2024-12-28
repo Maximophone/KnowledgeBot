@@ -1,3 +1,54 @@
+"""
+
+USAGE :
+
+from typing import Literal
+from enum import Enum
+
+# Using Literal for enum values
+@tool(
+    description="Fetch weather data for a location",
+    city="The city to get weather for",
+    units="The temperature units to use"
+)
+def get_weather(
+    city: str,
+    units: Literal["celsius", "fahrenheit"] = "celsius"
+) -> str:
+    ...
+
+# Using Enum for enum values
+class TemperatureUnit(Enum):
+    CELSIUS = "C"
+    FAHRENHEIT = "F"
+
+@tool(
+    description="Fetch weather data for a location",
+    city="The city to get weather for",
+    units="The temperature units to use"
+)
+def get_weather_enum(
+    city: str,
+    units: TemperatureUnit = TemperatureUnit.CELSIUS
+) -> str:
+    ...
+
+# Regular parameters with defaults
+@tool(
+    description="Calculate monthly payment for a loan",
+    amount="The loan amount",
+    rate="Annual interest rate (percentage)",
+    years="Loan term in years"
+)
+def calculate_loan(
+    amount: float,
+    rate: float,
+    years: int = 30
+) -> float:
+    ...
+"""
+
+
 from typing import Callable, Dict, Any, List, Optional, get_type_hints, Literal, Union, get_args
 from dataclasses import dataclass
 import inspect
@@ -90,3 +141,15 @@ def tool(description: str, **parameter_descriptions: str) -> Callable:
         )
         return func
     return decorator
+
+
+@tool(
+    description="Test method - Fetch weather data for a location",
+    city="The city to get weather for",
+    units="The temperature units to use"
+)
+def test_get_weather(
+    city: str,
+    units: Literal["celsius", "fahrenheit"] = "celsius"
+) -> str:
+    return f"The weather in {city} is in {units}."

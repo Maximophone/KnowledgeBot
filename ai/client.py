@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import anthropic
 import google.generativeai as genai
 import yaml
@@ -15,6 +15,7 @@ from PIL import Image
 from io import BytesIO
 from config import secrets
 from dataclasses import dataclass
+from .tools import Tool
 
 @dataclass
 class AIResponse:
@@ -149,30 +150,68 @@ def log_token_use(model: str, n_tokens: int, input: bool = True,
 class AIWrapper:
     def messages(self, model_name: str, messages: List[Dict[str,str]], 
                  system_prompt: str, max_tokens: int, 
-                 temperature: float) -> AIResponse:
-        response = self._messages(model_name, messages, system_prompt, max_tokens, temperature)
+                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
+        response = self._messages(model_name, messages, system_prompt, max_tokens, 
+                                temperature, tools)
         log_token_use(model_name, count_tokens_input(messages, system_prompt))
         log_token_use(model_name, count_tokens_output(response.content), input=False)
         return response
     
-    def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> AIResponse:
+    def _messages(self, model: str, messages: List[Dict[str,str]], 
+                 system_prompt: str, max_tokens: int, 
+                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         raise NotImplementedError
 
 class ClaudeWrapper(AIWrapper):
     def __init__(self, api_key: str):
         self.client = anthropic.Client(api_key=api_key)
 
-    def _messages(self, model: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> AIResponse:
-        message = self.client.messages.create(
+    def _messages(self, model: str, messages: List[Dict[str,str]], 
+                 system_prompt: str, max_tokens: int, temperature: float,
+                 tools: Optional[List[Tool]] = None) -> AIResponse:
+        # Convert tools to Claude's format if provided
+        claude_tools = None
+        if tools:
+            claude_tools = [{
+                "name": tool.tool.name,
+                "description": tool.tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        name: {
+                            "type": param.type,
+                            "description": param.description,
+                            **({"enum": param.enum} if param.enum else {})
+                        }
+                        for name, param in tool.tool.parameters.items()
+                    },
+                    "required": [
+                        name for name, param in tool.tool.parameters.items()
+                        if param.required
+                    ]
+                }
+            } for tool in tools]
+
+        response = self.client.messages.create(
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             system=system_prompt,
-            messages=messages
+            messages=messages,
+            tools=claude_tools
         )
-        return AIResponse(content=message.content[0].text)
+
+        # Check if Claude wants to use a tool
+        if response.stop_reason == "tool_use":
+            # Extract tool use request
+            tool_use = response.content[0].text  # We need to handle the actual structure
+            # Here we would need to:
+            # 1. Execute the tool
+            # 2. Send the result back to Claude
+            # 3. Get the final response
+            raise NotImplementedError("Tool execution not yet implemented")
+
+        return AIResponse(content=response.content[0].text)
     
 class GeminiWrapper(AIWrapper):
     def __init__(self, api_key: str, model_name:str):
@@ -180,7 +219,7 @@ class GeminiWrapper(AIWrapper):
         self.model = genai.GenerativeModel(model_name)
     
     def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> AIResponse:
+                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         if model_name:
             model = genai.GenerativeModel(model_name)
         else:
@@ -194,25 +233,66 @@ class GeminiWrapper(AIWrapper):
     
 class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
-        self.client = OpenAI(api_key = api_key, organization=org)
+        self.client = OpenAI(api_key=api_key, organization=org)
 
-    def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
-                 temperature: float) -> AIResponse:
+    def _messages(self, model_name: str, messages: List[Dict[str,str]], 
+                 system_prompt: str, max_tokens: int, temperature: float,
+                 tools: Optional[List[Tool]] = None) -> AIResponse:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
+            
+        # Convert tools to OpenAI's format if provided
+        openai_tools = None
+        if tools:
+            openai_tools = [{
+                "type": "function",
+                "function": {
+                    "name": tool.tool.name,
+                    "description": tool.tool.description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            name: {
+                                "type": param.type,
+                                "description": param.description,
+                                **({"enum": param.enum} if param.enum else {})
+                            }
+                            for name, param in tool.tool.parameters.items()
+                        },
+                        "required": [
+                            name for name, param in tool.tool.parameters.items()
+                            if param.required
+                        ],
+                        "additionalProperties": False
+                    }
+                }
+            } for tool in tools]
+
         if model_name.startswith("o1"):
             response = self.client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                max_completion_tokens=max_tokens
+                max_completion_tokens=max_tokens,
+                tools=openai_tools
             )
         else :
             response = self.client.chat.completions.create(
                 model=model_name,
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=temperature
+                temperature=temperature,
+                tools=openai_tools
             )
+
+        # Check if the model wants to use a tool
+        if response.choices[0].finish_reason == "tool_calls":
+            tool_calls = response.choices[0].message.tool_calls
+            # Here we would need to:
+            # 1. Execute the tool(s)
+            # 2. Send the result(s) back to GPT
+            # 3. Get the final response
+            raise NotImplementedError("Tool execution not yet implemented")
+
         return AIResponse(content=response.choices[0].message.content)
 
 class MockWrapper(AIWrapper):
@@ -220,7 +300,7 @@ class MockWrapper(AIWrapper):
         pass
 
     def _messages(self, model_name: str, messages: List[Dict[str, str]],
-        system_prompt: str, max_tokens: int, temperature:float) -> AIResponse:
+        system_prompt: str, max_tokens: int, temperature:float, tools: Optional[List[Tool]] = None) -> AIResponse:
         response = "---PARAMETERS START---\n"
         response += f"max_tokens: {max_tokens}\n"
         response += f"temperature: {temperature}\n"
@@ -229,6 +309,23 @@ class MockWrapper(AIWrapper):
         response += "---SYSTEM PROMPT START---\n"
         response += system_prompt + "\n"
         response += "---SYSTEM PROMPT END---\n"
+
+        if tools:
+            response += "---TOOLS START---\n"
+            for tool in tools:
+                tool = tool.tool
+                response += f"Tool: {tool.name}\n"
+                response += f"Description: {tool.description}\n"
+                response += "Parameters:\n"
+                for param_name, param in tool.parameters.items():
+                    response += f"  - {param_name}:\n"
+                    response += f"    type: {param.type}\n"
+                    response += f"    description: {param.description}\n"
+                    response += f"    required: {param.required}\n"
+                    if param.enum:
+                        response += f"    enum: {param.enum}\n"
+                response += "\n"
+            response += "---TOOLS END---\n"
 
         response += "---MESSAGES START---\n"
         for message in messages:
@@ -257,12 +354,14 @@ def get_model(model_name: str) -> str:
     return _MODELS_DICT.get(model_name, model_name)
 
 class AI:
-    def __init__(self, model_name: str, system_prompt: str = "", debug=False):
+    def __init__(self, model_name: str, system_prompt: str = "", 
+                 tools: Optional[List[Tool]] = None, debug=False):
         self.model_name = get_model(model_name)
         self.client = get_client(model_name)
         self.system_prompt = system_prompt
+        self.tools = tools or []
         self._history = []
-        self.debug=debug
+        self.debug = debug
 
     def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Dict[str, str]]:
         content = []
@@ -295,17 +394,20 @@ class AI:
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                 temperature: float = 0.0, xml: bool = False, debug: bool = False,
-                image_paths: List[str] = None) -> AIResponse:
+                image_paths: List[str] = None, tools: Optional[List[Tool]] = None) -> AIResponse:
         messages = self._prepare_messages(message, image_paths)
+
         response = self.messages(messages, system_prompt, model_override, 
-                                 max_tokens, temperature, debug=debug)
+                               max_tokens, temperature, debug=debug,
+                               tools=tools)
         if xml:
             response.content = f"<response>{response.content}</response>"
         return response
         
     def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
                  model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
-                 temperature: float = 0.0, xml: bool = False, debug: bool = False) -> AIResponse:
+                 temperature: float = 0.0, xml: bool = False, debug: bool = False,
+                 tools: Optional[List[Tool]] = None) -> AIResponse:
         debug = debug | self.debug
         if model_override:
             model_name = get_model(model_override) or self.model_name
@@ -315,11 +417,19 @@ class AI:
             client = self.client
         system_prompt = system_prompt or self.system_prompt
 
+        # Merge instance tools with method tools
+        tools_to_use = self.tools + (tools or [])
+
         if debug:
             print(f"--MODEL: {model_name}--", flush=True)
             print("--SYSTEM PROMPT START--", flush=True)
             print(system_prompt.encode("utf-8"), flush=True)
             print("--SYSTEM PROMPT END--", flush=True)
+            if tools_to_use:
+                print("--TOOLS START--", flush=True)
+                for tool in tools_to_use:
+                    print(f"Tool: {tool.name} - {tool.description}", flush=True)
+                print("--TOOLS END--", flush=True)
             print("--MESSAGES RECEIVED START--", flush=True)
             for message in messages:
                 print("role: ", message["role"], flush=True)
@@ -334,11 +444,7 @@ class AI:
             print("--MESSAGES RECEIVED END--", flush=True)
 
         response = client.messages(model_name, messages, system_prompt, 
-                                   max_tokens, temperature)
-        
-        # If we already have an AIResponse, use it directly
-        if not isinstance(response, AIResponse):
-            response = AIResponse(content=response)
+                                 max_tokens, temperature, tools=tools_to_use)
             
         if xml:
             response.content = f"<response>{response.content}</response>"
