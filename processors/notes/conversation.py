@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ai import get_prompt
+from ai.types import Message, MessageContent
 
 class ConversationProcessor(NoteProcessor):
     """Processes conversation notes and reformats them with AI-generated summaries."""
@@ -35,14 +36,24 @@ class ConversationProcessor(NoteProcessor):
             text = content.strip()
         
         # Format the conversation using AI
-        formatted_conversation = self.ai_model.message(
-            self.prompt_format + "\n\nTranscript:\n" + text
-        ).content
+        format_message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_format + "\n\nTranscript:\n" + text
+            )]
+        )
+        formatted_conversation = self.ai_model.message(format_message).content
         
         # Generate summary
-        summary = self.ai_model.message(
-            self.prompt_summary + "\n\nTranscript:\n" + text
-        ).content
+        summary_message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_summary + "\n\nTranscript:\n" + text
+            )]
+        )
+        summary = self.ai_model.message(summary_message).content
         
         # Update frontmatter
         frontmatter['tags'] = frontmatter.get('tags', [])

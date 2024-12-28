@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, date
 import calendar
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
+from ai.types import Message, MessageContent
 
 class TodoProcessor(NoteProcessor):
     """Processes todo transcripts and adds them to a todo directory."""
@@ -56,7 +57,14 @@ tags:
 
         # Extract todos using AI
         todos_prompt = self.prompt_todos + "\n\nTranscript:\n" + transcript
-        todos_text = self.ai_model.message(todos_prompt + transcript).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=todos_prompt + transcript
+            )]
+        )
+        todos_text = self.ai_model.message(message).content
 
         # Prepare the content to append
         append_content = f"\n## Todos from [[{filename}]] - {date_str}\n\n{todos_text}\n\n---\n"

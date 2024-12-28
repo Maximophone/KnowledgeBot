@@ -16,6 +16,7 @@ from io import BytesIO
 from config import secrets
 from dataclasses import dataclass
 from .tools import Tool, ToolCall, ToolResult
+from .types import Message, MessageContent
 import json
 
 @dataclass
@@ -122,18 +123,15 @@ def get_image_dimensions_from_base64(base64_string):
     
     return width, height
 
-def count_tokens_input(messages: str, system_prompt: str) -> int:
+def count_tokens_input(messages: List[Message], system_prompt: str) -> int:
     text = system_prompt
     images = []
     for m in messages:
-        if isinstance(m["content"], str):
-            text += m["content"]
-        else:
-            for content in m["content"]:
-                if content["type"] == "text":
-                    text += content["text"]
-                elif content["type"] == "image":
-                    images.append(content["source"])
+        for content in m.content:
+            if content.type == "text":
+                text += content.text
+            elif content.type == "image":
+                images.append(content.image)
     return n_tokens(text) + n_tokens_images(images)
 
 def count_tokens_output(response: str):
@@ -150,7 +148,7 @@ def log_token_use(model: str, n_tokens: int, input: bool = True,
             f.write(f"{model},output,{n_tokens},{t},{script}\n")
 
 class AIWrapper:
-    def messages(self, model_name: str, messages: List[Dict[str,str]], 
+    def messages(self, model_name: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, 
                  temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         response = self._messages(model_name, messages, system_prompt, max_tokens, 
@@ -159,7 +157,7 @@ class AIWrapper:
         log_token_use(model_name, count_tokens_output(response.content), input=False)
         return response
     
-    def _messages(self, model: str, messages: List[Dict[str,str]], 
+    def _messages(self, model: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, 
                  temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         raise NotImplementedError
@@ -168,7 +166,7 @@ class ClaudeWrapper(AIWrapper):
     def __init__(self, api_key: str):
         self.client = anthropic.Client(api_key=api_key)
 
-    def _messages(self, model: str, messages: List[Dict[str,str]], 
+    def _messages(self, model: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
                  tools: Optional[List[Tool]] = None) -> AIResponse:
         # Convert tools to Claude's format if provided
@@ -194,11 +192,11 @@ class ClaudeWrapper(AIWrapper):
                 }
             } for tool in tools]
 
-        # Convert messages to Claude's format, including tool results
+        # Convert messages to Claude's format
         claude_messages = []
         for message in messages:
-            if message["role"] == "tool":
-                tool_result: ToolResult = message["content"]
+            if message.role == "tool":
+                tool_result = next(content.tool_result for content in message.content if content.type == "tool_result")
                 claude_messages.append({
                     "role": "user",
                     "content": [{
@@ -209,7 +207,35 @@ class ClaudeWrapper(AIWrapper):
                     }]
                 })
             else:
-                claude_messages.append(message)
+                # Convert MessageContent list to Claude's format
+                claude_content = []
+                for content in message.content:
+                    if content.type == "text":
+                        claude_content.append({"type": "text", "text": content.text})
+                    elif content.type == "tool_use":
+                        claude_content.append({
+                            "type": "tool_use",
+                            "tool_call": content.tool_call
+                        })
+                    elif content.type == "tool_result":
+                        claude_content.append({
+                            "type": "tool_result",
+                            "tool_result": content.tool_result
+                        })
+                    elif content.type == "image":
+                        claude_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": content.image["type"],
+                                "media_type": content.image["media_type"],
+                                "data": content.image["data"]
+                            }
+                        })
+                
+                claude_messages.append({
+                    "role": message.role,
+                    "content": claude_content if len(claude_content) > 1 else claude_content[0]["text"]
+                })
 
         response = self.client.messages.create(
             model=model,
@@ -244,28 +270,41 @@ class GeminiWrapper(AIWrapper):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
     
-    def _messages(self, model_name: str, messages: List[Dict[str,str]], system_prompt: str, max_tokens: int, 
+    def _messages(self, model_name: str, messages: List[Message], system_prompt: str, max_tokens: int, 
                  temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         if model_name:
             model = genai.GenerativeModel(model_name)
         else:
             model = self.model
         role_mapping = {"user": "user", "assistant": "model"}
-        messages=[{"role": role_mapping.get(m["role"]), "parts":[m["content"]]} for m in messages]
-        response = model.generate_content(
-            messages
-        )
+        gemini_messages = []
+        for message in messages:
+            content = []
+            for msg_content in message.content:
+                if msg_content.type == "text":
+                    content.append(msg_content.text)
+                elif msg_content.type == "image":
+                    # Gemini expects base64 images in a specific format
+                    content.append({
+                        "mime_type": msg_content.image["media_type"],
+                        "data": msg_content.image["data"]
+                    })
+            gemini_messages.append({
+                "role": role_mapping.get(message.role),
+                "parts": content
+            })
+        response = model.generate_content(gemini_messages)
         return AIResponse(content=response.text)
     
 class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
         self.client = OpenAI(api_key=api_key, organization=org)
 
-    def _messages(self, model_name: str, messages: List[Dict[str,str]], 
+    def _messages(self, model_name: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
                  tools: Optional[List[Tool]] = None) -> AIResponse:
         if system_prompt:
-            messages = [{"role": "system", "content": system_prompt}] + messages
+            messages = [Message(role="system", content=[MessageContent(type="text", text=system_prompt)])] + messages
             
         # Convert tools to OpenAI's format if provided
         openai_tools = None
@@ -294,11 +333,11 @@ class GPTWrapper(AIWrapper):
                 }
             } for tool in tools]
 
-        # Convert messages to OpenAI's format, including tool results
+        # Convert messages to OpenAI's format
         openai_messages = []
         for message in messages:
-            if message["role"] == "tool":
-                tool_result: ToolResult = message["content"]
+            if message.role == "tool":
+                tool_result = next(content.tool_result for content in message.content if content.type == "tool_result")
                 openai_messages.append({
                     "role": "tool",
                     "content": json.dumps({
@@ -308,7 +347,24 @@ class GPTWrapper(AIWrapper):
                     "tool_call_id": tool_result.tool_call_id
                 })
             else:
-                openai_messages.append(message)
+                content_list = []
+                for msg_content in message.content:
+                    if msg_content.type == "text":
+                        content_list.append({
+                            "type": "text",
+                            "text": msg_content.text
+                        })
+                    elif msg_content.type == "image":
+                        content_list.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{msg_content.image['media_type']};base64,{msg_content.image['data']}"
+                            }
+                        })
+                openai_messages.append({
+                    "role": message.role,
+                    "content": content_list[0]["text"] if len(content_list) == 1 and content_list[0]["type"] == "text" else content_list
+                })
 
         if model_name.startswith("o1"):
             response = self.client.chat.completions.create(
@@ -347,7 +403,7 @@ class MockWrapper(AIWrapper):
     def __init__(self):
         pass
 
-    def _messages(self, model_name: str, messages: List[Dict[str, str]],
+    def _messages(self, model_name: str, messages: List[Message],
         system_prompt: str, max_tokens: int, temperature:float, tools: Optional[List[Tool]] = None) -> AIResponse:
         response = "---PARAMETERS START---\n"
         response += f"max_tokens: {max_tokens}\n"
@@ -377,10 +433,15 @@ class MockWrapper(AIWrapper):
 
         response += "---MESSAGES START---\n"
         for message in messages:
-            response += f"role: {message['role']}\n"
+            response += f"role: {message.role}\n"
             response += "content: \n"
-            response += str(message["content"])
-            response += "\n"
+            for content in message.content:
+                if content.type == "text":
+                    response += content.text + "\n"
+                elif content.type == "tool_use":
+                    response += f"[tool_use: {content.tool_call}]\n"
+                elif content.type == "tool_result":
+                    response += f"[tool_result: {content.tool_result}]\n"
         response += "---MESSAGES END---\n"
 
         return AIResponse(content=response)
@@ -411,33 +472,36 @@ class AI:
         self._history = []
         self.debug = debug
 
-    def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Dict[str, str]]:
+    def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Message]:
         content = []
         if image_paths:
             for image_path in image_paths:
                 try:
                     validate_image(image_path)
                     encoded_image, media_type = encode_image(image_path)
-                    content.append({
-                        "type": "image",
-                        "source": {
+                    content.append(MessageContent(
+                        type="image",
+                        text=None,
+                        tool_call=None,
+                        tool_result=None,
+                        image={
                             "type": "base64",
                             "media_type": media_type,
                             "data": encoded_image
                         }
-                    })
+                    ))
                 except (FileNotFoundError, ValueError) as e:
                     print(f"Error processing image {image_path}: {str(e)}")
         
-        content.append({
-            "type": "text",
-            "text": message
-        })
+        content.append(MessageContent(
+            type="text",
+            text=message
+        ))
 
-        return [{
-            "role": "user",
-            "content": content if image_paths else message
-        }]
+        return [Message(
+            role="user",
+            content=content
+        )]
 
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
@@ -452,7 +516,7 @@ class AI:
             response.content = f"<response>{response.content}</response>"
         return response
         
-    def messages(self, messages: List[Dict[str, str]], system_prompt: str = None, 
+    def messages(self, messages: List[Message], system_prompt: str = None, 
                  model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                  temperature: float = 0.0, xml: bool = False, debug: bool = False,
                  tools: Optional[List[Tool]] = None) -> AIResponse:
@@ -480,17 +544,14 @@ class AI:
                 print("--TOOLS END--", flush=True)
             print("--MESSAGES RECEIVED START--", flush=True)
             for message in messages:
-                print("role: ", message["role"], flush=True)
-                if isinstance(message["content"], list):
-                    for item in message["content"]:
-                        if item["type"] == "text":
-                            print("content (text): ", item["text"].encode("utf-8"), flush=True)
-                        elif item["type"] == "image":
-                            print("content (image): [base64 encoded image]", flush=True)
-                elif isinstance(message["content"], ToolResult):
-                    print("content (tool result): ", str(message["content"]), flush=True)
-                else:
-                    print("content: ", message["content"].encode("utf-8"), flush=True)
+                print("role: ", message.role, flush=True)
+                for content in message.content:
+                    if content.type == "text":
+                        print("content (text): ", content.text.encode("utf-8"), flush=True)
+                    elif content.type == "image":
+                        print("content (image): [base64 encoded image]", flush=True)
+                    elif content.type == "tool_result":
+                        print("content (tool result): ", str(content.tool_result), flush=True)
             print("--MESSAGES RECEIVED END--", flush=True)
 
         response = client.messages(model_name, messages, system_prompt, 
@@ -510,12 +571,13 @@ class AI:
                      image_paths: List[str] = None):
         messages = self._history + self._prepare_messages(message, image_paths)
         response = self.messages(messages, system_prompt, model_override, max_tokens, temperature, debug=debug)
-        self._history = messages + [
-            {
-                "role": "assistant",
-                "content": response.content
-            }
-        ]
+        self._history = messages + [Message(
+            role="assistant",
+            content=[MessageContent(
+                type="text",
+                text=response.content
+            )]
+        )]
         if xml:
             response.content = f"<response>{response.content}</response>"
         return response

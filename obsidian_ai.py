@@ -36,6 +36,7 @@ from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
 from parser.tag_parser import process_tags
 from config import secrets
 from ai.tools import test_get_weather, ToolCall, ToolResult
+from ai.types import Message, MessageContent
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -390,16 +391,20 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                         response += f"Result: {tool_result.result}\n"
                     
                     # Add tool result to messages for context
-                    messages.append({
-                        "role": "assistant",
-                        "content": response
-                    })
-                    messages.append({
-                        "role": "tool",  # New role type for tool results
-                        "tool_call_id": tool_result.tool_call_id,
-                        "name": tool_result.name,
-                        "content": tool_result  # Pass the entire ToolResult object
-                    })
+                    messages.append(Message(
+                        role="assistant",
+                        content=[MessageContent(
+                            type="text",
+                            text=response
+                        )]
+                    ))
+                    messages.append(Message(
+                        role="tool",
+                        content=[MessageContent(
+                            type="tool_result",
+                            tool_result=tool_result
+                        )]
+                    ))
                     
                     # Get AI's response to tool result
                     ai_response = model.messages(messages, model_override=model_name,
@@ -419,7 +424,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         new_block = f"{block}{beacon_error}\n```sh\n{traceback.format_exc()}```\n"
     return f"<ai!{option_txt}>{new_block}</ai!>"
 
-def process_conversation(txt: str) -> List[Dict[str, str]]:
+def process_conversation(txt: str) -> List[Message]:
     cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
     # [[<claude>, <me>], [<claude>, <me>], ... ]
     assert len(cut[0]) == 1 or len(cut[0]) == 2
@@ -428,37 +433,41 @@ def process_conversation(txt: str) -> List[Dict[str, str]]:
         cut[0] = ["", cut[0][0]]
     assert cut[0][0] == ""
 
-    def process_user_message(message: str) -> Dict[str, str]:
+    def process_user_message(message: str) -> Message:
         processed, results = process_tags(message, {"image": remove })
         image_paths = [v for n, v, _ in results if n == "image"]
+        content = []
         if image_paths:
-            content = []
             for image_path in image_paths:
                 try:
                     validate_image(image_path)
                     encoded_image, media_type = encode_image(image_path)
-                    content.append({
-                        "type": "image",
-                        "source": {
+                    content.append(MessageContent(
+                        type="image",
+                        text=None,
+                        tool_call=None,
+                        tool_result=None,
+                        image={
                             "type": "base64",
                             "media_type": media_type,
                             "data": encoded_image
                         }
-                    })
+                    ))
                 except (FileNotFoundError, ValueError) as e:
                     print(f"Error processing image {image_path}: {str(e)}")
-            content.append({"type": "text", "text": processed.strip()})
-            return {"role": "user", "content": content}
-        else:
-            return {"role": "user", "content": processed.strip()}
+        content.append(MessageContent(
+            type="text",
+            text=processed.strip()
+        ))
+        return Message(role="user", content=content)
 
     messages = sum([[
-        {"role": "assistant", "content": cl.strip()},
+        Message(role="assistant", content=[MessageContent(type="text", text=cl.strip())]),
         process_user_message(me)
     ] for cl, me in cut], [])[1:]
     
-    assert messages[0]["role"] == "user"
-    assert messages[-1]["role"] == "user"
+    assert messages[0].role == "user"
+    assert messages[-1].role == "user"
     return messages
 
 

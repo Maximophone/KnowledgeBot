@@ -3,6 +3,7 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter
+from ai.types import Message, MessageContent
 
 
 class MeetingSummaryProcessor(NoteProcessor):
@@ -83,7 +84,14 @@ class MeetingSummaryProcessor(NoteProcessor):
         Transcript:
         """
         
-        summary = self.ai_model.message(summary_prompt + transcript_content).content
+        summary_message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=summary_prompt + transcript_content
+            )]
+        )
+        summary = self.ai_model.message(summary_message).content
         
         # Generate next steps
         next_steps_prompt = f"""Review this meeting transcript and extract all action items and next steps.
@@ -100,7 +108,14 @@ class MeetingSummaryProcessor(NoteProcessor):
         Transcript:
         """
         
-        next_steps = self.ai_model.message(next_steps_prompt + transcript_content).content
+        next_steps_message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=next_steps_prompt + transcript_content
+            )]
+        )
+        next_steps = self.ai_model.message(next_steps_message).content
         
         # Prepare new summary section
         new_summary = f"""## Executive Summary

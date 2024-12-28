@@ -9,6 +9,7 @@ from watchdog.events import FileSystemEventHandler
 import time
 import traceback
 from beacons import *
+from ai.types import Message, MessageContent
 
 DEFAULT_LLM = "sonnet3.5"
 
@@ -167,7 +168,7 @@ model = ai.AI("claude-haiku")
 def needs_answer(txt):
     return not txt.strip().endswith(beacon_me) and txt
 
-def process_conversation(txt: str) -> List[Dict[str, str]]:
+def process_conversation(txt: str) -> List[Message]:
     cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
     # [[<claude>, <me>], [<claude>, <me>], ... ]
     assert len(cut[0]) == 1 or len(cut[0]) == 2
@@ -176,11 +177,11 @@ def process_conversation(txt: str) -> List[Dict[str, str]]:
         cut[0] = ["", cut[0][0]]
     assert cut[0][0] == ""
     messages = sum([[
-        {"role": "assistant", "content": cl.strip()},
-        {"role": "user", "content": me.strip()}
+        Message(role="assistant", content=[MessageContent(type="text", text=cl.strip())]),
+        Message(role="user", content=[MessageContent(type="text", text=me.strip())])
     ] for cl, me in cut], [])[1:]
-    assert messages[0]["role"] == "user"
-    assert messages[-1]["role"] == "user"
+    assert messages[0].role == "user"
+    assert messages[-1].role == "user"
     return messages
 
 

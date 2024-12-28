@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
 from ai import AI
+from ai.types import Message, MessageContent
 import os
 
 class SpeakerIdentifier(NoteProcessor):
@@ -29,7 +30,14 @@ class SpeakerIdentifier(NoteProcessor):
         Transcript:
         {transcript}"""
         
-        return self.ai_model.message(prompt).strip()
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=prompt
+            )]
+        )
+        return self.ai_model.message(message).content.strip()
 
     def consolidate_answer(self, text: str) -> str:
         prompt = f"""The text below is the answer from an LLM that was tasked to identify someone.
@@ -39,7 +47,14 @@ class SpeakerIdentifier(NoteProcessor):
         Text:
         {text}
         """
-        return self.tiny_model.message(prompt).strip()
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=prompt
+            )]
+        )
+        return self.tiny_model.message(message).content.strip()
         
     async def process_file(self, filename: str) -> None:
         print(f"Identifying speakers in: {filename}", flush=True)
@@ -86,9 +101,21 @@ class SpeakerIdentifier(NoteProcessor):
         print(f"Completed speaker identification for: {filename}", flush=True)
 
     def identify_speakers(self, text: str) -> str:
-        prompt = self.prompt_identify + text
-        return self.ai_model.message(prompt).content.strip()
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_identify + text
+            )]
+        )
+        return self.ai_model.message(message).content.strip()
 
     def identify_speakers_tiny(self, text: str) -> str:
-        prompt = self.prompt_identify_tiny + text
-        return self.tiny_model.message(prompt).content.strip()
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_identify_tiny + text
+            )]
+        )
+        return self.tiny_model.message(message).content.strip()

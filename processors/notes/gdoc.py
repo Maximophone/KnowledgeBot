@@ -6,6 +6,7 @@ from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from gdoc_utils import GoogleDocUtils
 import os
 from ai import get_prompt
+from ai.types import Message, MessageContent
 
 class GDocProcessor(NoteProcessor):
     """Processes Google Docs by pulling their content and converting to markdown."""
@@ -36,9 +37,14 @@ class GDocProcessor(NoteProcessor):
         # Download and process Google Doc
         gdoc_content_html = self.gdu.get_clean_document(frontmatter["url"])
         prompt = get_prompt("summarise_gdoc")
-        gdoc_content_md = self.ai_model.message(
-            prompt + gdoc_content_html
-        ).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=prompt + gdoc_content_html
+            )]
+        )
+        gdoc_content_md = self.ai_model.message(message).content
         
         # Update frontmatter and save
         frontmatter["synced"] = True

@@ -5,6 +5,7 @@ from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ..common.markdown import sanitize_filename
 from ai import get_prompt
+from ai.types import Message, MessageContent
 
 class MeditationProcessor(NoteProcessor):
     """Processes meditation transcripts into structured notes."""
@@ -36,7 +37,14 @@ class MeditationProcessor(NoteProcessor):
         transcript = content.split('---', 2)[2].strip()
         
         # Generate meditation summary
-        ai_response = self.ai_model.message(self.meditation_prompt + transcript).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.meditation_prompt + transcript
+            )]
+        )
+        ai_response = self.ai_model.message(message).content
         
         # Create audio link
         original_file = frontmatter.get('original_file', '')

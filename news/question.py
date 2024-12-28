@@ -4,6 +4,7 @@ from lxml import etree
 from dataclasses import dataclass, field
 from typing import List
 from newspaper import Article
+from ai.types import Message, MessageContent
 
 
 gemini = AI("gemini1.5")
@@ -105,7 +106,14 @@ def answer_question(article: str, question: str, n_retries=2, model=None) -> Ans
     assert n_retries >= 1, "N retries can't be < 1"
     model = model or gemini
     prompt = PROMPT.format(question = question, article = article)
-    response = model.message(prompt).content
+    messages = [Message(
+        role="user",
+        content=[MessageContent(
+            type="text",
+            text=prompt
+        )]
+    )]
+    response = model.messages(messages).content
     xml_response_str = "<response>" + response + "</response>"
     answer = Answer()
     answer.full_answer = xml_response_str
@@ -136,7 +144,14 @@ def get_article_text_ai(raw_text: str, n_retries=2, model=None) -> Text:
     assert n_retries >= 1, "N retries can't be < 1"
     model = model or gemini
     prompt = PROMPT_REFINE_TEXT + raw_text
-    response = model.message(prompt).content
+    messages = [Message(
+        role="user",
+        content=[MessageContent(
+            type="text",
+            text=prompt
+        )]
+    )]
+    response = model.messages(messages).content
     xml_response_str = "<response>" + response + "</response>"
     text = Text()
     text.full_answer = response

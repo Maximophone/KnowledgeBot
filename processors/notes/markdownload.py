@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
 from ai import AI, get_prompt
+from ai.types import Message, MessageContent
 
 
 class MarkdownloadProcessor(NoteProcessor):
@@ -33,9 +34,14 @@ class MarkdownloadProcessor(NoteProcessor):
         frontmatter = parse_frontmatter(content)
         
         # Generate summary
-        summary = self.ai_model.message(
-            self.prompt_summary + "\n\nContent:\n" + content
-        ).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_summary + "\n\nContent:\n" + content
+            )]
+        )
+        summary = self.ai_model.message(message).content
         
         # Read template
         async with aiofiles.open(self.template_path, 'r', encoding='utf-8') as f:

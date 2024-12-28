@@ -10,6 +10,7 @@ from .utils import get_recording_date
 from ..common.frontmatter import frontmatter_to_text
 
 from ai import AI, get_prompt
+from ai.types import Message, MessageContent
 import re
 import os
 
@@ -47,7 +48,14 @@ class AudioTranscriber:
         self.prompt_title = get_prompt("transcript_title")
 
     def get_title(self, text: str) -> str:
-        return self.ai_model.message(self.prompt_title + text).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_title + text
+            )]
+        )
+        return self.ai_model.message(message).content
         
     async def transcribe_audio_file(self, file_path: Path) -> assemblyai.Transcript:
         """Transcribe a single audio file using AssemblyAI."""

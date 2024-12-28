@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ..common.markdown import create_wikilink
+from ai.types import Message, MessageContent
 
 
 class IdeaProcessor(NoteProcessor):
@@ -50,7 +51,14 @@ tags:
         
         # Extract ideas using AI
         ideas_prompt = self.prompt_ideas + "\n\nTranscript:\n" + transcript
-        ideas_text = self.ai_model.message(ideas_prompt + transcript).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=ideas_prompt + transcript
+            )]
+        )
+        ideas_text = self.ai_model.message(message).content
         
         # Prepare the content to append
         date_str = frontmatter.get('date', '')

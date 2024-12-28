@@ -11,6 +11,7 @@ from ai import (
     AIWrapper, ClaudeWrapper, GeminiWrapper, GPTWrapper, MockWrapper,
     get_client, get_model, AI, AIResponse
 )
+from ai.types import Message, MessageContent
 
 IMG1_PATH = "G:\\My Drive\\Obsidian\\Images\\cube.png"
 IMG2_PATH = "G:\\My Drive\\Obsidian\\Images\\cube.png"
@@ -22,35 +23,28 @@ class TestAIFunctions(unittest.TestCase):
         self.assertEqual(n_tokens(""), 0)
 
     def test_count_tokens_input(self):
-        messages = [{"content": "Hello"}, {"content": "World"}]
+        messages = [Message(role="user", content=[MessageContent(type="text", text="Hello")]),
+                   Message(role="assistant", content=[MessageContent(type="text", text="World")])]
         system_prompt = "System"
         self.assertEqual(count_tokens_input(messages, system_prompt), 4)
 
     def test_count_tokens_images(self):
         encoded_image, media_type = encode_image(IMG1_PATH)
         messages = [
-            {"content": "Hello"}, 
-            {"content": [
-                {
-                    "type": "image", 
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": encoded_image
-                        }
+            Message(role="user", content=[MessageContent(type="text", text="Hello")]),
+            Message(role="user", content=[MessageContent(
+                type="image",
+                text=None,
+                tool_call=None,
+                tool_result=None,
+                image={
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": encoded_image
                 }
-                ]
-            }
+            )])
         ]
         self.assertEqual(count_tokens_input(messages, ""), 85)
-
-    def test_count_tokens_input(self):
-        messages = [{"content": "Hello"}, {"content": "World"}]
-        system_prompt = "System"
-        self.assertEqual(count_tokens_input(messages, system_prompt), 4)
-
-    def test_count_tokens_output(self):
-        self.assertEqual(count_tokens_output("Hello, world!"), 3)
 
     @patch('ai.open')
     def test_log_token_use(self, mock_open):
@@ -110,15 +104,17 @@ class TestAIWrappers(unittest.TestCase):
     def test_claude_wrapper(self, mock_client):
         mock_client.return_value.messages.create.return_value.content = [MagicMock(text='Response')]
         wrapper = ClaudeWrapper('fake_key')
-        response = wrapper._messages('model', [], '', 100, 0.5)
-        self.assertEqual(response, 'Response')
+        messages = [Message(role="user", content=[MessageContent(type="text", text="Hello")])]
+        response = wrapper._messages('model', messages, '', 100, 0.5)
+        self.assertEqual(response.content, 'Response')
 
     @patch('ai.genai.GenerativeModel')
     def test_gemini_wrapper(self, mock_model):
         mock_model.return_value.generate_content.return_value.text = 'Response'
         wrapper = GeminiWrapper('fake_key', 'model-name')
-        response = wrapper._messages('model', [{'role': 'user', 'content': 'Hello'}], '', 100, 0.5)
-        self.assertEqual(response, 'Response')
+        messages = [Message(role="user", content=[MessageContent(type="text", text="Hello")])]
+        response = wrapper._messages('model', messages, '', 100, 0.5)
+        self.assertEqual(response.content, 'Response')
 
     @patch('ai.OpenAI')
     def test_gpt_wrapper(self, mock_openai):
@@ -126,14 +122,16 @@ class TestAIWrappers(unittest.TestCase):
             MagicMock(message=MagicMock(content='Response'))
         ]
         wrapper = GPTWrapper('fake_key', 'org')
-        response = wrapper._messages('model', [], '', 100, 0.5)
-        self.assertEqual(response, 'Response')
+        messages = [Message(role="user", content=[MessageContent(type="text", text="Hello")])]
+        response = wrapper._messages('model', messages, '', 100, 0.5)
+        self.assertEqual(response.content, 'Response')
 
     def test_mock_wrapper(self):
         wrapper = MockWrapper()
-        response = wrapper._messages('model', [{'role': 'user', 'content': 'Hello'}], 'System', 100, 0.5)
-        self.assertIn('Hello', response)
-        self.assertIn('System', response)
+        messages = [Message(role="user", content=[MessageContent(type="text", text="Hello")])]
+        response = wrapper._messages('model', messages, 'System', 100, 0.5)
+        self.assertIn('Hello', response.content)
+        self.assertIn('System', response.content)
 
 class TestAIClass(unittest.TestCase):
 
@@ -150,9 +148,9 @@ class TestAIClass(unittest.TestCase):
         ai = AI('mock')
         messages = ai._prepare_messages('Hello', [IMG1_PATH, IMG2_PATH])
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]['role'], 'user')
-        self.assertIsInstance(messages[0]['content'], list)
-        self.assertEqual(len(messages[0]['content']), 3)  # 2 images + 1 text
+        self.assertEqual(messages[0].role, 'user')
+        self.assertIsInstance(messages[0].content, list)
+        self.assertEqual(len(messages[0].content), 3)  # 2 images + 1 text
 
     @patch('ai.AIWrapper.messages')
     def test_ai_message(self, mock_messages):

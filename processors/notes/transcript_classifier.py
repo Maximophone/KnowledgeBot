@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, update_front_matter
 from ai import AI, get_prompt
+from ai.types import Message, MessageContent
 
 class TranscriptClassifier(NoteProcessor):
     """Classifies transcripts using AI."""
@@ -20,7 +21,14 @@ class TranscriptClassifier(NoteProcessor):
         return "transcription" in frontmatter.get("tags", [])
         
     def classify(self, text: str) -> str:
-        return self.ai_model.message(self.prompt_classify + text).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_classify + text
+            )]
+        )
+        return self.ai_model.message(message).content
         
     async def process_file(self, filename: str) -> None:
         print(f"Classifying transcript: {filename}", flush=True)

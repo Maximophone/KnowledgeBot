@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ai import AI, get_prompt
+from ai.types import Message, MessageContent
 
 class DiaryProcessor(NoteProcessor):
     """Processes diary transcripts into clean, well-formatted entries."""
@@ -39,9 +40,14 @@ class DiaryProcessor(NoteProcessor):
         transcript = content.split('---', 2)[2].strip()
         
         # Format the entry using AI
-        formatted_entry = self.ai_model.message(
-            self.prompt_format + "\n\nEntry:\n" + transcript
-        ).content
+        message = Message(
+            role="user",
+            content=[MessageContent(
+                type="text",
+                text=self.prompt_format + "\n\nEntry:\n" + transcript
+            )]
+        )
+        formatted_entry = self.ai_model.message(message).content
         
         # Create new frontmatter
         new_frontmatter = {
