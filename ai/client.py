@@ -195,47 +195,38 @@ class ClaudeWrapper(AIWrapper):
         # Convert messages to Claude's format
         claude_messages = []
         for message in messages:
-            if message.role == "tool":
-                tool_result = next(content.tool_result for content in message.content if content.type == "tool_result")
-                claude_messages.append({
-                    "role": "user",
-                    "content": [{
+            claude_content = []
+            for content in message.content:
+                if content.type == "text":
+                    claude_content.append({"type": "text", "text": content.text})
+                elif content.type == "tool_use":
+                    claude_content.append({
+                        "type": "tool_use",
+                        "id": content.tool_call.id,
+                        "name": content.tool_call.name,
+                        "input": content.tool_call.arguments
+                    })
+                elif content.type == "tool_result":
+                    claude_content.append({
                         "type": "tool_result",
-                        "tool_use_id": tool_result.tool_call_id,
-                        "content": str(tool_result.result) if tool_result.result is not None 
-                                 else f"Error: {tool_result.error}"
-                    }]
-                })
-            else:
-                # Convert MessageContent list to Claude's format
-                claude_content = []
-                for content in message.content:
-                    if content.type == "text":
-                        claude_content.append({"type": "text", "text": content.text})
-                    elif content.type == "tool_use":
-                        claude_content.append({
-                            "type": "tool_use",
-                            "tool_call": content.tool_call
-                        })
-                    elif content.type == "tool_result":
-                        claude_content.append({
-                            "type": "tool_result",
-                            "tool_result": content.tool_result
-                        })
-                    elif content.type == "image":
-                        claude_content.append({
-                            "type": "image",
-                            "source": {
-                                "type": content.image["type"],
-                                "media_type": content.image["media_type"],
-                                "data": content.image["data"]
-                            }
-                        })
-                
-                claude_messages.append({
-                    "role": message.role,
-                    "content": claude_content if len(claude_content) > 1 else claude_content[0]["text"]
-                })
+                        "tool_use_id": content.tool_result.tool_call_id,
+                        "content": str(content.tool_result.result) if content.tool_result.result is not None 
+                                 else f"Error: {content.tool_result.error}"
+                    })
+                elif content.type == "image":
+                    claude_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": content.image["type"],
+                            "media_type": content.image["media_type"],
+                            "data": content.image["data"]
+                        }
+                    })
+            
+            claude_messages.append({
+                "role": message.role,
+                "content": claude_content
+            })
 
         response = self.client.messages.create(
             model=model,

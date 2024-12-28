@@ -390,16 +390,22 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                     else:
                         response += f"Result: {tool_result.result}\n"
                     
-                    # Add tool result to messages for context
+                    # Add tool call and result to messages for context
                     messages.append(Message(
                         role="assistant",
-                        content=[MessageContent(
-                            type="text",
-                            text=response
-                        )]
+                        content=[
+                            MessageContent(
+                                type="text",
+                                text=ai_response.content
+                            ),
+                            MessageContent(
+                                type="tool_use",
+                                tool_call=tool_call
+                            )
+                        ]
                     ))
                     messages.append(Message(
-                        role="tool",
+                        role="user",
                         content=[MessageContent(
                             type="tool_result",
                             tool_result=tool_result
