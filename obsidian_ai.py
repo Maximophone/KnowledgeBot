@@ -35,7 +35,7 @@ from file_packager import get_committed_files, format_for_llm
 from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
 from parser.tag_parser import process_tags
 from config import secrets
-from ai.tools import test_get_weather, ToolCall, ToolResult
+from ai.tools import test_get_weather, Tool,ToolCall, ToolResult
 from ai.types import Message, MessageContent
 
 # Constants
@@ -49,6 +49,14 @@ SEARCH_PATHS = [
     "C:\\Users\\fourn\\code",
     # Add any other paths you want to search
 ]
+
+# Define available tool sets
+TOOL_SETS = {
+    "test": [test_get_weather],
+    # We can add more sets later like:
+    # "weather": [get_weather, get_forecast],
+    # "file": [read_file, write_file],
+}
 
 # Initialize AI model
 api_key = secrets.CLAUDE_API_KEY
@@ -154,6 +162,11 @@ def insert_file_ref(fname: str = "", subfolder: str = "", typ: str = "document")
         return contents
     
     return f"<{typ}><filename>{file_name}</filename>\n<contents>{contents}</contents></{typ}>"
+
+def get_tools_from_key(key: str) -> List[Tool]:
+    """Get tools from a predefined key"""
+    return TOOL_SETS.get(key, [])
+
 # Define replacement functions
 remove = lambda *_: ""
 REPLACEMENTS_OUTSIDE = {
@@ -170,6 +183,7 @@ REPLACEMENTS_INSIDE = {
     "temperature": remove,
     "max_tokens": remove,
     "mock": remove,
+    "tools": lambda v, t, c: v,
     "this": lambda v, t, context: f"<document>{context}</document>\n",
     "repo": pack_repo,
     "vault": lambda *_: pack_vault(),
@@ -325,6 +339,8 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         debug = ("debug" in params)
         temperature = float(params.get("temperature", ai.DEFAULT_TEMPERATURE))
         max_tokens = int(params.get("max_tokens", ai.DEFAULT_MAX_TOKENS))
+        tools_key = params.get("tools") 
+        tools = get_tools_from_key(tools_key) if tools_key else []
         if "mock" in params:
             model_name = "mock"
 
@@ -347,7 +363,6 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             with open(f"prompts/{system_prompt}.md", "r") as f:
                 system_prompt = f.read()
 
-        tools = [test_get_weather]
         ai_response = model.messages(messages, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
