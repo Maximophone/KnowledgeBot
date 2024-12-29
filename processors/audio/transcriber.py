@@ -47,7 +47,7 @@ class AudioTranscriber:
         self.ai_model = AI("haiku3.5")
         self.prompt_title = get_prompt("transcript_title")
 
-    def get_title(self, text: str) -> str:
+    def generate_title(self, text: str) -> str:
         message = Message(
             role="user",
             content=[MessageContent(

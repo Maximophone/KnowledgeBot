@@ -228,14 +228,17 @@ class ClaudeWrapper(AIWrapper):
                 "content": claude_content
             })
 
-        response = self.client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=claude_messages,
-            tools=claude_tools
-        )
+        arguments = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_prompt,
+            "messages": claude_messages
+        }
+        if claude_tools:
+            arguments["tools"] = claude_tools
+
+        response = self.client.messages.create(**arguments)
 
         # Extract content and any tool calls
         content = ""
@@ -464,35 +467,37 @@ class AI:
         self.debug = debug
 
     def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Message]:
-        content = []
-        if image_paths:
-            for image_path in image_paths:
-                try:
-                    validate_image(image_path)
-                    encoded_image, media_type = encode_image(image_path)
-                    content.append(MessageContent(
-                        type="image",
-                        text=None,
-                        tool_call=None,
-                        tool_result=None,
-                        image={
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": encoded_image
-                        }
-                    ))
-                except (FileNotFoundError, ValueError) as e:
-                    print(f"Error processing image {image_path}: {str(e)}")
+        # content = []
+        # if image_paths:
+        #     for image_path in image_paths:
+        #         try:
+        #             validate_image(image_path)
+        #             encoded_image, media_type = encode_image(image_path)
+        #             content.append(MessageContent(
+        #                 type="image",
+        #                 text=None,
+        #                 tool_call=None,
+        #                 tool_result=None,
+        #                 image={
+        #                     "type": "base64",
+        #                     "media_type": media_type,
+        #                     "data": encoded_image
+        #                 }
+        #             ))
+        #         except (FileNotFoundError, ValueError) as e:
+        #             print(f"Error processing image {image_path}: {str(e)}")
         
-        content.append(MessageContent(
-            type="text",
-            text=message
-        ))
+        # content.append(MessageContent(
+        #     type="text",
+        #     text=message
+        # ))
 
-        return [Message(
-            role="user",
-            content=content
-        )]
+        # return [Message(
+        #     role="user",
+        #     content=content
+        # )]
+
+        return [message]
 
     def message(self, message: str, system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
