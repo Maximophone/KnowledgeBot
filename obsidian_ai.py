@@ -347,76 +347,77 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             with open(f"prompts/{system_prompt}.md", "r") as f:
                 system_prompt = f.read()
 
+        tools = [test_get_weather]
+        ai_response = model.messages(messages, model_override=model_name,
+                                    max_tokens=max_tokens, temperature=temperature,
+                                    tools=tools)
         response = ""
-        for i in range(n_replies):
-            if n_replies > 1:
-                response += f"==[VERSION-{i}]==\n"
+        while True:  # Process responses until no more tool calls
+            response += ai_response.content
+
+            if not ai_response.tool_calls:
+                break  # No (more) tool calls, we're done
+
+            # Process all tool calls at once
+            tool_results = []
+            for tool_call in ai_response.tool_calls:
+                try:
+                    # Find the matching tool from provided tools
+                    tool = next(t for t in tools if t.tool.name == tool_call.name)
+                    # Execute the tool
+                    result = tool.tool.func(**tool_call.arguments)
+                    # Format the result
+                    tool_results.append(ToolResult(
+                        name=tool_call.name,
+                        result=result,
+                        tool_call_id=tool_call.id
+                    ))
+                except Exception as e:
+                    tool_results.append(ToolResult(
+                        name=tool_call.name,
+                        result=None,
+                        tool_call_id=tool_call.id,
+                        error=str(e)
+                    ))
             
-            # Get available tools from the parameters
-            tools = [test_get_weather]  # TODO: Get tools from parameters/config
+            # Add all tool calls to messages
+            messages.append(Message(
+                role="assistant",
+                content=[
+                    MessageContent(
+                        type="text",
+                        text=ai_response.content
+                    ),
+                    *[MessageContent(
+                        type="tool_use",
+                        tool_call=tool_call
+                    ) for tool_call in ai_response.tool_calls]
+                ]
+            ))
+
+            # Add all tool results in a single user message
+            messages.append(Message(
+                role="user",
+                content=[MessageContent(
+                    type="tool_result",
+                    tool_result=result
+                ) for result in tool_results]
+            ))
             
+            # Add tool results to response for UI
+            for result in tool_results:
+                response += f"\n{beacon_tool}\n"
+                response += f"Tool: {result.name}\n"
+                if result.error:
+                    response += f"Error: {result.error}\n"
+                else:
+                    response += f"Result: {result.result}\n"
+            
+            # Get AI's response to tool results
             ai_response = model.messages(messages, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
-            response += ai_response.content
-
-            # Handle tool calls if present
-            if ai_response.tool_calls:
-                for tool_call in ai_response.tool_calls:
-                    try:
-                        # Find the matching tool from provided tools
-                        tool = next(t for t in tools if t.tool.name == tool_call.name)
-                        # Execute the tool
-                        result = tool.tool.func(**tool_call.arguments)
-                        # Format the result
-                        tool_result = ToolResult(
-                            name=tool_call.name,
-                            result=result,
-                            tool_call_id=tool_call.id
-                        )
-                    except Exception as e:
-                        tool_result = ToolResult(
-                            name=tool_call.name,
-                            result=None,
-                            tool_call_id=tool_call.id,
-                            error=str(e)
-                        )
-                    
-                    # Add tool result to response for UI
-                    response += f"\n{beacon_tool}\n"
-                    response += f"Tool: {tool_result.name}\n"
-                    if tool_result.error:
-                        response += f"Error: {tool_result.error}\n"
-                    else:
-                        response += f"Result: {tool_result.result}\n"
-                    
-                    # Add tool call and result to messages for context
-                    messages.append(Message(
-                        role="assistant",
-                        content=[
-                            MessageContent(
-                                type="text",
-                                text=ai_response.content
-                            ),
-                            MessageContent(
-                                type="tool_use",
-                                tool_call=tool_call
-                            )
-                        ]
-                    ))
-                    messages.append(Message(
-                        role="user",
-                        content=[MessageContent(
-                            type="tool_result",
-                            tool_result=tool_result
-                        )]
-                    ))
-                    
-                    # Get AI's response to tool result
-                    ai_response = model.messages(messages, model_override=model_name,
-                                            max_tokens=max_tokens, temperature=temperature,
-                                            tools=tools)  # Keep passing tools
-                    response += f"\n{beacon_ai}\n{ai_response.content}\n"
+            response += f"\n{beacon_ai}\n"
 
         response = escape_response(response)
         if option is None:
