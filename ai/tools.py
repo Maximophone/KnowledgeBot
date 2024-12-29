@@ -63,6 +63,7 @@ from dataclasses import dataclass
 import inspect
 from enum import Enum
 import subprocess
+import os
 
 @dataclass
 class ToolParameter:
@@ -186,7 +187,7 @@ def save_file(path: str, content: str) -> str:
     return f"File saved to {path}"
 
 @tool(
-    description="Run a command on the system, using subprocess, returns the output of the command",
+    description="Run a command on the system, using subprocess, returns the output of the command. Whenever possible, try and use other tools instead of this one.",
     command="The command to run",
     safe=False
 )
@@ -205,3 +206,20 @@ def run_command(command: str) -> str:
         
     except Exception as e:
         return f"Error executing command: {str(e)}"
+
+@tool(
+    description="Read the contents of a file",
+    path="The file path",
+    safe=True
+)
+def read_file(path: str) -> str:
+    with open(path, 'r') as file:
+        return file.read()
+
+@tool(
+    description="Lists the contents of a directory",
+    path="The directory path",
+    safe=True
+)
+def list_directory(path: str) -> str:
+    return os.listdir(path)

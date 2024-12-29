@@ -32,10 +32,10 @@ import glob
 import traceback
 from file_watcher import start_file_watcher
 from file_packager import get_committed_files, format_for_llm
-from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
+from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool_start, beacon_tool_end
 from parser.tag_parser import process_tags
 from config import secrets
-from ai.tools import test_get_weather, save_file, run_command, Tool,ToolCall, ToolResult
+from ai.tools import test_get_weather, save_file, run_command, read_file, list_directory, Tool,ToolCall, ToolResult
 from ai.types import Message, MessageContent
 from PyQt5.QtWidgets import QApplication, QMessageBox
 import json
@@ -55,7 +55,7 @@ SEARCH_PATHS = [
 # Define available tool sets
 TOOL_SETS = {
     "test": [test_get_weather, save_file],
-    "system": [run_command],
+    "system": [read_file, list_directory, run_command],
     # We can add more sets later like:
     # "weather": [get_weather, get_forecast],
     # "file": [read_file, write_file],
@@ -441,6 +441,11 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                         error=str(e)
                     ))
             
+            # Add tool calls and results to response text
+            for tool_call, tool_result in zip(ai_response.tool_calls, tool_results):
+                response += "\n" + format_tool_call(tool_call)
+                response += format_tool_result(tool_result)
+            
             # Add tool call and result to messages for context
             assistant_content = []
             if ai_response.content.strip():  # Only add text content if non-empty
@@ -470,20 +475,10 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                 ) for result in tool_results]
             ))
             
-            # Add tool results to response for UI
-            for result in tool_results:
-                response += f"\n{beacon_tool}\n"
-                response += f"Tool: {result.name} Safe: {tool.tool.safe}\n"
-                if result.error:
-                    response += f"Error: {result.error}\n"
-                else:
-                    response += f"Result: {result.result}\n"
-            
             # Get AI's response to tool results
             ai_response = model.messages(messages, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
-            response += f"\n{beacon_ai}\n"
 
         response = escape_response(response)
         if option is None:
@@ -497,12 +492,140 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         new_block = f"{block}{beacon_error}\n```sh\n{traceback.format_exc()}```\n"
     return f"<ai!{option_txt}>{new_block}</ai!>"
 
-def process_conversation(txt: str) -> List[Message]:
-    cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
-    # Now with tool calls, the structure might be:
-    # [[<initial_prompt>], [<ai_response>, <user_input>], [<ai_response_with_tool>, <tool_result>], [<final_ai_response>, <user_input>]]
+def format_tool_call(tool_call: ToolCall) -> str:
+    """Format a tool call into a parseable string"""
+    return (
+        f"{beacon_tool_start}\n"
+        f"ID: {tool_call.id}\n"
+        f"Tool: {tool_call.name}\n"
+        f"Arguments:\n"
+        f"{json.dumps(tool_call.arguments, indent=2)}\n"
+    )
+
+def format_tool_result(result: ToolResult) -> str:
+    """Format a tool result into a parseable string"""
+    return (
+        f"Result:\n"
+        f"{json.dumps({'result': result.result, 'error': result.error}, indent=2)}\n"
+        f"{beacon_tool_end}\n"
+    )
+
+def parse_tool_section(section: str) -> Tuple[ToolCall, ToolResult]:
+    """Parse a tool section back into ToolCall and ToolResult objects"""
+    lines = section.strip().split('\n')
+    tool_id = lines[1].split(': ')[1]
+    tool_name = lines[2].split(': ')[1]
     
-    # Remove the assumption about exactly 2 parts after the first split
+    # Find where arguments end and result starts
+    arg_start = lines.index('Arguments:') + 1
+    result_start = lines.index('Result:') + 1
+    
+    # Parse arguments and result
+    arguments = json.loads('\n'.join(lines[arg_start:result_start-1]))
+    results = json.loads('\n'.join(lines[result_start:-1])) # Skip the last line because it contains the closing tag
+    
+    tool_call = ToolCall(
+        id=tool_id,
+        name=tool_name,
+        arguments=arguments
+    )
+    
+    tool_result = ToolResult(
+        name=tool_name,
+        tool_call_id=tool_id,
+        result=results['result'],
+        error=results['error']
+    )
+    
+    return tool_call, tool_result
+
+def process_conversation(txt: str) -> List[Message]:
+    """
+    Process a conversation text into a list of structured messages for the AI.
+    
+    This function handles the complex task of converting a text-based conversation
+    (with beacons and tool interactions) into a structured format that can be sent
+    to the AI. The conversation text is expected to alternate between AI and user
+    messages, separated by beacons (beacon_ai and beacon_me).
+
+    The process works as follows:
+    1. Split the text into sections using AI beacons
+    2. For each section, split again using ME beacons
+    3. Process each part maintaining the conversation structure:
+        - First section must start with empty text before ME beacon
+        - AI responses may contain tool calls enclosed in TOOL_START/TOOL_END tags
+        - Tool calls and their results are parsed and reconstructed into proper objects
+        - Images in user messages are processed and encoded
+
+    Structure of the input text:
+    ```
+    <initial user message>
+    |AI|
+    <ai response>
+    [possibly including tool calls:
+    |TOOL_START|
+    ID: <tool_id>
+    Tool: <tool_name>
+    Arguments: <json_args>
+    Result: {
+        'value': <result>,
+        'error': <error>
+    }
+    |TOOL_END|]
+    |ME|
+    <user response>
+    |AI|
+    ...and so on
+    ```
+
+    Args:
+        txt (str): The conversation text to process
+
+    Returns:
+        List[Message]: A list of Message objects representing the conversation.
+        Each Message contains:
+        - role: "user" or "assistant"
+        - content: List[MessageContent] where each content can be:
+            * text: Regular message text
+            * tool_use: A tool call from the AI
+            * tool_result: Result of a tool execution
+            * image: An encoded image
+
+    Requirements:
+        - Conversation must start with a user message
+        - Conversation must end with a user message
+        - Tool calls must maintain their order and pairing with results
+        - All tool sections must be properly formatted
+
+    Example:
+        Input text:
+        ```
+        What's the weather?
+        |AI|
+        Let me check...
+        |TOOL_START|
+        ID: call_123
+        Tool: get_weather
+        Arguments: {"city": "Paris"}
+        Result: {'value': "22°C", 'error': null}
+        |TOOL_END|
+        It's 22°C in Paris
+        |ME|
+        Thanks!
+        ```
+
+        Results in messages:
+        [
+            Message(role="user", content=[MessageContent(type="text", text="What's the weather?")]),
+            Message(role="assistant", content=[
+                MessageContent(type="text", text="Let me check..."),
+                MessageContent(type="tool_use", tool_call=ToolCall(...))
+            ]),
+            Message(role="user", content=[MessageContent(type="tool_result", tool_result=ToolResult(...))]),
+            Message(role="user", content=[MessageContent(type="text", text="Thanks!")])
+        ]
+    """
+    cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
     if len(cut[0]) == 1:
         cut[0] = ["", cut[0][0]]
     assert cut[0][0] == ""
@@ -541,19 +664,50 @@ def process_conversation(txt: str) -> List[Message]:
             if parts[1].strip():  # Only add if there's content
                 messages.append(process_user_message(parts[1]))
         else:
-            if parts[0].strip():  # AI response
-                messages.append(Message(
-                    role="assistant",
-                    content=[MessageContent(type="text", text=parts[0].strip())]
-                ))
-            if len(parts) > 1 and parts[1].strip():  # User message
+            if parts[0].strip():
+                # Process AI response including any tool calls
+                content = []
+                text_parts = parts[0].split(beacon_tool_start)
+                
+                # Add initial text if present
+                if text_parts[0].strip():
+                    content.append(MessageContent(
+                        type="text",
+                        text=text_parts[0].strip()
+                    ))
+                
+                # Process tool sections
+                tool_sections = []
+                for section in text_parts[1:]:
+                    section = beacon_tool_start + section
+                    if beacon_tool_end in section:
+                        tool_section = section[:section.index(beacon_tool_end) + len(beacon_tool_end)]
+                        tool_call, tool_result = parse_tool_section(tool_section)
+                        content.append(MessageContent(
+                            type="tool_use",
+                            tool_call=tool_call
+                        ))
+                        tool_sections.append((tool_call, tool_result))
+                
+                messages.append(Message(role="assistant", content=content))
+                
+                # Add tool results as a separate user message
+                if tool_sections:
+                    messages.append(Message(
+                        role="user",
+                        content=[MessageContent(
+                            type="tool_result",
+                            tool_result=result
+                        ) for _, result in tool_sections]
+                    ))
+            
+            if len(parts) > 1 and parts[1].strip():
                 messages.append(process_user_message(parts[1]))
     
     # Ensure conversation starts with user and ends with user
     assert messages[0].role == "user"
     assert messages[-1].role == "user"
     return messages
-
 
 def needs_answer(file_path: str) -> bool:
     """

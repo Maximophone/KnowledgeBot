@@ -1,4 +1,5 @@
 beacon_ai = "==|AI|=="
 beacon_me = "==|ME|=="
 beacon_error = "==[ERROR]=="
-beacon_tool = "==[TOOL]=="
+beacon_tool_start = "==[TOOL_START]=="
+beacon_tool_end = "==[TOOL_END]=="
