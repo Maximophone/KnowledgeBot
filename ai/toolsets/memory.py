@@ -251,5 +251,5 @@ TOOLS = [
     write_memory,
     read_memory,
     list_memories,
-    search_memories
+    # search_memories # Deactivated as it's not very useful
 ]
