@@ -236,6 +236,31 @@ class CodaTablesClient:
         else:
             response.raise_for_status()
 
+    def list_columns(self, doc_id, table_id_or_name, limit=25, page_token=None, visible_only=None):
+        """
+        Returns a list of columns in a table.
+
+        Args:
+            doc_id (str): ID of the doc.
+            table_id_or_name (str): ID or name of the table.
+            limit (int, optional): Maximum number of results to return. Defaults to 25.
+            page_token (str, optional): Pagination token. Defaults to None.
+            visible_only (bool, optional): If true, returns only visible columns for the table. Defaults to None.
+
+        Returns:
+            dict: List of columns.
+        """
+        url = f"{self.base_url}/docs/{doc_id}/tables/{table_id_or_name}/columns"
+        params = {
+            "limit": limit,
+            "pageToken": page_token,
+            "visibleOnly": visible_only,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+        response = requests.get(url, headers=self.headers, params=params)
+        response.raise_for_status()
+        return response.json()
+
 
 if __name__ == "__main__":
     client = CodaTablesClient(api_token=CODA_API_KEY)

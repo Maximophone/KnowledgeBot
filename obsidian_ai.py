@@ -35,9 +35,10 @@ from file_packager import get_committed_files, format_for_llm
 from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool_start, beacon_tool_end
 from parser.tag_parser import process_tags
 from config import secrets
-from ai.tools import test_get_weather, save_file, run_command, read_file, list_directory, Tool,ToolCall, ToolResult
+from ai.tools import Tool, ToolCall, ToolResult
+from ai.toolsets import TOOL_SETS
 from ai.types import Message, MessageContent
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit
 import json
 
 # Constants
@@ -51,15 +52,6 @@ SEARCH_PATHS = [
     "C:\\Users\\fourn\\code",
     # Add any other paths you want to search
 ]
-
-# Define available tool sets
-TOOL_SETS = {
-    "test": [test_get_weather, save_file],
-    "system": [read_file, list_directory, run_command],
-    # We can add more sets later like:
-    # "weather": [get_weather, get_forecast],
-    # "file": [read_file, write_file],
-}
 
 # Initialize AI model
 api_key = secrets.CLAUDE_API_KEY
@@ -324,17 +316,27 @@ def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
     if app is None:
         app = QApplication([])
     
-    message = f"The AI wants to execute tool: {tool.name}\n"
-    message += f"Description: {tool.description}\n\n"
-    message += "Arguments:\n"
-    message += json.dumps(arguments, indent=2)
-    
+    # Create custom dialog with scrollable text area
     msg_box = QMessageBox()
     msg_box.setIcon(QMessageBox.Warning)
     msg_box.setWindowTitle("Confirm Tool Execution")
-    msg_box.setText(message)
+    
+    # Create main text
+    main_text = f"The AI wants to execute tool: {tool.name}\n"
+    main_text += f"Description: {tool.description}"
+    msg_box.setText(main_text)
+    
+    # Create scrollable detailed text for arguments
+    msg_box.setDetailedText(json.dumps(arguments, indent=2))
+    
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg_box.setDefaultButton(QMessageBox.No)  # Safer default
+    
+    # Make the detailed text area wider
+    textEdit = msg_box.findChild(QTextEdit)
+    if textEdit is not None:
+        textEdit.setMinimumWidth(400)
+        textEdit.setMinimumHeight(200)
     
     return msg_box.exec_() == QMessageBox.Yes
 
@@ -499,14 +501,18 @@ def format_tool_call(tool_call: ToolCall) -> str:
         f"ID: {tool_call.id}\n"
         f"Tool: {tool_call.name}\n"
         f"Arguments:\n"
+        f"```json\n"
         f"{json.dumps(tool_call.arguments, indent=2)}\n"
+        f"```\n"
     )
 
 def format_tool_result(result: ToolResult) -> str:
     """Format a tool result into a parseable string"""
     return (
         f"Result:\n"
+        f"```json\n"
         f"{json.dumps({'result': result.result, 'error': result.error}, indent=2)}\n"
+        f"```\n"
         f"{beacon_tool_end}\n"
     )
 
@@ -517,12 +523,12 @@ def parse_tool_section(section: str) -> Tuple[ToolCall, ToolResult]:
     tool_name = lines[2].split(': ')[1]
     
     # Find where arguments end and result starts
-    arg_start = lines.index('Arguments:') + 1
-    result_start = lines.index('Result:') + 1
+    arg_start = lines.index('Arguments:') + 2
+    result_start = lines.index('Result:') + 2
     
     # Parse arguments and result
-    arguments = json.loads('\n'.join(lines[arg_start:result_start-1]))
-    results = json.loads('\n'.join(lines[result_start:-1])) # Skip the last line because it contains the closing tag
+    arguments = json.loads('\n'.join(lines[arg_start:result_start-3]))  # Skip the end of the block quote
+    results = json.loads('\n'.join(lines[result_start:-2])) # Skip the last line because it contains the closing tag
     
     tool_call = ToolCall(
         id=tool_id,
