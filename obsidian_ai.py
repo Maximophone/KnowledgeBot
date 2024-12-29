@@ -24,7 +24,7 @@ Date: [Current Date]
 import argparse
 import ai
 from ai import encode_image, validate_image
-from typing import List, Dict, Tuple, Callable, Optional
+from typing import List, Dict, Tuple, Callable, Optional, Any
 import yaml
 import anthropic
 import os
@@ -35,8 +35,10 @@ from file_packager import get_committed_files, format_for_llm
 from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
 from parser.tag_parser import process_tags
 from config import secrets
-from ai.tools import test_get_weather, Tool,ToolCall, ToolResult
+from ai.tools import test_get_weather, save_file, Tool,ToolCall, ToolResult
 from ai.types import Message, MessageContent
+from PyQt5.QtWidgets import QApplication, QMessageBox
+import json
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -52,7 +54,7 @@ SEARCH_PATHS = [
 
 # Define available tool sets
 TOOL_SETS = {
-    "test": [test_get_weather],
+    "test": [test_get_weather, save_file],
     # We can add more sets later like:
     # "weather": [get_weather, get_forecast],
     # "file": [read_file, write_file],
@@ -305,6 +307,36 @@ def process_file(file_path: str):
         print(f"Error processing file {file_path}:")
         print(traceback.format_exc())
 
+def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
+    """
+    Show a Qt popup to confirm execution of an unsafe tool.
+    
+    Args:
+        tool: The tool to be executed
+        arguments: The arguments to be passed to the tool
+    
+    Returns:
+        bool: True if user confirms, False otherwise
+    """
+    # Ensure we have a QApplication instance
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    
+    message = f"The AI wants to execute tool: {tool.name}\n"
+    message += f"Description: {tool.description}\n\n"
+    message += "Arguments:\n"
+    message += json.dumps(arguments, indent=2)
+    
+    msg_box = QMessageBox()
+    msg_box.setIcon(QMessageBox.Warning)
+    msg_box.setWindowTitle("Confirm Tool Execution")
+    msg_box.setText(message)
+    msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    msg_box.setDefaultButton(QMessageBox.No)  # Safer default
+    
+    return msg_box.exec_() == QMessageBox.Yes
+
 def process_ai_block(block: str, context: Dict, option: str) -> str:
     """
     Process an AI block in the document.
@@ -379,6 +411,19 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                 try:
                     # Find the matching tool from provided tools
                     tool = next(t for t in tools if t.tool.name == tool_call.name)
+                    
+                    # Check if tool needs confirmation
+                    if not tool.tool.safe:
+                        if not confirm_tool_execution(tool.tool, tool_call.arguments):
+                            # User rejected the tool execution
+                            tool_results.append(ToolResult(
+                                name=tool_call.name,
+                                result=None,
+                                tool_call_id=tool_call.id,
+                                error="Tool execution rejected by user"
+                            ))
+                            continue
+                    
                     # Execute the tool
                     result = tool.tool.func(**tool_call.arguments)
                     # Format the result
@@ -422,7 +467,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             # Add tool results to response for UI
             for result in tool_results:
                 response += f"\n{beacon_tool}\n"
-                response += f"Tool: {result.name}\n"
+                response += f"Tool: {result.name} Safe: {tool.tool.safe}\n"
                 if result.error:
                     response += f"Error: {result.error}\n"
                 else:

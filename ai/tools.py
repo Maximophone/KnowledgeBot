@@ -78,6 +78,7 @@ class Tool:
     name: str
     description: str
     parameters: Dict[str, ToolParameter]
+    safe: bool = False  # True means the tool can be executed without confirmation
 
 @dataclass
 class ToolCall:
@@ -115,10 +116,18 @@ def _get_parameter_type(annotation: Any) -> tuple[str, Optional[List[str]]]:
     else:
         return "string", None  # default to string for unknown types
 
-def tool(description: str, **parameter_descriptions: str) -> Callable:
+def tool(
+    description: str,
+    safe: bool = True,  # New parameter
+    **parameter_descriptions: str
+) -> Callable:
     """
     Decorator to convert a function into an AI-callable tool.
-    Only requires a description and parameter descriptions.
+    
+    Args:
+        description: Tool description
+        safe: Whether the tool can be executed without user confirmation
+        **parameter_descriptions: Descriptions for each parameter
     """
     def decorator(func: Callable) -> Callable:
         # Get function signature
@@ -146,7 +155,8 @@ def tool(description: str, **parameter_descriptions: str) -> Callable:
             func=func,
             name=func.__name__,
             description=description,
-            parameters=tool_params
+            parameters=tool_params,
+            safe=safe  # Add safety flag to tool
         )
         return func
     return decorator
@@ -155,10 +165,21 @@ def tool(description: str, **parameter_descriptions: str) -> Callable:
 @tool(
     description="Test method - Fetch weather data for a location",
     city="The city to get weather for",
-    units="The temperature units to use"
+    units="The temperature units to use",
+    safe=True  # This is a read-only operation
 )
 def test_get_weather(
     city: str,
     units: Literal["celsius", "fahrenheit"] = "celsius"
 ) -> str:
     return f"The weather in {city} is in {units}."
+
+@tool(
+    description="Save a file to disk",
+    path="The file path",
+    content="The content to write",
+    safe=False  # This modifies the file system
+)
+def save_file(path: str, content: str) -> str:
+    # Implementation...
+    return f"File saved to {path}"
