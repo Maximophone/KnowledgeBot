@@ -46,6 +46,14 @@ class TestAIFunctions(unittest.TestCase):
         ]
         self.assertEqual(count_tokens_input(messages, ""), 85)
 
+    def test_count_tokens_input(self):
+        messages = [{"content": "Hello"}, {"content": "World"}]
+        system_prompt = "System"
+        self.assertEqual(count_tokens_input(messages, system_prompt), 4)
+
+    def test_count_tokens_output(self):
+        self.assertEqual(count_tokens_output("Hello, world!"), 3)
+
     @patch('ai.open')
     def test_log_token_use(self, mock_open):
         mock_file = MagicMock()

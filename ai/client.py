@@ -1,28 +1,20 @@
 from typing import List, Dict, Tuple, Optional
-import anthropic
-import google.generativeai as genai
-import yaml
-from openai import OpenAI
-from datetime import datetime as dt
+from PIL import Image
 import sys
-import PyPDF2
 import fitz
 import re
 import imghdr
 import os
 import base64
-from PIL import Image
 from io import BytesIO
+from datetime import datetime as dt
 from config import secrets
-from dataclasses import dataclass
-from .tools import Tool, ToolCall, ToolResult
 from .types import Message, MessageContent
-import json
-
-@dataclass
-class AIResponse:
-    content: str
-    tool_calls: Optional[List[ToolCall]] = None
+from .tools import Tool
+from .wrappers import (
+    AIWrapper, AIResponse, ClaudeWrapper, GeminiWrapper, 
+    GPTWrapper, MockWrapper
+)
 
 _MODELS_DICT = {
     "mock": "mock-",
@@ -46,34 +38,6 @@ TOKEN_COUNT_FILE = "token_count.csv"
 DEFAULT_MAX_TOKENS = 4096
 DEFAULT_TEMPERATURE = 0.0
 
-# def extract_text_from_pdf(pdf_path):
-#     text = ""
-#     with open(pdf_path, 'rb') as file:
-#         reader = PyPDF2.PdfReader(file)
-#         for page in reader.pages:
-#             text += page.extract_text()
-#     return text
-
-def get_prompt(prompt_name: str) -> str:
-    with open(f"prompts/{prompt_name}.md", "r") as f:
-        return f.read()
-
-def encode_image(image_path: str) -> Tuple[str, str]:
-    with open(image_path, "rb") as image_file:
-        file_content = image_file.read()
-        image_type = imghdr.what(None, file_content)
-        if image_type is None:
-            raise ValueError(f"Unsupported image format for file: {image_path}")
-        return base64.b64encode(file_content).decode('utf-8'), f"image/{image_type}"
-
-def validate_image(image_path: str, max_size: int = 20 * 1024 * 1024) -> None:
-    if not os.path.isfile(image_path):
-        raise FileNotFoundError(f"Image file not found: {image_path}")
-    if os.path.getsize(image_path) > max_size:
-        raise ValueError(f"Image file too large: {image_path}")
-    if imghdr.what(image_path) is None:
-        raise ValueError(f"Unsupported image format: {image_path}")
-
 def extract_text_from_pdf(pdf_path: str) -> str:
     text = ""
     with fitz.open(pdf_path) as doc:
@@ -94,6 +58,26 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     text = text.strip()  # Remove leading/trailing whitespace
     
     return text
+
+def get_prompt(prompt_name: str) -> str:
+    with open(f"prompts/{prompt_name}.md", "r") as f:
+        return f.read()
+
+def encode_image(image_path: str) -> Tuple[str, str]:
+    with open(image_path, "rb") as image_file:
+        file_content = image_file.read()
+        image_type = imghdr.what(None, file_content)
+        if image_type is None:
+            raise ValueError(f"Unsupported image format for file: {image_path}")
+        return base64.b64encode(file_content).decode('utf-8'), f"image/{image_type}"
+
+def validate_image(image_path: str, max_size: int = 20 * 1024 * 1024) -> None:
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    if os.path.getsize(image_path) > max_size:
+        raise ValueError(f"Image file too large: {image_path}")
+    if imghdr.what(image_path) is None:
+        raise ValueError(f"Unsupported image format: {image_path}")
 
 def n_tokens(text: str) -> int:
     return len(text) // 4
@@ -146,299 +130,6 @@ def log_token_use(model: str, n_tokens: int, input: bool = True,
             f.write(f"{model},input,{n_tokens},{t},{script}\n")
         else:
             f.write(f"{model},output,{n_tokens},{t},{script}\n")
-
-class AIWrapper:
-    def messages(self, model_name: str, messages: List[Message], 
-                 system_prompt: str, max_tokens: int, 
-                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
-        response = self._messages(model_name, messages, system_prompt, max_tokens, 
-                                temperature, tools)
-        log_token_use(model_name, count_tokens_input(messages, system_prompt))
-        log_token_use(model_name, count_tokens_output(response.content), input=False)
-        return response
-    
-    def _messages(self, model: str, messages: List[Message], 
-                 system_prompt: str, max_tokens: int, 
-                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
-        raise NotImplementedError
-
-class ClaudeWrapper(AIWrapper):
-    def __init__(self, api_key: str):
-        self.client = anthropic.Client(api_key=api_key)
-
-    def _messages(self, model: str, messages: List[Message], 
-                 system_prompt: str, max_tokens: int, temperature: float,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
-        # Convert tools to Claude's format if provided
-        claude_tools = None
-        if tools:
-            claude_tools = [{
-                "name": tool.tool.name,
-                "description": tool.tool.description,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        name: {
-                            "type": param.type,
-                            "description": param.description,
-                            **({"enum": param.enum} if param.enum else {})
-                        }
-                        for name, param in tool.tool.parameters.items()
-                    },
-                    "required": [
-                        name for name, param in tool.tool.parameters.items()
-                        if param.required
-                    ]
-                }
-            } for tool in tools]
-
-        # Convert messages to Claude's format
-        claude_messages = []
-        for message in messages:
-            claude_content = []
-            for content in message.content:
-                if content.type == "text":
-                    claude_content.append({"type": "text", "text": content.text})
-                elif content.type == "tool_use":
-                    claude_content.append({
-                        "type": "tool_use",
-                        "id": content.tool_call.id,
-                        "name": content.tool_call.name,
-                        "input": content.tool_call.arguments
-                    })
-                elif content.type == "tool_result":
-                    claude_content.append({
-                        "type": "tool_result",
-                        "tool_use_id": content.tool_result.tool_call_id,
-                        "content": str(content.tool_result.result) if content.tool_result.result is not None 
-                                 else f"Error: {content.tool_result.error}"
-                    })
-                elif content.type == "image":
-                    claude_content.append({
-                        "type": "image",
-                        "source": {
-                            "type": content.image["type"],
-                            "media_type": content.image["media_type"],
-                            "data": content.image["data"]
-                        }
-                    })
-            
-            claude_messages.append({
-                "role": message.role,
-                "content": claude_content
-            })
-
-        arguments = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "system": system_prompt,
-            "messages": claude_messages
-        }
-        if claude_tools:
-            arguments["tools"] = claude_tools
-
-        response = self.client.messages.create(**arguments)
-
-        # Extract content and any tool calls
-        content = ""
-        tool_calls = []
-        
-        for block in response.content:
-            if block.type == "text":
-                content += block.text
-            elif block.type == "tool_use":
-                tool_calls.append(ToolCall(
-                    id=block.id,
-                    name=block.name,
-                    arguments=block.input
-                ))
-
-        return AIResponse(
-            content=content,
-            tool_calls=tool_calls if tool_calls else None
-        )
-    
-class GeminiWrapper(AIWrapper):
-    def __init__(self, api_key: str, model_name:str):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
-    
-    def _messages(self, model_name: str, messages: List[Message], system_prompt: str, max_tokens: int, 
-                 temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
-        if model_name:
-            model = genai.GenerativeModel(model_name)
-        else:
-            model = self.model
-        role_mapping = {"user": "user", "assistant": "model"}
-        gemini_messages = []
-        for message in messages:
-            content = []
-            for msg_content in message.content:
-                if msg_content.type == "text":
-                    content.append(msg_content.text)
-                elif msg_content.type == "image":
-                    # Gemini expects base64 images in a specific format
-                    content.append({
-                        "mime_type": msg_content.image["media_type"],
-                        "data": msg_content.image["data"]
-                    })
-            gemini_messages.append({
-                "role": role_mapping.get(message.role),
-                "parts": content
-            })
-        response = model.generate_content(gemini_messages)
-        return AIResponse(content=response.text)
-    
-class GPTWrapper(AIWrapper):
-    def __init__(self, api_key: str, org: str):
-        self.client = OpenAI(api_key=api_key, organization=org)
-
-    def _messages(self, model_name: str, messages: List[Message], 
-                 system_prompt: str, max_tokens: int, temperature: float,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
-        if system_prompt:
-            messages = [Message(role="system", content=[MessageContent(type="text", text=system_prompt)])] + messages
-            
-        # Convert tools to OpenAI's format if provided
-        openai_tools = None
-        if tools:
-            openai_tools = [{
-                "type": "function",
-                "function": {
-                    "name": tool.tool.name,
-                    "description": tool.tool.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            name: {
-                                "type": param.type,
-                                "description": param.description,
-                                **({"enum": param.enum} if param.enum else {})
-                            }
-                            for name, param in tool.tool.parameters.items()
-                        },
-                        "required": [
-                            name for name, param in tool.tool.parameters.items()
-                            if param.required
-                        ],
-                        "additionalProperties": False
-                    }
-                }
-            } for tool in tools]
-
-        # Convert messages to OpenAI's format
-        openai_messages = []
-        for message in messages:
-            if message.role == "tool":
-                tool_result = next(content.tool_result for content in message.content if content.type == "tool_result")
-                openai_messages.append({
-                    "role": "tool",
-                    "content": json.dumps({
-                        "result": tool_result.result,
-                        "error": tool_result.error
-                    }),
-                    "tool_call_id": tool_result.tool_call_id
-                })
-            else:
-                content_list = []
-                for msg_content in message.content:
-                    if msg_content.type == "text":
-                        content_list.append({
-                            "type": "text",
-                            "text": msg_content.text
-                        })
-                    elif msg_content.type == "image":
-                        content_list.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{msg_content.image['media_type']};base64,{msg_content.image['data']}"
-                            }
-                        })
-                openai_messages.append({
-                    "role": message.role,
-                    "content": content_list[0]["text"] if len(content_list) == 1 and content_list[0]["type"] == "text" else content_list
-                })
-
-        if model_name.startswith("o1"):
-            response = self.client.chat.completions.create(
-                model=model_name,
-                messages=openai_messages,
-                max_completion_tokens=max_tokens,
-                tools=openai_tools
-            )
-        else:
-            response = self.client.chat.completions.create(
-                model=model_name,
-                messages=openai_messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                tools=openai_tools
-            )
-
-        # Check if the model wants to use a tool
-        if response.choices[0].message.tool_calls:
-            tool_calls = [
-                ToolCall(
-                    id=tool_call.id,
-                    name=tool_call.function.name,
-                    arguments=json.loads(tool_call.function.arguments)
-                )
-                for tool_call in response.choices[0].message.tool_calls
-            ]
-            return AIResponse(
-                content=response.choices[0].message.content or "",
-                tool_calls=tool_calls
-            )
-
-        return AIResponse(content=response.choices[0].message.content)
-
-class MockWrapper(AIWrapper):
-    def __init__(self):
-        pass
-
-    def _messages(self, model_name: str, messages: List[Message],
-        system_prompt: str, max_tokens: int, temperature:float, tools: Optional[List[Tool]] = None) -> AIResponse:
-        response = "---PARAMETERS START---\n"
-        response += f"max_tokens: {max_tokens}\n"
-        response += f"temperature: {temperature}\n"
-        response += "---PARAMETERS END---\n"
-
-        response += "---SYSTEM PROMPT START---\n"
-        response += system_prompt + "\n"
-        response += "---SYSTEM PROMPT END---\n"
-
-        if tools:
-            response += "---TOOLS START---\n"
-            for tool in tools:
-                tool = tool.tool
-                response += f"Tool: {tool.name}\n"
-                response += f"Description: {tool.description}\n"
-                response += "Parameters:\n"
-                for param_name, param in tool.parameters.items():
-                    response += f"  - {param_name}:\n"
-                    response += f"    type: {param.type}\n"
-                    response += f"    description: {param.description}\n"
-                    response += f"    required: {param.required}\n"
-                    if param.enum:
-                        response += f"    enum: {param.enum}\n"
-                response += "\n"
-            response += "---TOOLS END---\n"
-
-        response += "---MESSAGES START---\n"
-        for message in messages:
-            response += f"role: {message.role}\n"
-            response += "content: \n"
-            for content in message.content:
-                if content.type == "text":
-                    response += content.text + "\n"
-                elif content.type == "tool_use":
-                    response += f"[tool_use: {content.tool_call}]\n"
-                elif content.type == "tool_result":
-                    response += f"[tool_result: {content.tool_result}]\n"
-        response += "---MESSAGES END---\n"
-
-        return AIResponse(content=response)
 
 def get_client(model_name: str) -> AIWrapper:
     model_name = get_model(model_name)

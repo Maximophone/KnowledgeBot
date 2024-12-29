@@ -101,21 +101,9 @@ class SpeakerIdentifier(NoteProcessor):
         print(f"Completed speaker identification for: {filename}", flush=True)
 
     def identify_speakers(self, text: str) -> str:
-        message = Message(
-            role="user",
-            content=[MessageContent(
-                type="text",
-                text=self.prompt_identify + text
-            )]
-        )
-        return self.ai_model.message(message).content.strip()
+        prompt = self.prompt_identify + text
+        return self.ai_model.message(prompt).content.strip()
 
     def identify_speakers_tiny(self, text: str) -> str:
-        message = Message(
-            role="user",
-            content=[MessageContent(
-                type="text",
-                text=self.prompt_identify_tiny + text
-            )]
-        )
-        return self.tiny_model.message(message).content.strip()
+        prompt = self.prompt_identify_tiny + text
+        return self.tiny_model.message(prompt).content.strip()
