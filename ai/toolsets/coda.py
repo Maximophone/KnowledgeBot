@@ -156,6 +156,22 @@ def update_table_row(
     )
     return json.dumps(result)
 
+@tool(
+    description="Get the content of a specific page in a Coda document",
+    doc_id="The ID of the document containing the page",
+    page_id_or_name="The ID or name of the page to read. ID is more reliable.",
+    output_format="The format to return the content in ('html' or 'markdown'). Defaults to 'html'.",
+    safe=True
+)
+def get_page_content(doc_id: str, page_id_or_name: str, output_format: str = 'html') -> str:
+    """Gets the content of a specific page"""
+    content = coda_client.get_page_content(
+        doc_id,
+        page_id_or_name,
+        output_format=output_format
+    )
+    return content.decode('utf-8')
+
 # Export the tools
 TOOLS = [
     list_folders,
@@ -167,5 +183,6 @@ TOOLS = [
     list_table_rows,
     upsert_table_rows,
     delete_table_rows,
-    update_table_row
+    update_table_row,
+    get_page_content
 ] 

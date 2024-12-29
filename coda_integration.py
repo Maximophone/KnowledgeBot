@@ -166,7 +166,7 @@ class CodaClient:
             # Check the export status
             status_url = f'{self.base_url}/docs/{doc_id}/pages/{page_id_or_name}/export/{request_id}'
             status_response = self._make_request('GET', status_url, max_retries=max_retries, retry_delay=retry_delay)
-            status_response.raise_for_status()
+            #status_response.raise_for_status()
             status = status_response.json()['status']
 
             if status == 'complete':
