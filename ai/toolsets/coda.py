@@ -70,7 +70,7 @@ def list_tables(doc_id: str) -> str:
 @tool(
     description="Get the schema (columns and their properties) of a specific table",
     doc_id="The ID of the document containing the table",
-    table_id_or_name="The ID or name of the table to get the schema for",
+    table_id_or_name="The ID or name of the table to get the schema for. ID is more reliable.",
     safe=True
 )
 def get_table_schema(doc_id: str, table_id_or_name: str) -> str:
@@ -83,10 +83,10 @@ def get_table_schema(doc_id: str, table_id_or_name: str) -> str:
 @tool(
     description="List rows from a specific table with optional filtering and sorting",
     doc_id="The ID of the document containing the table",
-    table_id_or_name="The ID or name of the table to get rows from",
-    query="Optional query to filter rows",
-    use_column_names="Whether to use column names instead of IDs in the response",
-    limit="Maximum number of rows to return",
+    table_id_or_name="The ID or name of the table to get rows from. ID is more reliable.",
+    query="Optional query used to filter returned rows, specified as <column_id_or_name>:<value>. Example: query=c-tuVwxYz:\"Apple\". If you'd like to use a column name instead of an ID, you must quote it (e.g., \"My Column\":123). Also note that value is a JSON value; if you'd like to use a string, you must surround it in quotes (e.g., \"groceries\").",
+    use_column_names="Whether to receive column names instead of column IDs in the response",
+    limit="Maximum number of rows to return. No maximum value. Defaults to 100.",
     safe=True
 )
 def list_table_rows(
@@ -110,7 +110,7 @@ def list_table_rows(
     description="Insert or update rows in a table. Requires specific JSON format for row data.",
     doc_id="The ID of the document containing the table",
     table_id_or_name="The ID or name of the table to update",
-    rows_data="JSON string containing an array of row objects. Must follow format: [{\"cells\": [{\"column\": \"column-id\", \"value\": \"value\"}]}]. Column IDs must be used, not column names. Example: [{\"cells\": [{\"column\": \"c-xxx\", \"value\": \"data\"}]}]",
+    rows_data="JSON string containing an array of row objects with format: [{\"cells\": [{\"column\": \"c-xxx\", \"value\": \"value\"}]}]. For relation columns, the value can be either a row ID (i-xxx) or the display value/name of the related row. Example: [{\"cells\": [{\"column\": \"c-columnId\", \"value\": \"text\"}, {\"column\": \"c-relationColumnId\", \"value\": \"Related Row Name\"}]}]",
     safe=False
 )
 def upsert_table_rows(doc_id: str, table_id_or_name: str, rows_data: str) -> str:
