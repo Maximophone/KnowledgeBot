@@ -35,7 +35,7 @@ from file_packager import get_committed_files, format_for_llm
 from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool
 from parser.tag_parser import process_tags
 from config import secrets
-from ai.tools import test_get_weather, save_file, Tool,ToolCall, ToolResult
+from ai.tools import test_get_weather, save_file, run_command, Tool,ToolCall, ToolResult
 from ai.types import Message, MessageContent
 from PyQt5.QtWidgets import QApplication, QMessageBox
 import json
@@ -55,6 +55,7 @@ SEARCH_PATHS = [
 # Define available tool sets
 TOOL_SETS = {
     "test": [test_get_weather, save_file],
+    "system": [run_command],
     # We can add more sets later like:
     # "weather": [get_weather, get_forecast],
     # "file": [read_file, write_file],
@@ -440,19 +441,24 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                         error=str(e)
                     ))
             
-            # Add all tool calls to messages
+            # Add tool call and result to messages for context
+            assistant_content = []
+            if ai_response.content.strip():  # Only add text content if non-empty
+                assistant_content.append(MessageContent(
+                    type="text",
+                    text=ai_response.content
+                ))
+            # Add tool calls
+            assistant_content.extend([
+                MessageContent(
+                    type="tool_use",
+                    tool_call=tool_call
+                ) for tool_call in ai_response.tool_calls
+            ])
+            
             messages.append(Message(
                 role="assistant",
-                content=[
-                    MessageContent(
-                        type="text",
-                        text=ai_response.content
-                    ),
-                    *[MessageContent(
-                        type="tool_use",
-                        tool_call=tool_call
-                    ) for tool_call in ai_response.tool_calls]
-                ]
+                content=assistant_content
             ))
 
             # Add all tool results in a single user message

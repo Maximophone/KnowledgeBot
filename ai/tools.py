@@ -62,6 +62,7 @@ from typing import Callable, Dict, Any, List, Optional, get_type_hints, Literal,
 from dataclasses import dataclass
 import inspect
 from enum import Enum
+import subprocess
 
 @dataclass
 class ToolParameter:
@@ -183,3 +184,24 @@ def test_get_weather(
 def save_file(path: str, content: str) -> str:
     # Implementation...
     return f"File saved to {path}"
+
+@tool(
+    description="Run a command on the system, using subprocess, returns the output of the command",
+    command="The command to run",
+    safe=False
+)
+def run_command(command: str) -> str:
+    """Runs a command on the system, returns the output of the command"""
+    try:
+        # Use subprocess.run instead of os.system for better security and output capture
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        
+        # Combine stdout and stderr
+        output = result.stdout
+        if result.stderr:
+            output += "\nErrors:\n" + result.stderr
+            
+        return output if output else "Command completed with no output"
+        
+    except Exception as e:
+        return f"Error executing command: {str(e)}"
