@@ -30,6 +30,9 @@ class Paths:
     # prompts
     prompts_library: Path = vault_path / "Prompts"
 
+    # AI memory paths
+    ai_memory: Path = vault_path / "AI Memory"
+
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
         return iter([
@@ -44,7 +47,8 @@ class Paths:
             self.sources_path,
             self.meetings,
             self.conversations,
-            self.diary
+            self.diary,
+            self.ai_memory
         ])
 
 PATHS = Paths()

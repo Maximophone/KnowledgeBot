@@ -38,8 +38,9 @@ from config import secrets
 from ai.tools import Tool, ToolCall, ToolResult
 from ai.toolsets import TOOL_SETS
 from ai.types import Message, MessageContent
-from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit
+from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy
 import json
+from PyQt5.QtCore import Qt
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -332,11 +333,17 @@ def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
     msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg_box.setDefaultButton(QMessageBox.No)  # Safer default
     
-    # Make the detailed text area wider
+    # Find and modify the text edit widget
     textEdit = msg_box.findChild(QTextEdit)
     if textEdit is not None:
+        # Set a larger fixed size for the text area
+        textEdit.setMinimumHeight(300)
         textEdit.setMinimumWidth(400)
-        textEdit.setMinimumHeight(200)
+        # Make sure the text edit can expand
+        textEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        textEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # Ensure the widget can grow as needed
+        textEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     
     return msg_box.exec_() == QMessageBox.Yes
 

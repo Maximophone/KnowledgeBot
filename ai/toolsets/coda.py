@@ -109,7 +109,7 @@ def list_table_rows(
 @tool(
     description="Insert or update rows in a table. Requires specific JSON format for row data.",
     doc_id="The ID of the document containing the table",
-    table_id_or_name="The ID or name of the table to update",
+    table_id_or_name="The ID or name of the table to update. ID is more reliable.",
     rows_data="JSON string containing an array of row objects with format: [{\"cells\": [{\"column\": \"c-xxx\", \"value\": \"value\"}]}]. For relation columns, the value can be either a row ID (i-xxx) or the display value/name of the related row. Example: [{\"cells\": [{\"column\": \"c-columnId\", \"value\": \"text\"}, {\"column\": \"c-relationColumnId\", \"value\": \"Related Row Name\"}]}]",
     safe=False
 )
@@ -122,8 +122,8 @@ def upsert_table_rows(doc_id: str, table_id_or_name: str, rows_data: str) -> str
 @tool(
     description="Delete specific rows from a table",
     doc_id="The ID of the document containing the table",
-    table_id_or_name="The ID or name of the table to delete rows from",
-    row_ids="JSON string containing an array of row IDs to delete",
+    table_id_or_name="The ID or name of the table to delete rows from. ID is more reliable.",
+    row_ids="JSON string containing an array of row IDs to delete. Example: [\"i-xxx\", \"i-yyy\"]",
     safe=False
 )
 def delete_table_rows(doc_id: str, table_id_or_name: str, row_ids: str) -> str:
@@ -135,9 +135,9 @@ def delete_table_rows(doc_id: str, table_id_or_name: str, row_ids: str) -> str:
 @tool(
     description="Update a specific row in a table",
     doc_id="The ID of the document containing the table",
-    table_id_or_name="The ID or name of the table containing the row",
-    row_id_or_name="The ID or name of the row to update",
-    row_data="JSON string containing the new values for the row",
+    table_id_or_name="The ID or name of the table containing the row. ID is more reliable.",
+    row_id_or_name="The ID or name of the row to update. ID is more reliable.",
+    row_data="JSON string containing the new values for the row, must follow format: {\"cells\": [{\"column\": \"c-xxx\", \"value\": \"value\"}]}. For relation columns, the value can be either a row ID (i-xxx) or the display value/name of the related row. Example: {\"cells\": [{\"column\": \"c-columnId\", \"value\": \"text\"}, {\"column\": \"c-relationColumnId\", \"value\": \"Related Row Name\"}]}",
     safe=False
 )
 def update_table_row(
