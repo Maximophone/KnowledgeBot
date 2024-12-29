@@ -179,7 +179,7 @@ REPLACEMENTS_INSIDE = {
     "temperature": remove,
     "max_tokens": remove,
     "mock": remove,
-    "tools": lambda v, t, c: v,
+    "tools": remove,
     "this": lambda v, t, context: f"<document>{context}</document>\n",
     "repo": pack_repo,
     "vault": lambda *_: pack_vault(),
@@ -381,8 +381,8 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         debug = ("debug" in params)
         temperature = float(params.get("temperature", ai.DEFAULT_TEMPERATURE))
         max_tokens = int(params.get("max_tokens", ai.DEFAULT_MAX_TOKENS))
-        tools_key = params.get("tools") 
-        tools = get_tools_from_key(tools_key) if tools_key else []
+        tools_keys = [v for n, v, t in results if n == "tools" and v]
+        tools = merge_tools(tools_keys)
         if "mock" in params:
             model_name = "mock"
 
@@ -751,6 +751,15 @@ def needs_answer(file_path: str) -> bool:
         if "reply" in set(n for n,v,t in results):
             return True
     return False
+
+def merge_tools(tools_keys: List[str]) -> List[Tool]:
+    """Merge multiple toolsets together"""
+    all_tools = []
+    for key in tools_keys:
+        tools = get_tools_from_key(key)
+        if tools:
+            all_tools.extend(tools)
+    return all_tools
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Obsidian AI Assistant')
