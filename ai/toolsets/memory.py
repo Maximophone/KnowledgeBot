@@ -5,7 +5,6 @@ from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text
 from datetime import datetime
 import json
 import os
-from io import StringIO
 import patch_ng as patch
 
 def ensure_md_extension(filename: str) -> str:
@@ -44,38 +43,6 @@ def validate_filepath(filepath: str) -> None:
     if invalid_chars:
         raise ValueError(f"Filepath contains invalid characters: {', '.join(repr(c) for c in invalid_chars)}")
 
-class BytesIOWrapper:
-    """Wrapper for BytesIO that ensures all operations return bytes"""
-    def __init__(self, bytes_io):
-        self.bytes_io = bytes_io
-
-    def readline(self):
-        line = self.bytes_io.readline()
-        if isinstance(line, str):
-            return line.encode('utf-8')
-        return line
-
-    def read(self):
-        content = self.bytes_io.read()
-        if isinstance(content, str):
-            return content.encode('utf-8')
-        return content
-
-class StringIOWrapper:
-    """Wrapper for StringIO that ensures consistent line endings and types"""
-    def __init__(self, string_io):
-        self.string_io = string_io
-
-    def readline(self):
-        line = self.string_io.readline()
-        # Ensure we have consistent line endings
-        if line:
-            line = line.rstrip('\r\n') + '\n'
-        return line
-
-    def read(self):
-        return self.string_io.read()
-
 @tool(
     description="""CRITICAL: ALWAYS READ _MEMORY_SYSTEM_GUIDE.md FIRST (with the read_memory tool)!
 
@@ -90,7 +57,7 @@ The memory system is governed by a structured guide (_MEMORY_SYSTEM_GUIDE.md) th
 Following this guide ensures I maintain consistency and effectiveness in managing my knowledge base while maintaining appropriate boundaries between my internal processes and user interactions.""",
     safe=True
 )
-def system_introduction() -> str:
+def memory_system_introduction() -> str:
     return ""
 
 @tool(
@@ -202,8 +169,8 @@ def read_memory(filepath: str) -> str:
     })
 
 @tool(
-    description="""Shows me what information I have stored in a specific directory of my memory system. This helps me navigate my own knowledge structure through files and subdirectories. When you ask about what I remember about a particular topic, I'll use this to check my available memories and share the relevant information directly with you.""",
-    directory="The directory path relative to the memory root (e.g., 'concepts' or 'daily')",
+    description="""Shows me the complete directory tree structure starting from a given directory in my memory system, including all files and subdirectories recursively. This helps me understand the full organization of my knowledge by seeing the entire hierarchy of files and folders. When you ask about what information I have on a topic, I can explore the complete structure under relevant directories to find and share all related memories.""",
+    directory="The directory path relative to the memory root (e.g., 'concepts' or 'daily'). If empty, shows the complete memory tree.",
     safe=True
 )
 def list_memories(directory: str = "") -> str:
@@ -222,15 +189,18 @@ def list_memories(directory: str = "") -> str:
     if not full_path.exists():
         return f"Error: Directory {directory} does not exist"
     
-    # Get all files and directories
-    items = {}
-    for item in full_path.iterdir():
-        if item.is_file() and item.suffix == '.md':
-            items[item.name] = "file"
-        elif item.is_dir():
-            items[item.name] = "directory"
+    # Get all files and directories recursively
+    def build_tree(path):
+        tree = {}
+        for item in path.iterdir():
+            if item.is_file() and item.suffix == '.md':
+                tree[item.name] = "file"
+            elif item.is_dir():
+                tree[item.name] = build_tree(item)
+        return tree
     
-    return json.dumps(items)
+    tree = build_tree(full_path)
+    return json.dumps(tree, indent=1)
 
 @tool(
     description="""Allows me to search across my entire memory system for specific information, looking through both content and metadata. This helps me find relevant information I've stored even if I don't remember exactly where it is. When you ask about a topic, I can search my memories and share the relevant findings directly in our conversation.""",
@@ -336,7 +306,7 @@ def patch_memory(
 
 # Export the tools
 TOOLS = [
-    system_introduction,
+    memory_system_introduction,
     overwrite_memory,
     read_memory,
     list_memories,
