@@ -5,6 +5,8 @@ from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text
 from datetime import datetime
 import json
 import os
+from io import StringIO
+import patch_ng as patch
 
 def ensure_md_extension(filename: str) -> str:
     """Ensures the filename has a .md extension"""
@@ -42,6 +44,38 @@ def validate_filepath(filepath: str) -> None:
     if invalid_chars:
         raise ValueError(f"Filepath contains invalid characters: {', '.join(repr(c) for c in invalid_chars)}")
 
+class BytesIOWrapper:
+    """Wrapper for BytesIO that ensures all operations return bytes"""
+    def __init__(self, bytes_io):
+        self.bytes_io = bytes_io
+
+    def readline(self):
+        line = self.bytes_io.readline()
+        if isinstance(line, str):
+            return line.encode('utf-8')
+        return line
+
+    def read(self):
+        content = self.bytes_io.read()
+        if isinstance(content, str):
+            return content.encode('utf-8')
+        return content
+
+class StringIOWrapper:
+    """Wrapper for StringIO that ensures consistent line endings and types"""
+    def __init__(self, string_io):
+        self.string_io = string_io
+
+    def readline(self):
+        line = self.string_io.readline()
+        # Ensure we have consistent line endings
+        if line:
+            line = line.rstrip('\r\n') + '\n'
+        return line
+
+    def read(self):
+        return self.string_io.read()
+
 @tool(
     description="""CRITICAL: ALWAYS READ _MEMORY_SYSTEM_GUIDE.md FIRST (with the read_memory tool)!
 
@@ -60,14 +94,14 @@ def system_introduction() -> str:
     return ""
 
 @tool(
-    description="""Allows me (the AI) to store new information or update existing knowledge in my persistent memory system. I can organize information in directories (e.g., 'concepts/physics.md') and create connections between related memories using wikilinks ([[filename]]). Files are automatically timestamped and can include metadata. This is my way to maintain knowledge across conversations, but I will always share relevant information directly in our discussion rather than expecting you to access these files.""",
+    description="""Allows me (the AI) to store new information by OVERWRITING existing knowledge in my persistent memory system. This will completely replace any existing content in the specified file. For adding content without overwriting, use append_memory instead. I can organize information in directories (e.g., 'concepts/physics.md') and create connections between related memories using wikilinks ([[filename]]). Files are automatically timestamped and can include metadata.""",
     filepath="The path to the file relative to the memory root (e.g., 'concepts/physics.md' or 'daily/today-thoughts.md')",
     content="The markdown content to write to the file. Can include wikilinks using [[filename]] syntax",
     metadata="Optional JSON string of frontmatter metadata to include at the top of the file",
     append="If True, appends content to existing file instead of overwriting. Defaults to False",
     safe=True
 )
-def write_memory(
+def overwrite_memory(
     filepath: str,
     content: str,
     metadata: str = None,
@@ -114,6 +148,21 @@ def write_memory(
         f.write(full_content)
     
     return f"Successfully wrote to {filepath}"
+
+@tool(
+    description="""Allows me to add new content to the end of an existing memory file without overwriting previous content. This is useful for accumulating information over time while preserving the existing content. The new content will be separated from existing content with a newline. Files are automatically timestamped and can include updated metadata.""",
+    filepath="The path to the file relative to the memory root (e.g., 'concepts/physics.md' or 'daily/today-thoughts.md')",
+    content="The markdown content to append to the file. Can include wikilinks using [[filename]] syntax",
+    metadata="Optional JSON string of frontmatter metadata to update at the top of the file",
+    safe=True
+)
+def append_memory(
+    filepath: str,
+    content: str,
+    metadata: str = None
+) -> str:
+    """Appends content to an existing markdown file in the memory system"""
+    return overwrite_memory(filepath, content, metadata, append=True)
 
 @tool(
     description="""Enables me to retrieve information I've previously stored in my memory system. I can access both the content and metadata of specific files I've stored. When you ask about something I've memorized, I'll read it and share the relevant information directly in our conversation rather than expecting you to access these files.""",
@@ -245,11 +294,53 @@ def find_excerpt(content: str, query: str, context_chars: int = 100) -> str:
     
     return excerpt
 
+@tool(
+    description="""Allows me to modify a memory file by providing a unified diff string. The diff should show the desired changes in unified diff format (with --- and +++ headers, @@ markers, and +/- line prefixes). This is useful for making precise modifications to specific parts of a file while leaving the rest unchanged.""",
+    filepath="The path to the file relative to the memory root (e.g., 'concepts/physics.md')",
+    diff_content="A unified diff string showing the desired changes",
+    safe=True
+)
+def patch_memory(
+    filepath: str,
+    diff_content: str
+) -> str:
+    """Applies a unified diff to modify a memory file"""
+    # Validate filepath
+    validate_filepath(filepath)
+    filepath = ensure_md_extension(filepath)
+    
+    # Resolve the full path and check it's within allowed directory
+    full_path = (PATHS.ai_memory / filepath).resolve()
+    try:
+        full_path.relative_to(PATHS.ai_memory)
+    except ValueError:
+        raise ValueError("Invalid filepath: attempted to access outside of allowed directory")
+    
+    if not full_path.exists():
+        return f"Error: File {filepath} does not exist"
+    
+    try:
+        # Create a PatchSet from the diff content
+        patchset = patch.fromstring(diff_content)
+        
+        # Apply the patch
+        success = patchset.apply(strip=0, root=str(full_path.parent))
+        
+        if success:
+            return f"Successfully applied patch to {filepath}"
+        else:
+            return f"Failed to apply patch to {filepath}"
+            
+    except Exception as e:
+        return f"Error applying patch: {str(e)}"
+
 # Export the tools
 TOOLS = [
     system_introduction,
-    write_memory,
+    overwrite_memory,
     read_memory,
     list_memories,
+    append_memory,
+    patch_memory,  # Re-enabled with patch_ng
     # search_memories # Deactivated as it's not very useful
 ]
