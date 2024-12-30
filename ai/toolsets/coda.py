@@ -133,7 +133,7 @@ def delete_table_rows(doc_id: str, table_id_or_name: str, row_ids: str) -> str:
     return json.dumps(result)
 
 @tool(
-    description="Update a specific row in a table",
+    description="Update a specific row in a table. You only need to provide the values you want to update.",
     doc_id="The ID of the document containing the table",
     table_id_or_name="The ID or name of the table containing the row. ID is more reliable.",
     row_id_or_name="The ID or name of the row to update. ID is more reliable.",
