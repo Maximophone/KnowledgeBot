@@ -62,7 +62,10 @@ def get_profile(
         public_id=public_id,
         urn_id=urn_id
     )
-    return json.dumps(profile)
+    try:
+        return json.dumps(profile)
+    except Exception as e:
+        raise ValueError(f"Could not serialize profile data to JSON. Raw data: {profile}. Error: {str(e)}")
 
 @tool(
     description="Get contact information for a LinkedIn profile. This includes email, phone, websites, and other contact details if available. You must provide either a public_id or urn_id.",
