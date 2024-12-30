@@ -2,6 +2,10 @@ from typing import List, Optional
 from ..types import Message
 from ..tools import Tool, ToolCall
 from dataclasses import dataclass
+from ..tokens import (
+    count_tokens_input, count_tokens_output, 
+    log_token_use
+)
 
 @dataclass
 class AIResponse:
@@ -14,6 +18,8 @@ class AIWrapper:
                  temperature: float, tools: Optional[List[Tool]] = None) -> AIResponse:
         response = self._messages(model_name, messages, system_prompt, max_tokens, 
                                 temperature, tools)
+        log_token_use(model_name, count_tokens_input(messages, system_prompt))
+        log_token_use(model_name, count_tokens_output(response.content), input=False)
         return response
     
     def _messages(self, model: str, messages: List[Message], 

@@ -23,7 +23,7 @@ Date: [Current Date]
 
 import argparse
 import ai
-from ai import encode_image, validate_image
+from ai.image_utils import encode_image, validate_image
 from typing import List, Dict, Tuple, Callable, Optional, Any
 import yaml
 import anthropic
