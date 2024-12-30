@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 from PIL import Image
 import sys
 import fitz
@@ -25,6 +25,8 @@ _MODELS_DICT = {
     "haiku3.5": "claude-3-5-haiku-latest",
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
+    "gemini2.0flash": "gemini-2.0-flash-exp",
+    "gemini2.0exp": "gemini-exp-1206",
     "gpt3.5": "gpt-3.5-turbo",
     "gpt4": "gpt-4-turbo-preview",
     "gpt4o": "gpt-4o",
@@ -157,40 +159,40 @@ class AI:
         self._history = []
         self.debug = debug
 
-    def _prepare_messages(self, message: str, image_paths: List[str] = None) -> List[Message]:
-        # content = []
-        # if image_paths:
-        #     for image_path in image_paths:
-        #         try:
-        #             validate_image(image_path)
-        #             encoded_image, media_type = encode_image(image_path)
-        #             content.append(MessageContent(
-        #                 type="image",
-        #                 text=None,
-        #                 tool_call=None,
-        #                 tool_result=None,
-        #                 image={
-        #                     "type": "base64",
-        #                     "media_type": media_type,
-        #                     "data": encoded_image
-        #                 }
-        #             ))
-        #         except (FileNotFoundError, ValueError) as e:
-        #             print(f"Error processing image {image_path}: {str(e)}")
+    def _prepare_messages(self, message: Union[str, Message], image_paths: List[str] = None) -> List[Message]:
+        if isinstance(message, Message):
+            return [message]
+        content = []
+        if image_paths:
+            for image_path in image_paths:
+                try:
+                    validate_image(image_path)
+                    encoded_image, media_type = encode_image(image_path)
+                    content.append(MessageContent(
+                        type="image",
+                        text=None,
+                        tool_call=None,
+                        tool_result=None,
+                        image={
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": encoded_image
+                        }
+                    ))
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Error processing image {image_path}: {str(e)}")
         
-        # content.append(MessageContent(
-        #     type="text",
-        #     text=message
-        # ))
+        content.append(MessageContent(
+            type="text",
+            text=message
+        ))
 
-        # return [Message(
-        #     role="user",
-        #     content=content
-        # )]
+        return [Message(
+            role="user",
+            content=content
+        )]
 
-        return [message]
-
-    def message(self, message: str, system_prompt: str = None, 
+    def message(self, message: Union[str, Message], system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                 temperature: float = 0.0, xml: bool = False, debug: bool = False,
                 image_paths: List[str] = None, tools: Optional[List[Tool]] = None) -> AIResponse:
