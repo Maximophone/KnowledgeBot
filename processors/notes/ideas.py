@@ -5,6 +5,7 @@ from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ..common.markdown import create_wikilink
 from ai.types import Message, MessageContent
+from ai import get_prompt
 
 
 class IdeaProcessor(NoteProcessor):
@@ -17,6 +18,8 @@ class IdeaProcessor(NoteProcessor):
 
         self.directory_file = directory_file
         self.directory_file.parent.mkdir(parents=True, exist_ok=True)
+
+        self.prompt_ideas = get_prompt("idea_extract")
         
         # Initialize directory file if it doesn't exist
         if not self.directory_file.exists():
