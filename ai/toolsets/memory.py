@@ -3,45 +3,14 @@ from pathlib import Path
 from config.paths import PATHS
 from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text, update_frontmatter
 from datetime import datetime
+from ..file_utils import validate_filepath, ensure_md_extension
 import json
 import os
 import patch_ng as patch
 
-def ensure_md_extension(filename: str) -> str:
-    """Ensures the filename has a .md extension"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    return filename
-
 def create_wikilink(text: str) -> str:
     """Converts text to a valid wikilink format [[text]]"""
     return f"[[{text}]]"
-
-def validate_filepath(filepath: str) -> None:
-    if not filepath or '..' in filepath or filepath.startswith('/') or filepath.startswith('\\'):
-        raise ValueError("Invalid filepath: must not contain '..' or start with '/' or '\\'")
-    
-    # Check for empty or whitespace-only names
-    if not filepath.strip():
-        raise ValueError("Filepath cannot be empty or whitespace")
-    
-    # Check for reserved Windows names
-    WINDOWS_RESERVED = {'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
-                       'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3',
-                       'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'}
-    name_without_ext = os.path.splitext(os.path.basename(filepath))[0].upper()
-    if name_without_ext in WINDOWS_RESERVED:
-        raise ValueError(f"Invalid filepath: {name_without_ext} is a reserved name")
-    
-    # Block hidden files
-    if filepath.startswith('.'):
-        raise ValueError("Hidden files are not allowed")
-    
-    # Allow only safe characters
-    safe_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./')
-    invalid_chars = [c for c in filepath if c not in safe_chars]
-    if invalid_chars:
-        raise ValueError(f"Filepath contains invalid characters: {', '.join(repr(c) for c in invalid_chars)}")
 
 @tool(
     description="""CRITICAL: ALWAYS READ _MEMORY_SYSTEM_GUIDE.md FIRST (with the read_memory tool)!
@@ -200,7 +169,7 @@ def list_memories(directory: str = "") -> str:
         return tree
     
     tree = build_tree(full_path)
-    return json.dumps(tree, indent=1)
+    return json.dumps(tree)
 
 @tool(
     description="""Allows me to search across my entire memory system for specific information, looking through both content and metadata. This helps me find relevant information I've stored even if I don't remember exactly where it is. When you ask about a topic, I can search my memories and share the relevant findings directly in our conversation.""",
@@ -311,6 +280,6 @@ TOOLS = [
     read_memory,
     list_memories,
     append_memory,
-    patch_memory,  # Re-enabled with patch_ng
+    # patch_memory,  # Re-enabled with patch_ng # Disabled, still does not work
     # search_memories # Deactivated as it's not very useful
 ]
