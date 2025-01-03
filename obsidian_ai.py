@@ -41,6 +41,7 @@ from ai.types import Message, MessageContent
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy
 import json
 from PyQt5.QtCore import Qt
+from config.paths import PATHS
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -402,10 +403,20 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             messages = process_conversation(f"{PROMPT_MOD}<document>{context['doc']}</document><instructions>{conv_txt}</instructions>")
 
         if system_prompt is not None:
-            with open(f"prompts/{system_prompt}.md", "r") as f:
-                system_prompt = f.read()
-
-        ai_response = model.messages(messages, model_override=model_name,
+            # Search through multiple paths for the system prompt
+            prompt_found = False
+            for prompts_path in ["./prompts", PATHS.prompts_library]:
+                prompt_path = os.path.join(prompts_path, f"{system_prompt}.md")
+                if os.path.exists(prompt_path):
+                    with open(prompt_path, "r", encoding="utf-8") as f:
+                        system_prompt = f.read()
+                        prompt_found = True
+                        break
+            
+            if not prompt_found:
+                raise FileNotFoundError(f"Could not find system prompt '{system_prompt}' in any search paths")
+        
+        ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
         response = ""
@@ -485,7 +496,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             ))
             
             # Get AI's response to tool results
-            ai_response = model.messages(messages, model_override=model_name,
+            ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
 
