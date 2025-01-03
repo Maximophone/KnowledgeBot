@@ -11,6 +11,124 @@ from googleapiclient.discovery import build
 import base64
 import quopri
 
+# Top level fields to keep
+ESSENTIAL_EMAIL_FIELDS = {
+    'id',
+    'threadId',
+    'labelIds',
+    'snippet',
+    'simplified_content'
+}
+
+# Essential headers to keep
+ESSENTIAL_HEADERS = {
+    'From',
+    'To',
+    'Subject',
+    'Date',
+    'Reply-to'
+}
+
+def process_gmail_message(message):
+    """
+    Process a Gmail API message by:
+    1. Extracting and decoding the content into simplified_content
+    2. Removing base64 data to clean up the structure
+    """
+    def decode_content(part):
+        """Helper function to decode message content"""
+        if 'data' not in part.get('body', {}):
+            return ''
+        
+        data = part['body']['data']
+        decoded_bytes = base64.urlsafe_b64decode(data)
+        
+        # Handle different content transfer encodings
+        if 'headers' in part:
+            for header in part['headers']:
+                if header['name'].lower() == 'content-transfer-encoding':
+                    if header['value'].lower() == 'quoted-printable':
+                        decoded_bytes = quopri.decodestring(decoded_bytes)
+                    break
+        
+        try:
+            return decoded_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            return decoded_bytes.decode('iso-8859-1')
+
+    def extract_plain_text(payload):
+        """Extract plain text content from payload"""
+        if payload.get('mimeType') == 'text/plain':
+            return decode_content(payload)
+        
+        if payload.get('mimeType') == 'multipart/alternative':
+            parts = payload.get('parts', [])
+            for part in parts:
+                if part.get('mimeType') == 'text/plain':
+                    return decode_content(part)
+            if parts:
+                return decode_content(parts[0])
+        return ''
+
+    def clean_part(part):
+        """Clean a message part by removing body data"""
+        cleaned_part = part.copy()
+        if 'body' in cleaned_part:
+            body = cleaned_part['body'].copy()
+            if 'data' in body:
+                del body['data']
+            cleaned_part['body'] = body
+        return cleaned_part
+
+    # Create a copy of the original message
+    processed_message = message.copy()
+    
+    # Add simplified content
+    if 'payload' in message:
+        processed_message['simplified_content'] = extract_plain_text(message['payload'])
+    
+    # Clean the payload
+    if 'payload' in processed_message:
+        payload = processed_message['payload']
+        
+        # Clean main body
+        if 'body' in payload:
+            body = payload['body'].copy()
+            if 'data' in body:
+                del body['data']
+            payload['body'] = body
+            
+        # Clean parts
+        if 'parts' in payload:
+            payload['parts'] = [clean_part(part) for part in payload['parts']]
+        
+        processed_message['payload'] = payload
+
+    return processed_message
+
+def filter_email_data(raw_email):
+    # Initialize filtered result
+    filtered = {}
+    
+    # First level filtering
+    for field in ESSENTIAL_EMAIL_FIELDS:
+        if field in raw_email:
+            filtered[field] = raw_email[field]
+    
+    # Handle payload and headers specially
+    if 'payload' in raw_email:
+        filtered['headers'] = {}
+        headers = raw_email['payload'].get('headers', [])
+        
+        # Filter only essential headers
+        filtered['headers'] = {
+            header['name']: header['value']
+            for header in headers
+            if header['name'] in ESSENTIAL_HEADERS
+        }
+    
+    return filtered
+
 def simplify_gmail_message(message):
     """
     Process a Gmail API message to simplify its content structure.
@@ -143,11 +261,47 @@ class GmailClient:
             userId='me',
             q=query,
             labelIds=label_ids,
-            maxResults=max_results
+            maxResults=max_results,
         ).execute()
 
-        # If no messages are found, the 'messages' key may not exist
-        return response.get('messages', [])
+        messages = response.get('messages', [])
+        results = []
+
+        # 2) For each message, call messages().get with format='metadata' to grab its Subject.
+        for msg in messages:
+            msg_id = msg['id']
+            detail = self.service.users().messages().get(
+                userId='me',
+                id=msg_id,
+                format='metadata',
+                metadataHeaders=['Subject', 'From', 'To', 'Cc']
+            ).execute()
+
+            # Extract the relevant headers
+            subject, from_addr, to_addr, cc_addr = None, None, None, None
+            headers = detail.get('payload', {}).get('headers', [])
+            for h in headers:
+                name_lower = h['name'].lower()
+                value = h['value']
+                if name_lower == 'subject':
+                    subject = h['value']
+                elif name_lower == 'from':
+                    from_addr = value
+                elif name_lower == 'to':
+                    to_addr = value
+                elif name_lower == 'cc':
+                    cc_addr = value
+
+            results.append({
+                'id': msg_id,
+                'threadId': msg.get('threadId'),
+                'subject': subject,
+                'from': from_addr,
+                'to': to_addr,
+                'cc': cc_addr,
+            })
+
+        return results
 
     def get_email(self, message_id):
         """
@@ -209,14 +363,7 @@ class GmailClient:
         if label_ids is None:
             label_ids = []
 
-        response = self.service.users().messages().list(
-            userId='me',
-            q=query_str,
-            labelIds=label_ids,
-            maxResults=max_results
-        ).execute()
-
-        return response.get('messages', [])
+        return self.list_emails(query=query_str, label_ids=label_ids, max_results=max_results)
 
 
 if __name__ == '__main__':

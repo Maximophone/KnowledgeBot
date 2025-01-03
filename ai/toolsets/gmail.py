@@ -1,5 +1,5 @@
 from ..tools import tool
-from gmail_client import GmailClient, simplify_gmail_message
+from gmail_client import GmailClient, filter_email_data, process_gmail_message
 import json
 
 # Initialize client
@@ -66,7 +66,8 @@ def get_email_content(message_id: str, simplified: bool = True) -> str:
     """Gets the full content of a specific email"""
     message = gmail_client.get_email(message_id)
     if simplified:
-        message = simplify_gmail_message(message)
+        message = process_gmail_message(message)
+        message = filter_email_data(message)
     return json.dumps(message)
 
 @tool(

@@ -155,7 +155,10 @@ def insert_file_ref(fname: str = "", subfolder: str = "", typ: str = "document")
 
     if typ=="prompt":
         # we remove the frontmatter, and insert the prompt as is
-        contents = remove_frontmatter(contents)
+        try:
+            contents = remove_frontmatter(contents)
+        except IndexError:
+            contents = contents
         return contents
     
     return f"<{typ}><filename>{file_name}</filename>\n<contents>{contents}</contents></{typ}>"
