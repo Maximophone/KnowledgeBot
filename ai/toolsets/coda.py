@@ -160,10 +160,10 @@ def update_table_row(
     description="Get the content of a specific page in a Coda document",
     doc_id="The ID of the document containing the page",
     page_id_or_name="The ID or name of the page to read. ID is more reliable.",
-    output_format="The format to return the content in ('html' or 'markdown'). Defaults to 'html'.",
+    output_format="The format to return the content in ('html' or 'markdown'). Defaults to 'markdown'.",
     safe=True
 )
-def get_page_content(doc_id: str, page_id_or_name: str, output_format: str = 'html') -> str:
+def get_page_content(doc_id: str, page_id_or_name: str, output_format: str = 'markdown') -> str:
     """Gets the content of a specific page"""
     content = coda_client.get_page_content(
         doc_id,
