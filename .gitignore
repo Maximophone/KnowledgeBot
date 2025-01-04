@@ -3,8 +3,13 @@ secrets.yml
 summary.txt
 *.m4a
 summary.json
-output/*.json
-conversation
-data
+deprecated/*.json
+deprecated/test_vault
+deprecated/output/*.json
+deprecated/conversation
+deprecated/data
+deprecated/news/extracted
 token_count.csv
+credentials.json
+token.pickle
 __pycache__
