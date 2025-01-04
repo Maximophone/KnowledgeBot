@@ -12,4 +12,6 @@ deprecated/news/extracted
 token_count.csv
 credentials.json
 token.pickle
+test
+tests/data
 __pycache__
