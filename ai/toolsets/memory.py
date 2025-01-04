@@ -293,11 +293,19 @@ def apply_content_patch(filepath: Path, diff_content: str) -> tuple[bool, str, d
     
     # Split frontmatter and content
     meta = parse_frontmatter(full_content) or {}
-    content_start = full_content.find('---\n', 4) + 4 if full_content.startswith('---\n') else 0
-    content = full_content[content_start:]
+    if not full_content.startswith('---\n'):
+        content = full_content
+    else:
+        # Find the end of frontmatter and ensure we keep the trailing newline
+        content_start = full_content.find('---\n', 4)
+        if content_start != -1:
+            content_start += 4  # Length of '---\n'
+            content = full_content[content_start:]
+            if content.startswith('\n'):
+                content = content[1:]  # Remove the leading newline to match read_memory output
     
     # Create a temporary file with just the content
-    with tempfile.NamedTemporaryFile(mode='w+', suffix='.md', delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(mode='w+', suffix='.md', delete=False, newline='\n') as temp_file:
         temp_file.write(content)
         temp_path = temp_file.name
     
@@ -309,18 +317,18 @@ def apply_content_patch(filepath: Path, diff_content: str) -> tuple[bool, str, d
             if line.startswith('---') or line.startswith('+++'):
                 # Replace the filepath with the temp file path
                 prefix = line[:4]  # '---' or '+++'
-                adjusted_lines.append(f"{prefix} {temp_path}")
+                adjusted_lines.append(f"{prefix} {os.path.basename(temp_path)}")
             else:
                 adjusted_lines.append(line)
         adjusted_diff = '\n'.join(adjusted_lines)
         
         # Apply the patch
         patchset = fromstring(adjusted_diff.encode('utf-8'))
-        success = patchset.apply(root='/', strip=0)
+        success = patchset.apply(root=os.path.dirname(temp_path), strip=0)
         
         if success:
             # Read the patched content
-            with open(temp_path, 'r') as f:
+            with open(temp_path, 'r', newline='\n') as f:
                 new_content = f.read()
             return True, new_content, meta
         else:
@@ -346,7 +354,15 @@ def apply_content_patch(filepath: Path, diff_content: str) -> tuple[bool, str, d
             pass
 
 @tool(
-    description="""Allows me to modify the content portion of a memory file (excluding frontmatter) by providing a unified diff string. The diff should be created based on the content returned by read_memory, ignoring frontmatter. The diff should show the desired changes in unified diff format (with --- and +++ headers, @@ markers, and +/- line prefixes). This is useful for making precise modifications to specific parts of a file while leaving the rest unchanged.""",
+    description="""Allows me to modify the content portion of a memory file (excluding frontmatter) by providing a unified diff string. The diff must:
+1. Be created based on the exact content returned by read_memory (ignoring frontmatter)
+2. Use relative paths in the headers (e.g., 'a/filepath' and 'b/filepath' or just filepath)
+3. Include all required unified diff format components:
+   - First line: '--- a/filepath' or '--- filepath'
+   - Second line: '+++ b/filepath' or '+++ filepath'
+   - Hunk header: '@@ -line,count +line,count @@'
+   - Modified lines prefixed with '+' for additions and '-' for deletions
+4. Include sufficient context lines to ensure proper matching""",
     filepath="The path to the file relative to the memory root (e.g., 'concepts/physics.md')",
     diff_content="A unified diff string showing the desired changes to the content portion only",
     safe=True
