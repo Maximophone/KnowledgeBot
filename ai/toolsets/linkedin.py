@@ -1,11 +1,11 @@
 from ..tools import tool
 from config.secrets import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
-from linkedin_api import Linkedin
+from linkedin_client import get_linkedin_client
 from typing import List, Dict, Optional, Literal
 import json
 
 # Initialize LinkedIn client
-linkedin_client = Linkedin(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
+linkedin_client = get_linkedin_client(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
 
 @tool(
     description="Search for LinkedIn profiles with various filters. This tool provides comprehensive search functionality for finding people on LinkedIn. It supports filtering by keywords, companies, regions, industries, schools, and more.",
