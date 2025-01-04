@@ -283,7 +283,7 @@ def apply_content_patch(filepath: Path, diff_content: str) -> tuple[bool, str, d
     # Set up logging capture
     log_capture = StringIO()
     log_handler = logging.StreamHandler(log_capture)
-    patch_logger = logging.getLogger('patch')
+    patch_logger = logging.getLogger('patch_ng')
     patch_logger.addHandler(log_handler)
     patch_logger.setLevel(logging.WARNING)  # Capture WARNING and ERROR
 
