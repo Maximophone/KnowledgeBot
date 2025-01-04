@@ -502,11 +502,22 @@ def unfollow_entity(
     result = linkedin_client.unfollow_entity(urn_id)
     return json.dumps({"success": not result})
 
+@tool(
+    description="Get the connections for a LinkedIn profile by URN.",
+    urn_id="The URN identifier of the LinkedIn profile (e.g., 'urn:li:fs_miniProfile:AbC123')",
+    safe=True
+)
+def get_profile_connections(urn_id: str) -> str:
+    """Get the connections for a LinkedIn profile using only the URN ID."""
+    results = linkedin_client.get_profile_connections(urn_id=urn_id)
+    return json.dumps(results)
+
 # Export the tools
 TOOLS = [
     search_people,
     get_profile,
     get_profile_contact_info,
+    get_profile_connections,
     # add_connection,
     # remove_connection,
     # search_jobs,
