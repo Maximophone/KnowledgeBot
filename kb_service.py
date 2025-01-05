@@ -18,12 +18,12 @@ from processors.notes.idea_cleanup import IdeaCleanupProcessor
 from processors.notes.todo import TodoProcessor
 from processors.audio.video_to_audio import VideoToAudioProcessor
 
-from keyboard_listener import main as keyboard_listener_main
+from services.keyboard_listener import main as keyboard_listener_main
 
 # Import existing services
-from obsidian_ai import process_file, needs_answer, VAULT_PATH
-from file_watcher import start_file_watcher
-from repeater import slow_repeater, start_repeaters
+from obsidian.obsidian_ai import process_file, needs_answer, VAULT_PATH
+from services.file_watcher import start_file_watcher
+from services.repeater import slow_repeater, start_repeaters
 
 async def run_obsidian_ai():
     await start_file_watcher(VAULT_PATH, process_file, needs_answer, use_polling=True)

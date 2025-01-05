@@ -30,9 +30,9 @@ import anthropic
 import os
 import glob
 import traceback
-from file_watcher import start_file_watcher
-from file_packager import get_committed_files, format_for_llm
-from beacons import beacon_ai, beacon_error, beacon_me, beacon_tool_start, beacon_tool_end
+from services.file_watcher import start_file_watcher
+from ai.file_packager import get_committed_files, format_for_llm
+from obsidian.beacons import beacon_ai, beacon_error, beacon_me, beacon_tool_start, beacon_tool_end
 from parser.tag_parser import process_tags
 from config import secrets
 from ai.tools import Tool, ToolCall, ToolResult

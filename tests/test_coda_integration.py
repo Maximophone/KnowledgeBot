@@ -1,7 +1,7 @@
 import os
 import unittest
-import coda_integration
-from config import secrets
+import secrets
+from integrations import coda_integration
 from config import coda_paths
 
 class TestCodaClient(unittest.TestCase):

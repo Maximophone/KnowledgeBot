@@ -3,7 +3,7 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
-from gdoc_utils import GoogleDocUtils
+from integrations.gdoc_utils import GoogleDocUtils
 import os
 from ai import get_prompt
 from ai.types import Message, MessageContent

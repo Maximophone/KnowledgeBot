@@ -1,5 +1,5 @@
 from ..tools import tool
-from gmail_client import GmailClient, filter_email_data, process_gmail_message
+from integrations.gmail_client import GmailClient, filter_email_data, process_gmail_message
 import json
 
 # Initialize client

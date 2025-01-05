@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from obsidian_ai import process_conversation, beacon_ai, beacon_me, REPLACEMENTS_INSIDE, validate_image, encode_image
+from obsidian.obsidian_ai import process_conversation, beacon_ai, beacon_me, REPLACEMENTS_INSIDE, validate_image, encode_image
 
 class TestProcessConversation(unittest.TestCase):
 
