@@ -290,7 +290,7 @@ def process_file(file_path: str):
             content = f.read()
 
         doc_no_ai, _ = process_tags(content, {"ai": lambda *_: ""}) 
-        context = {"doc": doc_no_ai, "new_doc": None}
+        context = {"doc": doc_no_ai, "new_doc": None, "file_path": file_path}
         content, params = process_tags(content, REPLACEMENTS_OUTSIDE, context=context)
 
         if context["new_doc"]:
@@ -357,8 +357,8 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
 
     Args:
         block (str): Content of the AI block
-        context (Dict): Context information
-        option (str): Processing option
+        context (Dict): Context information including file_path
+        option (str): Processing option (None, "rep", or "all")
 
     Returns:
         str: Processed AI block
@@ -367,13 +367,8 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
     _, results = process_tags(block)
     if "reply" not in set([n for n,v,t in results]):
         return f"<ai!{option_txt}>{block}</ai!>"
-    
+    initial_block = block
     block, results = process_tags(block, {"reply": remove})
-    try:
-        # THERE CAN ONLY BE ONE >_<
-        n_replies = [int(v) for n,v,t in results if n=="reply"][0]
-    except TypeError:
-        n_replies = 1
 
     try:
         conv_txt = block.strip()
@@ -423,8 +418,19 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
         response = ""
+        current_content = initial_block
+        start = True
         while True:  # Process responses until no more tool calls
             response += ai_response.content
+
+            if ai_response.content.strip():
+                escaped_response = escape_response(ai_response.content)
+                current_content = update_file_content(
+                    current_content,
+                    f"{beacon_ai if start else ""}\n{escaped_response}\n",
+                    context["file_path"]
+                )
+                start = False
 
             if not ai_response.tool_calls:
                 break  # No (more) tool calls, we're done
@@ -432,6 +438,12 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             # Process all tool calls at once
             tool_results = []
             for tool_call in ai_response.tool_calls:
+                tool_call_text = format_tool_call(tool_call)
+                current_content = update_file_content(
+                    current_content,
+                    tool_call_text,
+                    context["file_path"]
+                )
                 try:
                     # Find the matching tool from provided tools
                     tool = next(t for t in tools if t.tool.name == tool_call.name)
@@ -440,29 +452,50 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                     if not tool.tool.safe:
                         if not confirm_tool_execution(tool.tool, tool_call.arguments):
                             # User rejected the tool execution
-                            tool_results.append(ToolResult(
+                            tool_result = ToolResult(
                                 name=tool_call.name,
                                 result=None,
                                 tool_call_id=tool_call.id,
                                 error="Tool execution rejected by user"
-                            ))
+                            )
+                            tool_results.append(tool_result)
+                            tool_result_text = format_tool_result(tool_result)
+                            current_content = update_file_content(
+                                current_content,
+                                tool_result_text,
+                                context["file_path"]
+                            )
                             continue
                     
                     # Execute the tool
                     result = tool.tool.func(**tool_call.arguments)
                     # Format the result
-                    tool_results.append(ToolResult(
+                    tool_result = ToolResult(
                         name=tool_call.name,
                         result=result,
                         tool_call_id=tool_call.id
-                    ))
+                    )
+                    tool_results.append(tool_result)
+                    tool_result_text = format_tool_result(tool_result)
+                    current_content = update_file_content(
+                        current_content,
+                        tool_result_text,
+                        context["file_path"]
+                    )
                 except Exception as e:
-                    tool_results.append(ToolResult(
+                    tool_result = ToolResult(
                         name=tool_call.name,
                         result=None,
                         tool_call_id=tool_call.id,
                         error=str(e)
-                    ))
+                    )
+                    tool_results.append(tool_result)
+                    tool_result_text = format_tool_result(tool_result)
+                    current_content = update_file_content(
+                        current_content,
+                        tool_result_text,
+                        context["file_path"]
+                    )
             
             # Add tool calls and results to response text
             for tool_call, tool_result in zip(ai_response.tool_calls, tool_results):
@@ -774,6 +807,36 @@ def merge_tools(tools_keys: List[str]) -> List[Tool]:
         if tools:
             all_tools.extend(tools)
     return all_tools
+
+def update_file_content(current_content: str, new_text: str, file_path: str) -> str:
+    """
+    Update the file by finding the current content and appending new text to it.
+    
+    Args:
+        current_content (str): Current content to find in the file
+        new_text (str): New text to append
+        file_path (str): Path to the file to update
+    
+    Returns:
+        str: Updated current_content
+    """
+    # Update current content with new text
+    updated_content = f"{current_content}{new_text}"
+    
+    # Read the full file
+    with open(file_path, "r", encoding="utf-8") as f:
+        full_content = f.read()
+    
+    # Replace the exact current content with updated content
+    full_content = full_content.replace(current_content, updated_content)
+    
+    # Write the updated content back to file
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(full_content)
+
+    os.utime(file_path, None) # necessary to trigger Obsidian to reload the file
+
+    return updated_content
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Obsidian AI Assistant')
