@@ -50,5 +50,41 @@ def read_file(path: str) -> str:
 def list_directory(path: str) -> str:
     return os.listdir(path)
 
+@tool(
+    description="Execute Python code. WARNING: This tool can be dangerous as it executes arbitrary Python code. Use with extreme caution.",
+    code="The Python code to execute",
+    safe=False  # This is definitely not safe
+)
+def execute_python(code: str) -> str:
+    """Executes Python code and returns the output"""
+    import io
+    import sys
+    from contextlib import redirect_stdout, redirect_stderr
+
+    try:
+        # Create string buffers to capture output
+        stdout_buffer = io.StringIO()
+        stderr_buffer = io.StringIO()
+        
+        # Create a new dictionary for local variables
+        local_vars = {}
+        
+        # Execute the code while capturing both stdout and stderr
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            exec(code, {}, local_vars)
+        
+        # Collect output
+        output = stdout_buffer.getvalue()
+        errors = stderr_buffer.getvalue()
+            
+        # Combine stdout and stderr if there are any
+        if errors:
+            output += f"\nErrors:\n{errors}"
+            
+        return output if output else "Code executed successfully with no output"
+        
+    except Exception as e:
+        return f"Error executing Python code: {str(e)}"
+
 # Export the tools in this toolset
-TOOLS = [save_file, run_command, read_file, list_directory] 
+TOOLS = [save_file, run_command, read_file, list_directory, execute_python] 

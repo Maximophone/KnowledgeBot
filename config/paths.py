@@ -50,5 +50,5 @@ class Paths:
             self.diary,
             self.ai_memory
         ])
-
+    
 PATHS = Paths()
