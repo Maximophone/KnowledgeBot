@@ -112,8 +112,8 @@ The Obsidian integration provides a powerful way to enhance your Obsidian vault 
 
 - **File Watching**: Automatically detects changes in your Obsidian vault
 - **Custom AI Tags**: Process special tags in your markdown files:
-  - `<ai!>`: Basic AI interaction
-  - `<ai!>`: Advanced options for file modifications
+  - `<ai!>content</ai!>`: Basic AI interaction
+  - `<ai!value>content</ai!>`: Advanced options for file modifications
   - Support for custom parameters and system prompts
 - **Context Awareness**: 
   - Understands vault structure and relationships
@@ -144,9 +144,25 @@ Please analyze this technical document.
 
 ### Special Commands
 
-- `=#[meeting-ref:path/to/meeting]`: Reference other notes
-- `=#[system_prompt:prompt_name]`: Use custom system prompts
-- `=#[model:model_name]`: Specify different AI models
+- `<model!model_name>`: Specify different AI models
+- `<system!prompt_name>`: Use custom system prompts from prompts directory
+- `<temperature!value>`: Set the temperature for AI responses
+- `<max_tokens!value>`: Set maximum tokens for response
+- `<tools!toolset>`: Enable specific tool sets
+- `<debug!>`: Enable debug mode to see parameter and conversion details
+- `<this!>`: Reference the current document
+- `<repo!path>`: Include repository context
+- `<vault!>`: Include entire vault context
+- `<meeting!path>`: Reference meeting transcription
+- `<transcription!path>`: Reference any transcription
+- `<daily!path>`: Reference daily note
+- `<idea!path>`: Reference idea transcription
+- `<unsorted!path>`: Reference unsorted transcription
+- `<doc!path>`: Reference any document
+- `<pdf!path>`: Reference PDF document
+- `<md!path>`: Reference downloaded markdown
+- `<file!path>`: Reference any file
+- `<prompt!path>`: Include system prompt from prompts directory
 
 ### File Processing
 
@@ -517,10 +533,19 @@ print(response.content)
 project_root/
 ├── ai/                 # AI engine and tools
 ├── config/            # Configuration files
+├── deprecated/        # Deprecated code
 ├── integrations/      # Service integrations
+├── obsidian/         # Obsidian integration components
 ├── processors/        # Content processors
-├── ui/               # User interfaces
 ├── prompts/          # System prompts
+├── services/         # Core services
+├── tests/            # Test suites
+├── ui/               # User interfaces
+├── .env              # Environment variables
+├── .gitignore        # Git ignore rules
+├── kb_service.py     # Main service entry point
+├── LICENSE           # MIT license
+├── README.md         # This file
 └── requirements.txt  # Dependencies
 ```
 
