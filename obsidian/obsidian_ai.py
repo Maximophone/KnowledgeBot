@@ -42,6 +42,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy
 import json
 from PyQt5.QtCore import Qt
 from config.paths import PATHS
+from integrations.html_to_markdown import HTMLToMarkdown
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -59,6 +60,9 @@ SEARCH_PATHS = [
 api_key = secrets.CLAUDE_API_KEY
 client = anthropic.Client(api_key=api_key)
 model = ai.AI("claude-haiku")
+
+# Initialize HTML to Markdown converter
+html_to_md = HTMLToMarkdown()
 
 def remove_frontmatter(contents: str) -> str:
     return contents.split("---")[2]
@@ -196,7 +200,8 @@ REPLACEMENTS_INSIDE = {
     "pdf": lambda v, t, c: insert_file_ref(v, "pdf", typ="pdf"),
     "md": lambda v, t, c: insert_file_ref(v, "MarkDownload"),
     "file": lambda v, t, c: insert_file_ref(v),
-    "prompt": lambda v, t, c: insert_file_ref(v, "Prompts", "prompt")
+    "prompt": lambda v, t, c: insert_file_ref(v, "Prompts", "prompt"),
+    "url": lambda v, t, c: f"<url>{v}</url>\n<content>{fetch_url_content(v)}</content>\n",
 }
 
 def get_markdown_files(directory: str) -> List[str]:
@@ -837,6 +842,21 @@ def update_file_content(current_content: str, new_text: str, file_path: str) -> 
     os.utime(file_path, None) # necessary to trigger Obsidian to reload the file
 
     return updated_content
+
+def fetch_url_content(url: str) -> str:
+    """
+    Fetch and convert URL content to markdown.
+    
+    Args:
+        url (str): URL to fetch
+        
+    Returns:
+        str: Markdown content
+    """
+    try:
+        return html_to_md.convert_url(url)
+    except Exception as e:
+        return f"Error fetching URL: {str(e)}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Obsidian AI Assistant')
