@@ -13,9 +13,9 @@ def show_popup():
     app.exec_()
 
 async def main():
-    print("Listening for hotkey Ctrl+`.", flush=True)
+    print("Listening for hotkey Ctrl+.", flush=True)
     # Register the hotkey
-    keyboard.add_hotkey('ctrl+`', show_popup)
+    keyboard.add_hotkey('ctrl+.', show_popup)
 
     try:
         while True:
