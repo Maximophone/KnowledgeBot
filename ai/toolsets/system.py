@@ -2,6 +2,8 @@ import os
 import subprocess
 from ..tools import tool
 import shutil
+import requests
+from integrations.html_to_markdown import HTMLToMarkdown
 
 @tool(
     description="Save a file to disk. Can optionally overwrite existing files, but this should be used with extreme caution.",
@@ -133,5 +135,29 @@ def copy_file(source: str, destination: str, move: bool = False, overwrite: bool
     except Exception as e:
         return f"Error copying/moving file: {str(e)}"
 
+@tool(
+    description="Fetch content from a webpage and convert it to markdown or return raw HTML",
+    url="The URL to fetch content from",
+    raw_html="Whether to return the raw HTML instead of converting to markdown (defaults to False)",
+    safe=True
+)
+def fetch_webpage(url: str, raw_html: bool = False) -> str:
+    """Fetches content from a URL and returns it as markdown or raw HTML"""
+    try:
+        if raw_html:
+            # Make the request to get the webpage content
+            response = requests.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            })
+            response.raise_for_status()
+            return response.text
+            
+        # Convert to markdown using the HTMLToMarkdown integration
+        converter = HTMLToMarkdown()
+        return converter.convert_url(url)
+        
+    except Exception as e:
+        return f"Error fetching webpage: {str(e)}"
+
 # Export the tools in this toolset
-TOOLS = [save_file, run_command, read_file, list_directory, execute_python, copy_file] 
+TOOLS = [save_file, run_command, read_file, list_directory, execute_python, copy_file, fetch_webpage] 
