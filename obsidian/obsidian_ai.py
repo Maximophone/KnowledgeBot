@@ -427,7 +427,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                 escaped_response = escape_response(ai_response.content)
                 current_content = update_file_content(
                     current_content,
-                    f"{beacon_ai if start else ""}\n{escaped_response}\n",
+                    f"{beacon_ai if start else ''}\n{escaped_response}\n",
                     context["file_path"]
                 )
                 start = False
