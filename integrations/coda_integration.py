@@ -2,6 +2,7 @@ import requests
 from config.secrets import CODA_API_KEY
 from config import coda_paths
 import time
+import re
 
 _MAX_RETRIES = 2
 _RETRY_DELAY = 30
@@ -11,6 +12,46 @@ class CodaClient:
         self.api_token = api_token
         self.headers = {'Authorization': f'Bearer {api_token}'}
         self.base_url = 'https://coda.io/apis/v1'
+
+    def extract_doc_and_page_id(self, url: str) -> tuple[str, str]:
+        """Extract doc_id and page_id from a Coda URL. According to https://coda.io/@ben/coda-urls-explained.
+        
+        Args:
+            url: A Coda URL in one of these formats:
+                - https://coda.io/d/DocName_dDocID
+                - https://coda.io/d/DocName_dDocID/PageName_suPageID
+                - https://coda.io/d/DocName_dDocID/PageName_suPageID#...
+                
+        Returns:
+            tuple[str, str]: (doc_id, page_id) where page_id may be None if not specified.
+            The page_id will be the full API page ID (e.g., 'canvas-AbcDefGhi')
+        """
+        # Pattern to match doc ID: _d followed by exactly 10 characters
+        doc_pattern = r'_d([a-zA-Z0-9]{10})'
+        # Pattern to match shortened page ID: _su followed by any characters until # or end of string
+        page_pattern = r'_su([^#]+)'
+        
+        doc_match = re.search(doc_pattern, url)
+        if not doc_match:
+            raise ValueError("Invalid Coda URL: Could not extract document ID")
+            
+        doc_id = doc_match.group(1)
+        
+        # Look for shortened page ID after the doc ID
+        url_after_doc = url[url.index(doc_id) + len(doc_id):]
+        page_match = re.search(page_pattern, url_after_doc)
+        shortened_page_id = page_match.group(1) if page_match else None
+        
+        # If we have a shortened page ID, get the full page ID
+        if shortened_page_id:
+            # Get all pages and find the matching one
+            pages_response = self.list_pages(doc_id)
+            for page in pages_response['items']:
+                if page['id'].endswith(shortened_page_id):
+                    return doc_id, page['id']
+            raise ValueError(f"No page found with shortened ID: {shortened_page_id}")
+        
+        return doc_id, None
 
     def _make_request(self, method, url, max_retries=_MAX_RETRIES, retry_delay=_RETRY_DELAY, **kwargs):
         """
@@ -327,6 +368,19 @@ class CodaClient:
         """
         url = f'{self.base_url}/docs/{doc_id}/tables/{table_id}/columns/{column_id}'
         response = self._make_request('GET', url, max_retries=max_retries, retry_delay=retry_delay)
+        return response.json()
+
+    def list_pages(self, doc_id: str) -> dict:
+        """List all pages in a Coda doc.
+        
+        Args:
+            doc_id (str): The ID of the doc
+            
+        Returns:
+            dict: The API response containing the list of pages
+        """
+        url = f'{self.base_url}/docs/{doc_id}/pages'
+        response = self._make_request('GET', url)
         return response.json()
 
 if __name__ == "__main__":

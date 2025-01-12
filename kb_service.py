@@ -7,6 +7,7 @@ from processors.audio.transcriber import AudioTranscriber
 from processors.notes.meditation import MeditationProcessor
 from processors.notes.ideas import IdeaProcessor
 from processors.notes.gdoc import GDocProcessor
+from processors.notes.coda import CodaProcessor
 from processors.notes.markdownload import MarkdownloadProcessor
 from processors.notes.speaker_identifier import SpeakerIdentifier
 from processors.notes.meeting import MeetingProcessor
@@ -57,6 +58,10 @@ async def setup_processors():
 
     gdoc_processor = GDocProcessor(
         input_dir=PATHS.gdoc_path
+    )
+
+    coda_processor = CodaProcessor(
+        input_dir=PATHS.coda_path
     )
 
     markdownload_processor = MarkdownloadProcessor(
@@ -110,6 +115,7 @@ async def setup_processors():
     slow_repeater.register(idea_processor.process_all)
     slow_repeater.register(todo_processor.process_all)
     slow_repeater.register(gdoc_processor.process_all)
+    slow_repeater.register(coda_processor.process_all)
     slow_repeater.register(markdownload_processor.process_all)
     slow_repeater.register(speaker_identifier_processor.process_all)
     slow_repeater.register(meeting_processor.process_all)

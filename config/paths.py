@@ -19,6 +19,7 @@ class Paths:
     ideas_directory: Path = vault_knowledgebot_path / "Ideas Directory.md"
     todo_directory: Path = vault_knowledgebot_path / "Todo Directory.md"
     gdoc_path: Path = vault_path / "gdoc"
+    coda_path: Path = vault_path / "coda"
     markdownload_path: Path = vault_path / "MarkDownload"
     sources_path: Path = vault_path / "Source"
     source_template_path: Path = vault_path / "Templates" / "source.md"
@@ -43,6 +44,7 @@ class Paths:
             self.ideas,
             self.ideas_directory.parent,
             self.gdoc_path,
+            self.coda_path,
             self.markdownload_path,
             self.sources_path,
             self.meetings,
