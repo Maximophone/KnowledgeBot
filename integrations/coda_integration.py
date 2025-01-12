@@ -33,7 +33,7 @@ class CodaClient:
                 response.raise_for_status()
                 return response
             except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 409 and retries < max_retries - 1:
+                if e.response.status_code in (404, 409) and retries < max_retries - 1:
                     retries += 1
                     time.sleep(retry_delay)  # Wait before retrying
                 else:
