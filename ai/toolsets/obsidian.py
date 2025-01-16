@@ -126,9 +126,32 @@ def list_obsidian_notes(directory: str = "") -> str:
     
     return str(items)
 
+@tool(
+    description="""Reads the contents of multiple notes from the Obsidian vault simultaneously. Accepts a comma-separated list of filepaths relative to the vault root.
+    Returns a dictionary mapping each filepath to its content. Invalid or inaccessible notes will return error messages in the dictionary.""",
+    filepaths="Comma-separated list of paths to the notes relative to the vault root (e.g., 'folder/note1.md, folder/note2.md')",
+    safe=True
+)
+def read_multiple_obsidian_notes(filepaths: str) -> str:
+    """Reads multiple notes from the Obsidian vault"""
+    # Parse the comma-separated string into a list
+    filepath_list = [f.strip() for f in filepaths.split(',')]
+    results = {}
+    
+    for filepath in filepath_list:
+        try:
+            # Reuse existing read_obsidian_note logic
+            content = read_obsidian_note(filepath)
+            results[filepath] = content
+        except Exception as e:
+            results[filepath] = f"Error reading {filepath}: {str(e)}"
+    
+    return str(results)  # Convert dictionary to string for return
+
 # Export the tools
 TOOLS = [
     obsidian_system_introduction,
     read_obsidian_note,
-    list_obsidian_notes
+    list_obsidian_notes,
+    read_multiple_obsidian_notes
 ] 
