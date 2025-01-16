@@ -1,5 +1,9 @@
 import yaml
 from typing import Dict, Any, Optional
+from config.logging_config import setup_logger
+from pathlib import Path
+
+logger = setup_logger(__name__)
 
 def read_front_matter(file_path):
     front_matter = {}
@@ -19,7 +23,7 @@ def read_front_matter(file_path):
         try:
             front_matter = yaml.safe_load(yaml_content)
         except yaml.YAMLError as e:
-            print(f"Error parsing YAML front matter in {file_path}: {e}")
+            logger.error("Error parsing YAML front matter in %s: %s", file_path, e)
             front_matter = {}
     return front_matter
 

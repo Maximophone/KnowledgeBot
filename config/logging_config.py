@@ -6,8 +6,8 @@ DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 # Example of how to set different levels for different components
 LOGGER_LEVELS = {
-    'services.file_watcher': 'DEBUG',
-    'services.repeater': 'DEBUG',
+    'services.file_watcher': 'INFO',
+    'services.repeater': 'INFO',
     # Add more components as needed
 }
 
@@ -20,7 +20,7 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
 
     # Prevent logging propagation to avoid duplicate logs
     logger.propagate = False
-    
+
     if level is None:
         # We are setting the default logging level to 'INFO'. 
         # Then, we check if the logger's name starts with any of the keys in LOGGER_LEVELS.
@@ -39,13 +39,3 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
         logger.addHandler(handler)
     
     return logger
-
-
-
-def configure_logging():
-    """
-    Configure all loggers based on LOGGER_LEVELS.
-    Call this once at application startup.
-    """
-    for logger_name, level in LOGGER_LEVELS.items():
-        setup_logger(logger_name, level)

@@ -11,6 +11,10 @@ from googleapiclient.discovery import build
 import base64
 import quopri
 
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
+
 # Top level fields to keep
 ESSENTIAL_EMAIL_FIELDS = {
     'id',

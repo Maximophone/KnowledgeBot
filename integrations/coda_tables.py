@@ -2,6 +2,9 @@ import requests
 from config.secrets import CODA_API_KEY
 from config.coda_paths import FOLDER_PERSO, FOLDER_CONTACTS, DOC_RELATIONS, DOC_TEST_TABLES
 import time
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class CodaTablesClient:
     def __init__(self, api_token, base_url="https://coda.io/apis/v1"):

@@ -5,6 +5,9 @@ from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
 from ai import AI, get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class MarkdownloadProcessor(NoteProcessor):
@@ -27,7 +30,8 @@ class MarkdownloadProcessor(NoteProcessor):
         return not (self.output_dir / new_filename).exists()
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing markdownload: {filename}", flush=True)
+        """Process a markdownload file."""
+        logger.info("Processing markdownload: %s", filename)
         
         # Read source file
         content = await self.read_file(filename)
@@ -62,4 +66,4 @@ class MarkdownloadProcessor(NoteProcessor):
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
             await f.write(template + "\n" + summary)
             
-        print(f"Processed markdownload: {filename}", flush=True)
+        logger.info("Processed markdownload: %s", filename)

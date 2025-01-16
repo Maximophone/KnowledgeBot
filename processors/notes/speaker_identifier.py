@@ -6,6 +6,9 @@ from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatt
 from ai import AI
 from ai.types import Message, MessageContent
 import os
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class SpeakerIdentifier(NoteProcessor):
     """Identifies speakers in transcripts using AI."""
@@ -57,7 +60,9 @@ class SpeakerIdentifier(NoteProcessor):
         return self.tiny_model.message(message).content.strip()
         
     async def process_file(self, filename: str) -> None:
-        print(f"Identifying speakers in: {filename}", flush=True)
+        """Process a transcript file to identify speakers."""
+        logger.info("Identifying speakers in: %s", filename)
+        
         content = await self.read_file(filename)
         
         # Parse frontmatter and content
@@ -71,12 +76,12 @@ class SpeakerIdentifier(NoteProcessor):
         # Identify each speaker
         speaker_mapping = {}
         for speaker in unique_speakers:
-            print(f"Identifying {speaker}...", flush=True)
+            logger.info("Identifying %s...", speaker)
             label = speaker.replace('Speaker ', '')
             identified_name_verbose = await self.identify_speaker(transcript, label)
             identified_name = self.consolidate_answer(identified_name_verbose)
 
-            print(f"Result : {identified_name_verbose}", flush=True)
+            logger.info("Result: %s", identified_name_verbose)
             if identified_name.lower() != "unknown":
                 speaker_mapping[speaker] = identified_name
         
@@ -98,7 +103,7 @@ class SpeakerIdentifier(NoteProcessor):
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
 
-        print(f"Completed speaker identification for: {filename}", flush=True)
+        logger.info("Completed speaker identification for: %s", filename)
 
     def identify_speakers(self, text: str) -> str:
         prompt = self.prompt_identify + text

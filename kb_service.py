@@ -1,7 +1,6 @@
 import asyncio
 from config.paths import PATHS
 from config.secrets import ASSEMBLY_AI_KEY
-from config.logging_config import configure_logging
 
 # Import processors
 from processors.audio.transcriber import AudioTranscriber
@@ -132,7 +131,6 @@ async def run_processor_services():
     await start_repeaters()
 
 async def main():
-    configure_logging()
     # Create all required directories
     for path in PATHS:
         path.mkdir(parents=True, exist_ok=True)

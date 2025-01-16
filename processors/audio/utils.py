@@ -1,6 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 from mutagen import File
+import re
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 def get_recording_date(file_path: Path) -> datetime:
     """

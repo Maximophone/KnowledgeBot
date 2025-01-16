@@ -2,6 +2,10 @@ import os
 from pathlib import Path
 from moviepy import VideoFileClip
 import asyncio
+from config.logging_config import setup_logger
+import shutil
+
+logger = setup_logger(__name__)
 
 class VideoToAudioProcessor:
     """Extracts audio from video files and replaces the original file with the audio-only version."""
@@ -20,28 +24,34 @@ class VideoToAudioProcessor:
 
     async def process_single_file(self, filename: str) -> None:
         """Process a single video file: extract audio and replace the original file."""
-        input_path = self.input_dir / filename
-        output_path = self.output_dir / f"{filename.rsplit('.', 1)[0]}.m4a"
-
+        logger.info("Extracting audio from: %s", filename)
+        
         try:
+            input_path = self.input_dir / filename
+            output_path = self.output_dir / f"{os.path.splitext(filename)[0]}.m4a"
+            
             # Check if the file is a video file (e.g., .mkv, .mp4, .avi)
             _, ext = os.path.splitext(filename)
             if ext.lower() not in ['.mkv', '.mp4', '.avi']:
                 return
 
-            print(f"Extracting audio from: {filename}", flush=True)
-
-            # Extract audio from the video file
-            video = VideoFileClip(str(input_path))
-            audio = video.audio
-            audio.write_audiofile(str(output_path), codec="aac")
-            video.close()
-            audio.close()
-
-            # Remove the original video file
-            os.remove(input_path)
-
-            print(f"Extracted audio: {output_path}", flush=True)
+            # Extract audio using ffmpeg
+            await self._extract_audio(input_path, output_path)
+            
+            # Move original file to processed directory
+            processed_path = self.processed_dir / filename
+            shutil.move(str(input_path), str(processed_path))
+            
+            logger.info("Extracted audio: %s", output_path)
+            
         except Exception as e:
-            print(f"Error processing {filename}: {str(e)}", flush=True)
+            logger.error("Error processing %s: %s", filename, str(e))
             raise
+
+    async def _extract_audio(self, input_path: Path, output_path: Path) -> None:
+        # Extract audio from the video file
+        video = VideoFileClip(str(input_path))
+        audio = video.audio
+        audio.write_audiofile(str(output_path), codec="aac")
+        video.close()
+        audio.close()

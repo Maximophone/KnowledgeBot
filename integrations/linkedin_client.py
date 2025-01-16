@@ -16,6 +16,9 @@ from linkedin_api import Linkedin
 import browser_cookie3
 from config.secrets import LINKEDIN_LI_AT, LINKEDIN_JSESSIONID
 import sys
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 def load_linkedin_cookies():
     """
@@ -54,14 +57,14 @@ def load_linkedin_cookies():
             has_jsessionid = any(cookie.name.lower() == "jsessionid" for cookie in cj)
             
             if has_li_at and has_jsessionid:
-                print(f"Loaded LinkedIn cookies from {browser_method.__name__}")
+                logger.info("Loaded LinkedIn cookies from %s", browser_method.__name__)
                 return cj  # If we found both li_at and JSESSIONID, we're done
             else:
-                print(f"Could not find li_at or JSESSIONID in {browser_method.__name__}.")
+                logger.warning("Could not find li_at or JSESSIONID in %s", browser_method.__name__)
         except Exception as e:
-            print(f"Failed to load cookies from {browser_method.__name__}: {e}")
+            logger.warning("Failed to load cookies from %s: %s", browser_method.__name__, e)
 
-    print("Falling back to environment variables for LinkedIn cookies...")
+    logger.info("Falling back to environment variables for LinkedIn cookies...")
 
     # If we reach here, none of the browsers worked, so use fallback
     # Expect the secrets to be set in the .env file
@@ -70,7 +73,7 @@ def load_linkedin_cookies():
 
     # If these are still None or empty, then we can't proceed
     if not li_at or not jsession:
-        print("Error: Could not load cookies from browsers or environment variables.")
+        logger.error("Could not load cookies from browsers or environment variables")
         sys.exit(1)
 
     # Build a RequestsCookieJar from env
@@ -78,7 +81,7 @@ def load_linkedin_cookies():
     cookie_jar.set("li_at", li_at, domain=".linkedin.com", path="/")
     cookie_jar.set("JSESSIONID", jsession, domain=".linkedin.com", path="/")
 
-    print("Loaded cookies from environment variables (li_at, JSESSIONID).")
+    logger.info("Loaded cookies from environment variables (li_at, JSESSIONID)")
     return cookie_jar
 
 def get_linkedin_client(user_email, user_password):
@@ -91,20 +94,20 @@ def get_linkedin_client(user_email, user_password):
     """
     try:
         # Attempt a fresh login with username/password
-        print("Attempting direct username/password login to LinkedIn...")
+        logger.info("Attempting direct username/password login to LinkedIn...")
         linkedin_client = Linkedin(
             user_email,
             user_password,
             refresh_cookies=True  # force re-login
         )
-        print("Login successful with username/password.")
+        logger.info("Login successful with username/password")
         return linkedin_client
 
     except Exception as e:
         # Typically, you might catch ChallengeException or other specific errors here.
         # For simplicity, we catch all and fallback to cookies.
-        print("Could not login with username/password (Challenge, 2FA, or other error). Falling back to cookies.")
-        print(f"Error detail: {e}")
+        logger.warning("Could not login with username/password (Challenge, 2FA, or other error). Falling back to cookies")
+        logger.warning("Error detail: %s", e)
 
         # Fallback: load cookies from browser or .env
         cookie_jar = load_linkedin_cookies()

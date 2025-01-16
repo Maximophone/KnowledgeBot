@@ -5,6 +5,9 @@ from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, update_front_matter
 from ai import AI, get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class TranscriptClassifier(NoteProcessor):
     """Classifies transcripts using AI."""
@@ -31,7 +34,8 @@ class TranscriptClassifier(NoteProcessor):
         return self.ai_model.message(message).content
         
     async def process_file(self, filename: str) -> None:
-        print(f"Classifying transcript: {filename}", flush=True)
+        """Process a transcript file."""
+        logger.info("Classifying transcript: %s", filename)
         
         # Read file content
         content = await self.read_file(filename)
@@ -41,7 +45,7 @@ class TranscriptClassifier(NoteProcessor):
         
         # Classify the transcript
         category = self.classify(text)
-        print(f"Classified as: {category}", flush=True)
+        logger.info("Classified as: %s", category)
         
         # Update frontmatter
         file_path = self.input_dir / filename

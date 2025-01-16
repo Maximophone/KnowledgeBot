@@ -43,6 +43,7 @@ import json
 from PyQt5.QtCore import Qt
 from config.paths import PATHS
 from integrations.html_to_markdown import HTMLToMarkdown
+from config.logging_config import setup_logger
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
@@ -63,6 +64,8 @@ model = ai.AI("claude-haiku")
 
 # Initialize HTML to Markdown converter
 html_to_md = HTMLToMarkdown()
+
+logger = setup_logger(__name__)
 
 def remove_frontmatter(contents: str) -> str:
     return contents.split("---")[2]
@@ -289,8 +292,8 @@ def process_file(file_path: str):
     Args:
         file_path (str): Path to the modified file
     """
+    logger.info("File %s modified", file_path)
     try:
-        print(f"File {file_path} modified", flush=True)
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
@@ -307,8 +310,8 @@ def process_file(file_path: str):
         os.utime(file_path, None)
 
     except Exception:
-        print(f"Error processing file {file_path}:")
-        print(traceback.format_exc())
+        logger.error("Error processing file %s:", file_path)
+        logger.error(traceback.format_exc())
 
 def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
     """
@@ -398,15 +401,15 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             model_name = "mock"
 
         if debug:
-            print("---PARAMETERS START---", flush=True)
+            logger.debug("---PARAMETERS START---")
             for name, value in params.items():
-                print(f"{name}: {value}", flush=True)
-            print("---PARAMETERS END---", flush=True)
-            print("---CONVERTED TEXT START---", flush=True)
-            print(conv_txt.encode("utf-8"), flush=True)
-            print("---CONVERTED TEXT END---", flush=True)
+                logger.debug("%s: %s", name, value)
+            logger.debug("---PARAMETERS END---")
+            logger.debug("---CONVERTED TEXT START---")
+            logger.debug("%s", conv_txt.encode("utf-8"))
+            logger.debug("---CONVERTED TEXT END---")
 
-        print(f"Answering with {model_name}...", flush=True)
+        logger.info("Answering with %s...", model_name)
         if option != "all":
             messages = process_conversation(conv_txt)
         else:

@@ -3,6 +3,9 @@ import keyboard
 import pyperclip
 from PyQt5.QtWidgets import QApplication
 from ui.popup_window import PopupWindow
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 def show_popup():
     app = QApplication([])
@@ -13,9 +16,10 @@ def show_popup():
     app.exec_()
 
 async def main():
-    print("Listening for hotkey Ctrl+.", flush=True)
+    hotkey = 'ctrl+.'
+    logger.info("Listening for hotkey %s", hotkey)
     # Register the hotkey
-    keyboard.add_hotkey('ctrl+.', show_popup)
+    keyboard.add_hotkey(hotkey, show_popup)
 
     try:
         while True:
@@ -23,7 +27,7 @@ async def main():
     except KeyboardInterrupt:
         pass
     finally:
-        print("Exiting...", flush=True)
+        logger.info("Exiting...")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

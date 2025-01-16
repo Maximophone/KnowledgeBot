@@ -19,11 +19,10 @@ class FileModifiedHandler(FileSystemEventHandler):
         super().__init__()
 
     def on_any_event(self, event):
-        print("an event happened!", flush=True)
-        print(event, flush=True)
+        self.logger.debug("Event detected: %s", event)
 
     def on_modified(self, event):
-        print("Modified triggered", flush=True)
+        self.logger.debug("Modified event triggered")
         if event.is_directory:
             return
         if event.src_path in self.ignore_set:
@@ -43,7 +42,7 @@ async def poll_for_changes(path, callback, condition_check):
                 continue
             last_modified_times[file_path] = os.path.getmtime(file_path)
 
-    print("Built index of modified times")
+    logger.info("Built index of modified times")
     while True:
         try:
             await asyncio.sleep(0.1)  # Check every 0.1 seconds
@@ -55,20 +54,20 @@ async def poll_for_changes(path, callback, condition_check):
                     current_mtime = os.path.getmtime(file_path)
                     if file_path in last_modified_times:
                         if current_mtime > last_modified_times[file_path]:
-                            print("file modified!", flush=True)
+                            logger.debug("File modified: %s", file_path)
                             try:
                                 if condition_check(file_path):
-                                    print("condition checked!", flush=True)
+                                    logger.debug("Condition check passed for file: %s", file_path)
                                     callback(file_path)
                                 last_modified_times[file_path] = current_mtime
                             except Exception:
-                                print(f"Error when checking condition for file {file_path}")
-                                print(traceback.format_exc())
+                                logger.error("Error when checking condition for file %s", file_path)
+                                logger.error(traceback.format_exc())
                     else:
                         last_modified_times[file_path] = current_mtime
         except Exception:
-            print(f"Error in file polling:")
-            print(traceback.format_exc())
+            logger.error("Error in file polling:")
+            logger.error(traceback.format_exc())
 
 class ObsidianWorkspaceWatcher:
     def __init__(self, vault_path: str, callback, condition_check):
@@ -100,11 +99,10 @@ class ObsidianWorkspaceWatcher:
                                     tab['state']['state']['file']
                                 )
                                 open_files.add(file_path)
-            # print(f"Open files: {open_files}", flush=True)
             return open_files
             
         except Exception as e:
-            print(f"Error reading workspace file: {e}")
+            self.logger.error("Error reading workspace file: %s", e)
             return set()
 
     async def start_watching(self):
@@ -127,9 +125,9 @@ class ObsidianWorkspaceWatcher:
                         last_mtime = self.last_modified_times.get(file_path, 0)
                         
                         if current_mtime > last_mtime:
-                            self.logger.info(f"File {file_path} modified")
+                            self.logger.info("File %s modified", file_path)
                             if self.condition_check(file_path):
-                                self.logger.debug(f"Condition checked for file {file_path}")
+                                self.logger.debug("Condition checked for file %s", file_path)
                                 self.callback(file_path)
                             self.last_modified_times[file_path] = current_mtime
                             

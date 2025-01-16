@@ -6,6 +6,9 @@ import calendar
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class TodoProcessor(NoteProcessor):
     """Processes todo transcripts and adds them to a todo directory."""
@@ -38,13 +41,16 @@ tags:
         return f"[[{filename}]]" not in directory_content
 
     async def process_file(self, filename: str) -> None:
-        print(f"Processing todos from: {filename}", flush=True)
+        """Process todos from a note."""
+        logger.info("Processing todos from: %s", filename)
+        
         content = await self.read_file(filename)
 
         # Parse frontmatter and content
         frontmatter = parse_frontmatter(content)
+        
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
 
         transcript = content.split('---', 2)[2].strip()

@@ -5,6 +5,9 @@ from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ai import get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class ConversationProcessor(NoteProcessor):
     """Processes conversation notes and reformats them with AI-generated summaries."""
@@ -19,7 +22,8 @@ class ConversationProcessor(NoteProcessor):
         return True
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing conversation: {filename}", flush=True)
+        """Process a conversation transcript."""
+        logger.info("Processing conversation: %s", filename)
         
         # Read source file
         content = await self.read_file(filename)
@@ -73,4 +77,4 @@ class ConversationProcessor(NoteProcessor):
         async with aiofiles.open(self.input_dir / filename, 'w', encoding='utf-8') as f:
             await f.write(final_content)
             
-        print(f"Processed conversation: {filename}", flush=True)
+        logger.info("Processed conversation: %s", filename)

@@ -7,6 +7,9 @@ import traceback
 from ai import AI
 import os
 import asyncio
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class NoteProcessor(ABC):
     """Base class for all note processors in Obsidian vault."""
@@ -67,7 +70,7 @@ class NoteProcessor(ABC):
             os.utime(file_path, None)
             
         except Exception as e:
-            print(f"Error in {self.__class__.__name__} processing {filename}: {str(e)}")
+            logger.error("Error in %s processing %s: %s", self.__class__.__name__, filename, str(e))
             raise
     
     @abstractmethod
@@ -96,7 +99,7 @@ class NoteProcessor(ABC):
                 self.files_in_process.add(filename)
                 await self._process_file(filename)
             except Exception as e:
-                print(f"Error processing {filename}: {str(e)}", flush=True)
+                logger.error("Error processing %s: %s", filename, str(e))
                 traceback.print_exc()
             finally:
                 self.files_in_process.remove(filename)

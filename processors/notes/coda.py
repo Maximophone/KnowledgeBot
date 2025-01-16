@@ -6,6 +6,9 @@ from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from integrations.coda_integration import CodaClient
 import os
 from config.secrets import CODA_API_KEY
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class CodaProcessor(NoteProcessor):
     """Processes Coda pages by pulling their content and converting to markdown."""
@@ -27,7 +30,8 @@ class CodaProcessor(NoteProcessor):
         return "coda.io" in url
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing coda page: {filename}", flush=True)
+        """Process a Coda page."""
+        logger.info("Processing coda page: %s", filename)
         
         # Read the file
         content = await self.read_file(filename)
@@ -51,5 +55,5 @@ class CodaProcessor(NoteProcessor):
             print(f"Processed coda page: {filename}", flush=True)
             
         except Exception as e:
-            print(f"Error processing Coda page {filename}: {str(e)}", flush=True)
+            logger.error("Error processing Coda page %s: %s", filename, str(e))
             raise 
