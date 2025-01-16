@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from moviepy import VideoFileClip
+import asyncio
 
 class VideoToAudioProcessor:
     """Extracts audio from video files and replaces the original file with the audio-only version."""
@@ -15,6 +16,7 @@ class VideoToAudioProcessor:
         for file_path in self.input_dir.iterdir():
             filename = file_path.name
             await self.process_single_file(filename)
+            await asyncio.sleep(0)
 
     async def process_single_file(self, filename: str) -> None:
         """Process a single video file: extract audio and replace the original file."""

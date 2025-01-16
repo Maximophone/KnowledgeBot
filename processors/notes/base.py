@@ -6,6 +6,7 @@ from ..common.frontmatter import read_front_matter, update_front_matter, parse_f
 import traceback
 from ai import AI
 import os
+import asyncio
 
 class NoteProcessor(ABC):
     """Base class for all note processors in Obsidian vault."""
@@ -82,6 +83,7 @@ class NoteProcessor(ABC):
     async def process_all(self) -> None:
         """Process all eligible files in the input directory."""
         for file_path in self.input_dir.iterdir():
+            await asyncio.sleep(0)
             filename = file_path.name
             
             if filename in self.files_in_process:

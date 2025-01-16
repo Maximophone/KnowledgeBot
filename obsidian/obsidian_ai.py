@@ -376,6 +376,13 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
     block, results = process_tags(block, {"reply": remove})
 
     try:
+        # Add immediate feedback that AI is processing
+        current_content = update_file_content(
+            initial_block,
+            f"{beacon_ai}\n_Thinking..._\n",
+            context["file_path"]
+        )
+
         conv_txt = block.strip()
         conv_txt, results = process_tags(conv_txt, REPLACEMENTS_INSIDE, context=context["doc"])
         params = dict([(n, v) for n, v, t in results])
@@ -423,7 +430,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
         response = ""
-        current_content = initial_block
+        
         start = True
         while True:  # Process responses until no more tool calls
             response += ai_response.content

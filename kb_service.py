@@ -1,6 +1,7 @@
 import asyncio
 from config.paths import PATHS
 from config.secrets import ASSEMBLY_AI_KEY
+from config.logging_config import configure_logging
 
 # Import processors
 from processors.audio.transcriber import AudioTranscriber
@@ -109,21 +110,21 @@ async def setup_processors():
     )
     
     # Register all processors with the repeater
-    slow_repeater.register(video_to_audio_processor.process_all)
-    slow_repeater.register(transcriber.process_all)
-    slow_repeater.register(meditation_processor.process_all)
-    slow_repeater.register(idea_processor.process_all)
-    slow_repeater.register(todo_processor.process_all)
-    slow_repeater.register(gdoc_processor.process_all)
-    slow_repeater.register(coda_processor.process_all)
-    slow_repeater.register(markdownload_processor.process_all)
-    slow_repeater.register(speaker_identifier_processor.process_all)
-    slow_repeater.register(meeting_processor.process_all)
-    slow_repeater.register(meeting_summary_processor.process_all)
-    slow_repeater.register(transcript_classifier_processor.process_all)
-    slow_repeater.register(conversation_processor.process_all)
-    slow_repeater.register(diary_processor.process_all)
-    slow_repeater.register(idea_cleanup_processor.process_all)
+    slow_repeater.register(video_to_audio_processor.process_all, name="video_to_audio_processor")
+    slow_repeater.register(transcriber.process_all, name="transcriber")
+    slow_repeater.register(meditation_processor.process_all, name="meditation_processor")
+    slow_repeater.register(idea_processor.process_all, name="idea_processor")
+    slow_repeater.register(todo_processor.process_all, name="todo_processor")
+    slow_repeater.register(gdoc_processor.process_all, name="gdoc_processor")
+    slow_repeater.register(coda_processor.process_all, name="coda_processor")
+    slow_repeater.register(markdownload_processor.process_all, name="markdownload_processor")
+    slow_repeater.register(speaker_identifier_processor.process_all, name="speaker_identifier_processor")
+    slow_repeater.register(meeting_processor.process_all, name="meeting_processor")
+    slow_repeater.register(meeting_summary_processor.process_all, name="meeting_summary_processor")
+    slow_repeater.register(transcript_classifier_processor.process_all, name="transcript_classifier_processor")
+    slow_repeater.register(conversation_processor.process_all, name="conversation_processor")
+    slow_repeater.register(diary_processor.process_all, name="diary_processor")
+    slow_repeater.register(idea_cleanup_processor.process_all, name="idea_cleanup_processor")
 
 async def run_processor_services():
     """Setup and start all processor services."""
@@ -131,6 +132,7 @@ async def run_processor_services():
     await start_repeaters()
 
 async def main():
+    configure_logging()
     # Create all required directories
     for path in PATHS:
         path.mkdir(parents=True, exist_ok=True)

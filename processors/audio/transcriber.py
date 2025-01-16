@@ -13,7 +13,7 @@ from ai import AI, get_prompt
 from ai.types import Message, MessageContent
 import re
 import os
-
+import asyncio
 
 class AudioTranscriber:
     """Handles the transcription of audio files to markdown and JSON."""
@@ -150,6 +150,7 @@ class AudioTranscriber:
         """Process all audio files in the input directory."""
         tasks = []
         for file_path in self.input_dir.iterdir():
+            await asyncio.sleep(0)
             filename = file_path.name
             if not self.should_process(filename, None):
                 continue
