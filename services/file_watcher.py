@@ -7,6 +7,7 @@ import traceback
 import asyncio
 from typing import Set, Dict
 from config.logging_config import setup_logger
+from pathlib import Path
 
 logger = setup_logger(__name__)
 
@@ -71,7 +72,7 @@ async def poll_for_changes(path, callback, condition_check):
 
 class ObsidianWorkspaceWatcher:
     def __init__(self, vault_path: str, callback, condition_check):
-        self.vault_path = vault_path
+        self.vault_path = os.path.normpath(vault_path)
         self.workspace_file = os.path.join(vault_path, '.obsidian', 'workspace.json')
         self.callback = callback
         self.condition_check = condition_check
@@ -83,7 +84,7 @@ class ObsidianWorkspaceWatcher:
     def _get_open_files(self) -> Set[str]:
         """Extract all open file paths from workspace.json"""
         try:
-            with open(self.workspace_file, 'r') as f:
+            with open(self.workspace_file, 'r', encoding='utf-8') as f:
                 workspace = json.load(f)
                 
             open_files = set()
@@ -94,10 +95,9 @@ class ObsidianWorkspaceWatcher:
                         for tab in child['children']:
                             if ('state' in tab and 'state' in tab['state'] 
                                 and 'file' in tab['state']['state']):
-                                file_path = os.path.join(
-                                    self.vault_path, 
-                                    tab['state']['state']['file']
-                                )
+                                # Use Path to handle file paths in a platform-independent way
+                                file_path = Path(self.vault_path) / tab['state']['state']['file']
+                                file_path = str(file_path.resolve())  # Normalize the path
                                 open_files.add(file_path)
             return open_files
             
@@ -121,15 +121,17 @@ class ObsidianWorkspaceWatcher:
                 for file_path in current_open_files:
                     # print(f"Checking file {file_path}", flush=True)
                     try:
-                        current_mtime = os.path.getmtime(file_path)
-                        last_mtime = self.last_modified_times.get(file_path, 0)
+                        # Normalize the file path before checking
+                        normalized_path = str(Path(file_path).resolve())
+                        current_mtime = os.path.getmtime(normalized_path)
+                        last_mtime = self.last_modified_times.get(normalized_path, 0)
                         
                         if current_mtime > last_mtime:
-                            self.logger.info("File %s modified", file_path)
-                            if self.condition_check(file_path):
-                                self.logger.debug("Condition checked for file %s", file_path)
-                                self.callback(file_path)
-                            self.last_modified_times[file_path] = current_mtime
+                            self.logger.info("File %s modified", normalized_path)
+                            if self.condition_check(normalized_path):
+                                self.logger.debug("Condition checked for file %s", normalized_path)
+                                self.callback(normalized_path)
+                            self.last_modified_times[normalized_path] = current_mtime
                             
                     except OSError:
                         # Handle case where file might have been deleted
