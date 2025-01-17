@@ -28,8 +28,8 @@ class CodaClient:
         """
         # Pattern to match doc ID: _d followed by exactly 10 characters
         doc_pattern = r'_d([a-zA-Z0-9]{10})'
-        # Pattern to match shortened page ID: _su followed by any characters until # or end of string
-        page_pattern = r'_su([^#]+)'
+        # Updated pattern to match shortened page ID: _su followed by characters until #, ?, or end of string
+        page_pattern = r'_su([^#?\s]+)'
         
         doc_match = re.search(doc_pattern, url)
         if not doc_match:
