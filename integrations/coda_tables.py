@@ -15,6 +15,26 @@ class CodaTablesClient:
             "Content-Type": "application/json"
         }
 
+    def _raise_for_status_with_details(self, response):
+        """
+        Similar to raise_for_status() but with additional error details.
+        
+        Args:
+            response (requests.Response): Response object from the API call
+            
+        Raises:
+            requests.exceptions.HTTPError: If the response indicates an error, with detailed message
+        """
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            error_detail = (
+                f"Status Code: {response.status_code}\n"
+                f"URL: {response.url}\n"
+                f"Response Body: {response.text}"
+            )
+            raise requests.exceptions.HTTPError(error_detail) from e
+
     def list_tables(self, doc_id, limit=25, page_token=None, sort_by=None, table_types=None):
         """
         Returns a list of tables in a Coda doc.
@@ -40,7 +60,7 @@ class CodaTablesClient:
         if table_types and isinstance(table_types, list):
             params["tableTypes"] = ",".join(table_types)
         response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         return response.json()
 
     def get_table(self, doc_id, table_id_or_name, use_updated_table_layouts=None):
@@ -60,7 +80,7 @@ class CodaTablesClient:
         if use_updated_table_layouts is not None:
             params["useUpdatedTableLayouts"] = use_updated_table_layouts
         response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         return response.json()
 
     def list_rows(self, doc_id, table_id_or_name, query=None, sort_by=None, use_column_names=False, value_format="simple", visible_only=None, limit=25, page_token=None, sync_token=None):
@@ -95,7 +115,7 @@ class CodaTablesClient:
         }
         params = {k: v for k, v in params.items() if v is not None}
         response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         return response.json()
 
     def upsert_rows(self, doc_id, table_id_or_name, rows_data, disable_parsing=None):
@@ -120,10 +140,8 @@ class CodaTablesClient:
             params["disableParsing"] = disable_parsing
 
         response = requests.post(url, headers=self.headers, json=payload, params=params)
-        if response.status_code == 202:
-            return response.json()
-        else:
-            response.raise_for_status()
+        self._raise_for_status_with_details(response)
+        return response.json()
 
     def delete_rows(self, doc_id, table_id_or_name, row_ids):
         """
@@ -142,10 +160,8 @@ class CodaTablesClient:
             "rowIds": row_ids
         }
         response = requests.delete(url, headers=self.headers, json=payload)
-        if response.status_code == 202:
-            return response.json()
-        else:
-            response.raise_for_status()
+        self._raise_for_status_with_details(response)
+        return response.json()
 
     def get_row(self, doc_id, table_id_or_name, row_id_or_name, use_column_names=False, value_format="simple"):
         """
@@ -167,7 +183,7 @@ class CodaTablesClient:
             "valueFormat": value_format,
         }
         response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         return response.json()
 
     def update_row(self, doc_id, table_id_or_name, row_id_or_name, row_data, disable_parsing=None):
@@ -193,12 +209,8 @@ class CodaTablesClient:
             params["disableParsing"] = disable_parsing
 
         response = requests.put(url, headers=self.headers, json=payload, params=params)
-
-        if response.status_code == 202:
-            return response.json()
-        else:
-            response.raise_for_status()
-
+        self._raise_for_status_with_details(response)
+        return response.json()
 
     def delete_row(self, doc_id, table_id_or_name, row_id_or_name):
         """
@@ -214,10 +226,8 @@ class CodaTablesClient:
         """
         url = f"{self.base_url}/docs/{doc_id}/tables/{table_id_or_name}/rows/{row_id_or_name}"
         response = requests.delete(url, headers=self.headers)
-        if response.status_code == 202:
-            return response.json()
-        else:
-            response.raise_for_status()
+        self._raise_for_status_with_details(response)
+        return response.json()
 
     def push_button(self, doc_id, table_id_or_name, row_id_or_name, column_id_or_name):
         """
@@ -234,10 +244,8 @@ class CodaTablesClient:
         """
         url = f"{self.base_url}/docs/{doc_id}/tables/{table_id_or_name}/rows/{row_id_or_name}/buttons/{column_id_or_name}"
         response = requests.post(url, headers=self.headers)
-        if response.status_code == 202:
-            return response.json()
-        else:
-            response.raise_for_status()
+        self._raise_for_status_with_details(response)
+        return response.json()
 
     def list_columns(self, doc_id, table_id_or_name, limit=25, page_token=None, visible_only=None):
         """
@@ -261,7 +269,7 @@ class CodaTablesClient:
         }
         params = {k: v for k, v in params.items() if v is not None}
         response = requests.get(url, headers=self.headers, params=params)
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         return response.json()
 
 
