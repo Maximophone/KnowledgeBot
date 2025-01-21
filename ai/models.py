@@ -1,5 +1,5 @@
 from config import secrets
-from .wrappers import ClaudeWrapper, GeminiWrapper, GPTWrapper, MockWrapper, AIWrapper
+from .wrappers import ClaudeWrapper, GeminiWrapper, GPTWrapper, MockWrapper, AIWrapper, DeepSeekWrapper
 
 _MODELS_DICT = {
     "mock": "mock-",
@@ -18,7 +18,9 @@ _MODELS_DICT = {
     "mini": "gpt-4o-mini",
     "o1-preview": "o1-preview",
     "o1-mini": "o1-mini",
-    "o1": "o1-2024-12-17"
+    "o1": "o1-2024-12-17",
+    "deepseek-chat": "deepseek-chat",
+    "deepseek-reasoner": "deepseek-reasoner",
 }
 
 def get_model(model_name: str) -> str:
@@ -33,6 +35,8 @@ def get_client(model_name: str) -> AIWrapper:
         return GeminiWrapper(secrets.GEMINI_API_KEY, get_model(model_name))
     elif client_name == "gpt" or client_name == "o1":
         return GPTWrapper(secrets.OPENAI_API_KEY, secrets.OPENAI_ORG)
+    elif client_name == "deepseek":
+        return DeepSeekWrapper(secrets.DEEPSEEK_API_KEY)
     elif client_name == "mock":
         return MockWrapper()
     return None 
