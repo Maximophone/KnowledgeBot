@@ -72,7 +72,7 @@ async def poll_for_changes(path, callback, condition_check):
 
 class ObsidianWorkspaceWatcher:
     def __init__(self, vault_path: str, callback, condition_check):
-        self.vault_path = os.path.normpath(vault_path)
+        self.vault_path = vault_path
         self.workspace_file = os.path.join(vault_path, '.obsidian', 'workspace.json')
         self.callback = callback
         self.condition_check = condition_check
@@ -127,7 +127,7 @@ class ObsidianWorkspaceWatcher:
                         last_mtime = self.last_modified_times.get(normalized_path, 0)
                         
                         if current_mtime > last_mtime:
-                            self.logger.info("File %s modified", normalized_path)
+                            self.logger.debug("File %s modified", normalized_path)
                             if self.condition_check(normalized_path):
                                 self.logger.debug("Condition checked for file %s", normalized_path)
                                 self.callback(normalized_path)

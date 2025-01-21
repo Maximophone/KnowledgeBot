@@ -105,7 +105,8 @@ async def setup_processors():
 
     video_to_audio_processor = VideoToAudioProcessor(
         input_dir=PATHS.audio_input,
-        output_dir=PATHS.audio_input
+        output_dir=PATHS.audio_input,
+        processed_dir=PATHS.audio_processed
     )
     
     # Register all processors with the repeater

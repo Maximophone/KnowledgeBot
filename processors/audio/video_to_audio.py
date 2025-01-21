@@ -10,10 +10,12 @@ logger = setup_logger(__name__)
 class VideoToAudioProcessor:
     """Extracts audio from video files and replaces the original file with the audio-only version."""
 
-    def __init__(self, input_dir: Path, output_dir: Path):
+    def __init__(self, input_dir: Path, output_dir: Path, processed_dir: Path):
         self.input_dir = input_dir
         self.output_dir = output_dir
+        self.processed_dir = processed_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.processed_dir.mkdir(parents=True, exist_ok=True)
 
     async def process_all(self) -> None:
         """Process all video files in the input directory."""
