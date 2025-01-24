@@ -20,6 +20,8 @@ from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)
 
+_INSTANCIATED = {}
+
 def load_linkedin_cookies():
     """
     Tries to load LinkedIn cookies (li_at, JSESSIONID, etc.) from various browsers
@@ -92,6 +94,8 @@ def get_linkedin_client(user_email, user_password):
     2) If we do fallback, we attempt to load cookies from the local browsers or .env file
        by calling load_linkedin_cookies().
     """
+    if _INSTANCIATED.get("client"): 
+        return _INSTANCIATED.get("client")
     try:
         # Attempt a fresh login with username/password
         logger.info("Attempting direct username/password login to LinkedIn...")
@@ -101,6 +105,7 @@ def get_linkedin_client(user_email, user_password):
             refresh_cookies=True  # force re-login
         )
         logger.info("Login successful with username/password")
+        _INSTANCIATED["client"] = linkedin_client
         return linkedin_client
 
     except Exception as e:
@@ -116,6 +121,7 @@ def get_linkedin_client(user_email, user_password):
             password="",
             cookies=cookie_jar
         )
+        _INSTANCIATED["client"] = linkedin_client
         return linkedin_client
 
 if __name__ == "__main__":

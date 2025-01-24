@@ -229,16 +229,34 @@ class GmailClient:
 
         return build('gmail', 'v1', credentials=creds)
 
-    def send_email(self, to, subject, body):
+    def send_email(self, to, subject, body, cc=None):
         """
         Send a plain-text email.
-        :param to: Recipient email address
+        :param to: List of recipient email addresses or single address
         :param subject: Email subject
         :param body: Plain-text message content
+        :param cc: List of CC recipient email addresses or single address (optional)
         :return: API response dict containing message ID, etc.
         """
-        message = MIMEText(body)
-        message['to'] = to
+        # Create a simple message without any policy
+        message = MIMEText(body, 'html')
+        
+        # Disable line wrapping by setting a custom header
+        # message.add_header('Content-Transfer-Encoding', '7bit')
+        
+        # Handle to recipients (convert to comma-separated string if list)
+        if isinstance(to, list):
+            message['to'] = ', '.join(to)
+        else:
+            message['to'] = to
+
+        # Handle CC recipients if provided
+        if cc:
+            if isinstance(cc, list):
+                message['cc'] = ', '.join(cc)
+            else:
+                message['cc'] = cc
+
         message['subject'] = subject
 
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
@@ -378,7 +396,8 @@ if __name__ == '__main__':
     response = client.send_email(
         to='fournes.maxime@gmail.com',
         subject='Hello from Python!',
-        body='This is a test email.'
+        body='This is a test email.',
+        cc=['cc_recipient@example.com']
     )
     print("Email sent:", response)
 
