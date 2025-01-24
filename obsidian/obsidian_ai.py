@@ -502,7 +502,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                         name=tool_call.name,
                         result=None,
                         tool_call_id=tool_call.id,
-                        error=str(e)
+                        error=f"{str(e)}\n{traceback.format_exc()}"
                     )
                     tool_results.append(tool_result)
                     tool_result_text = format_tool_result(tool_result)
