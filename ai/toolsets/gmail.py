@@ -8,15 +8,21 @@ gmail_client = GmailClient()
 @tool(
     description="Send an email through Gmail. This tool allows sending plain text emails to specified recipients. "
                 "It handles the email composition and sending process through the authenticated Gmail account. "
-                "The email will be sent from the account that was authenticated during GmailClient setup.",
-    to="The recipient's email address",
+                "The email will be sent from the account that was authenticated during GmailClient setup. "
+                "Multiple recipients and CC addresses can be specified using comma-separated values.",
+    to="The recipient's email address(es), comma-separated for multiple recipients",
+    cc="Optional CC recipient(s), comma-separated for multiple CC addresses",
     subject="The subject line of the email",
-    body="The plain text content of the email message",
+    body="The html content of the email message (make sure to use <br> for line breaks)",
     safe=False
 )
-def send_email(to: str, subject: str, body: str) -> str:
+def send_email(to: str, subject: str, body: str, cc: str = None) -> str:
     """Sends an email through Gmail"""
-    result = gmail_client.send_email(to=to, subject=subject, body=body)
+    # Split recipients by comma and strip whitespace
+    to_list = [email.strip() for email in to.split(',') if email.strip()]
+    cc_list = [email.strip() for email in cc.split(',')] if cc else None
+    
+    result = gmail_client.send_email(to=to_list, subject=subject, body=body, cc=cc_list)
     return json.dumps(result)
 
 @tool(

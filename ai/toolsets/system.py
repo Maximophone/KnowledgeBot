@@ -56,7 +56,7 @@ def run_command(command: str) -> str:
     safe=True
 )
 def read_file(path: str) -> str:
-    with open(path, 'r') as file:
+    with open(path, 'r', encoding='utf-8') as file:
         return file.read()
 
 @tool(
