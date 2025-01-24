@@ -1,4 +1,4 @@
-from . import test, system, coda, memory, linkedin, obsidian, gmail
+from . import test, system, coda, memory, linkedin, obsidian, gmail, subagents
 
 # Define available tool sets
 TOOL_SETS = {
@@ -8,5 +8,6 @@ TOOL_SETS = {
     "memory": memory.TOOLS,
     "linkedin": linkedin.TOOLS,
     "obsidian": obsidian.TOOLS,
-    "gmail": gmail.TOOLS
+    "gmail": gmail.TOOLS,
+    "subagents": subagents.TOOLS
 } 

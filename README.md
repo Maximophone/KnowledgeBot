@@ -351,6 +351,18 @@ The system provides AI models with controlled access to various services through
 
 ### Available Toolsets
 
+#### Subagents Tools
+- **Agent Management**: Create and interact with specialized AI subagents
+- **Model Selection**: 
+  - haiku3.5: Fast and cost-effective, best for simple tasks
+  - sonnet3.5: Well-balanced performance, good all-around choice
+  - deepseek-reasoner: Specialized in complex reasoning tasks
+- **Conversation Modes**: 
+  - One-off interactions for quick tasks
+  - Persistent conversations with memory
+- **Tool Access**: Give subagents access to other toolsets (memory, gmail, etc.)
+- **Safety Controls**: Subagents can only use safe tools, unsafe operations are blocked
+
 #### LinkedIn Tools
 - **Profile Operations**: Search, view, and analyze profiles
 - **Network Management**: Handle connections and messages
@@ -417,7 +429,8 @@ from ai.toolsets import TOOL_SETS
 # Initialize AI with specific toolsets
 ai_model = AI("claude-3-sonnet", tools=[
     TOOL_SETS["linkedin"],
-    TOOL_SETS["gmail"]
+    TOOL_SETS["gmail"],
+    TOOL_SETS["subagents"]  # Enable subagent creation
 ])
 
 # Tool usage in AI context
