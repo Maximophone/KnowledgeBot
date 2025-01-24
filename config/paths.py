@@ -33,6 +33,9 @@ class Paths:
 
     # AI memory paths
     ai_memory: Path = vault_path / "AI Memory"
+    
+    # LinkedIn paths
+    linkedin_messages: Path = vault_path / "LinkedIn Messages"
 
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
@@ -50,7 +53,8 @@ class Paths:
             self.meetings,
             self.conversations,
             self.diary,
-            self.ai_memory
+            self.ai_memory,
+            self.linkedin_messages
         ])
     
 PATHS = Paths()
