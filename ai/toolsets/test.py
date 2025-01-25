@@ -13,5 +13,13 @@ def test_get_weather(
 ) -> str:
     return f"The weather in {city} is in {units}."
 
+@tool(
+    description="Test method - Unsafe operation that does nothing",
+    safe=False  # This is an unsafe operation
+)
+def test_unsafe_operation() -> str:
+    return "This is an unsafe operation that does nothing."
+
+
 # Export the tools in this toolset
-TOOLS = [test_get_weather] 
+TOOLS = [test_get_weather, test_unsafe_operation] 
