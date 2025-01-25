@@ -42,19 +42,17 @@ from config.paths import PATHS
 from integrations.html_to_markdown import HTMLToMarkdown
 from config.logging_config import setup_logger
 from ui.tool_confirmation import confirm_tool_execution
+from obsidian.file_utils import (
+    resolve_file_path, get_file_contents, get_markdown_files,
+    find_matching_path, resolve_vault_fname, remove_frontmatter,
+    VAULT_PATH, SEARCH_PATHS
+)
 import json
 
 # Constants
 DEFAULT_LLM = "sonnet3.5"
-VAULT_PATH = "G:\\My Drive\\Obsidian"
 VAULT_EXCLUDE = ["KnowledgeBot\\Meetings", "AI Chats", "MarkDownload", "gdoc", ".smart-connections"]
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
-
-SEARCH_PATHS = [
-    VAULT_PATH,
-    "C:\\Users\\fourn\\code",
-    # Add any other paths you want to search
-]
 
 # Initialize AI model
 api_key = secrets.CLAUDE_API_KEY
@@ -65,9 +63,6 @@ model = ai.AI("claude-haiku")
 html_to_md = HTMLToMarkdown()
 
 logger = setup_logger(__name__)
-
-def remove_frontmatter(contents: str) -> str:
-    return contents.split("---")[2]
 
 def pack_repo(path: str) -> str:
     """
@@ -94,50 +89,6 @@ def pack_vault() -> str:
     packaged = get_markdown_files(VAULT_PATH, VAULT_EXCLUDE)
     packaged_txt = format_for_llm(packaged)
     return f"<vault>{packaged_txt}</vault>\n"
-
-def resolve_file_path(fname: str, subfolder: str = "") -> Optional[str]:
-    """
-    Resolve a file path based on various input formats.
-    
-    Args:
-        fname (str): Filename or path
-        subfolder (str): Subfolder to search within each search path
-    
-    Returns:
-        Optional[str]: Resolved file path or None if not found
-    """
-    if fname.startswith("[[") and fname.endswith("]]"):
-        fname = fname[2:-2].split("|")[0]
-        return resolve_vault_fname(fname)
-    
-    potential_names = [fname, f"{fname}.md"]
-    
-    for base_path in SEARCH_PATHS:
-        for name in potential_names:
-            full_path = os.path.join(base_path, subfolder, name)
-            if os.path.isfile(full_path):
-                return full_path
-    
-    return None
-
-def get_file_contents(fpath: str) -> str:
-    """
-    Read the contents of a file.
-    
-    Args:
-        fpath (str): Path to the file
-    
-    Returns:
-        str: File contents or error message
-    """
-    if fpath.endswith(".pdf"):
-        return ai.extract_text_from_pdf(fpath)
-    
-    try:
-        with open(fpath, "rb") as f:
-            return f.read().decode('utf-8', errors='replace')
-    except Exception as e:
-        return f"Error reading file {fpath}: {str(e)}"
 
 def insert_file_ref(fname: str = "", subfolder: str = "", typ: str = "document") -> str:
     """
@@ -205,57 +156,6 @@ REPLACEMENTS_INSIDE = {
     "prompt": lambda v, t, c: insert_file_ref(v, "Prompts", "prompt"),
     "url": lambda v, t, c: f"<url>{v}</url>\n<content>{fetch_url_content(v)}</content>\n",
 }
-
-def get_markdown_files(directory: str) -> List[str]:
-    """
-    Get all markdown files in a directory and its subdirectories.
-
-    Args:
-        directory (str): Directory to search
-
-    Returns:
-        List[str]: List of markdown file paths
-    """
-    search_pattern = os.path.join(directory, '**', '*.md')
-    return glob.glob(search_pattern, recursive=True)
-
-def find_matching_path(file_list: List[str], end_path: str) -> str:
-    """
-    Find a matching file path from a list of paths. If multiple paths 
-    match, the shortest one is returned
-
-    Args:
-        file_list (List[str]): List of file paths
-        end_path (str): End of the path to match
-
-    Returns:
-        str: Matching file path or None
-    """
-    normalized_end = os.path.normpath(end_path)
-    candidates = []
-    for full_path in file_list:
-        normalized_full = os.path.normpath(full_path)
-        if normalized_full.endswith(normalized_end):
-            candidates.append(full_path)
-    if len(candidates) == 0:
-        return None
-    # We pick the shortest path out of the candidates
-    return min(candidates, key=lambda x: len(x))
-
-def resolve_vault_fname(fname: str, vault_path: str = VAULT_PATH) -> str:
-    """
-    Resolve a vault filename to its full path.
-
-    Args:
-        fname (str): Filename to resolve
-        vault_path (str): Path to the vault
-
-    Returns:
-        str: Full path to the file or None if not found
-    """
-    fpaths_set = get_markdown_files(vault_path)
-    fpath = find_matching_path(fpaths_set, fname+".md")
-    return fpath
 
 def escape_response(response: str) -> str:
     """
