@@ -5,6 +5,7 @@ import json
 import traceback
 from typing import List, Optional, Dict, Tuple
 from uuid import uuid4
+from .obsidian import read_obsidian_note
 
 # Store active conversations
 _conversations: Dict[str, AI] = {}
@@ -83,6 +84,13 @@ def _handle_tool_calls(agent: AI, response: Message, tools: List[Tool]) -> Tuple
     description="Create a new AI subagent with specified configuration. This tool allows spawning a new AI instance "
                 "with custom model, system prompt, and tools. The subagent can then be used for specific subtasks "
                 "or specialized processing.\n\n"
+                "Note Path Handling:\n"
+                "- When note paths are provided, their contents will be prepended to the system prompt in a special\n"
+                "  'OBSIDIAN CONTEXT BLOCK' formatted as:\n"
+                "  <!-- Begin referenced notes -->\n"
+                "  <note path='...'>...</note>\n"
+                "  <!-- End referenced notes -->\n"
+                "- The subagent should reference these notes using their full path when citing sources\n\n"
                 "Available Models:\n"
                 "- haiku3.5: Fast and cost-effective, but with reduced performance. Best for simple tasks.\n"
                 "- sonnet3.5: Well-balanced performance and cost. Good all-around choice for most tasks.\n"
@@ -98,15 +106,48 @@ def _handle_tool_calls(agent: AI, response: Message, tools: List[Tool]) -> Tuple
     model_name="The model to use for the subagent (e.g., 'haiku3.5', 'sonnet3.5', 'deepseek-reasoner')",
     system_prompt="The system prompt that defines the subagent's behavior and capabilities",
     toolset_names="Optional comma-separated list of toolset names to give the subagent access to (e.g., 'memory,gmail')",
+    note_paths="Optional comma-separated list of Obsidian note paths to include as formatted context. Notes will be "
+                "prepended to the system prompt in an XML-like block with their full vault path and content. "
+                "Example: 'Projects/AI.md, Meetings/Q2.md'",
     safe=True
 )
 def spawn_subagent(
     model_name: str,
     system_prompt: str,
-    toolset_names: str = ""
+    toolset_names: str = "",
+    note_paths: str = ""
 ) -> str:
     """Creates a new AI subagent with the specified configuration"""
     from . import TOOL_SETS
+
+    # Parse and validate note paths
+    note_context = []
+    note_errors = []
+    
+    if note_paths:
+        for path in note_paths.split(','):
+            path = path.strip()
+            content = read_obsidian_note(path)
+            if content.startswith("Error:"):
+                note_errors.append(f"Failed to read note '{path}': {content}")
+            else:
+                note_context.append(f"<note path='{path}'>\n{content}\n</note>")
+    
+    # If any notes failed to load, return error
+    if note_errors:
+        return json.dumps({
+            "error": "Failed to load one or more notes:\n" + "\n".join(note_errors)
+        })
+    
+    # Only add context block if we have notes
+    if note_context:
+        system_prompt = (
+            f"OBSIDIAN CONTEXT BLOCK:\n"
+            f"<!-- Begin referenced notes -->\n"
+            f"{''.join(note_context)}\n"
+            f"<!-- End referenced notes -->\n\n"
+            f"{system_prompt}"
+        )
 
     # Parse comma-separated toolset names
     toolset_list = [name.strip() for name in toolset_names.split(",") if name.strip()]
