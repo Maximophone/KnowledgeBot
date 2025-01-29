@@ -4,6 +4,7 @@ from scripts.base_script import BaseScript
 from integrations.linkedin_client import get_linkedin_client
 from config.secrets import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
 from config.linkedin_config import MY_PROFILE_ID, MY_PROFILE_URN
+from utils.rate_limiter import RateLimiter
 from typing import List, Optional, Literal
 from pathlib import Path
 import logging
@@ -21,6 +22,14 @@ class LinkedInScraper(BaseScript):
         self._name = "linkedin_scraper"
         super().__init__()
         self.client = get_linkedin_client(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
+        
+        # Initialize rate limiter for LinkedIn API calls
+        self.rate_limiter = RateLimiter(
+            name="linkedin_api",
+            min_delay_seconds=4.0,  # Minimum 2 seconds between calls
+            max_delay_seconds=8.0,  # Add up to 2 seconds of jitter
+            max_per_day=2000
+        )
         
         # Create subdirectories for different types of data
         self.profiles_dir = self.output_dir / "profiles"
@@ -122,12 +131,16 @@ class LinkedInScraper(BaseScript):
         # Handle profile IDs
         if profile_ids:
             for profile_id in profile_ids:
+                # Apply rate limiting before each API call
+                self.rate_limiter.wait()
                 result = self.scrape_profile(profile_id=profile_id)
                 results.append(result)
         
         # Handle profile URNs
         if profile_urns:
             for profile_urn in profile_urns:
+                # Apply rate limiting before each API call
+                self.rate_limiter.wait()
                 result = self.scrape_profile(profile_urn=profile_urn)
                 results.append(result)
                 
@@ -231,7 +244,8 @@ class LinkedInScraper(BaseScript):
         try:
             results = []
             for profile_urn in profile_urns:
-                time.sleep(0.2)
+                # Apply rate limiting before each API call
+                self.rate_limiter.wait()
                 try:
                     # First get conversation details to get the conversation URN
                     conversation_details = self.client.get_conversation_details(profile_urn)
