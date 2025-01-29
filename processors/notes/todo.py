@@ -31,6 +31,24 @@ tags:
 # Todo Directory
 
 """)
+        self.prompt_todos = """
+Analyze this transcript and extract ALL distinct todo items, even if some are only briefly mentioned.
+Important guidelines:
+- For each todo item, provide:
+    1. A concise description of the task
+    2. The due date, if explicitly stated or if it can be inferred from the context (e.g., "in 3 days", "by Monday")
+- If no due date is mentioned or can be inferred, leave the due date blank
+- Format each todo item as follows:
+    - [ ] {{Task description}} 📅 {{Due date}}
+- Use the "Tasks" plugin formatting for Obsidian
+- The recording date for this transcript is {recording_date.strftime('%Y-%m-%d')} ({weekday})
+Format your response as a list of todo items, nothing else.
+Example format:
+- [ ] Finish coding the todo processor 📅 2023-06-15
+- [ ] Test the todo processor
+- [ ] Deploy the todo processor to production 📅 2023-06-20
+Transcript:
+        """
 
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         if frontmatter.get("category") != "todo":
@@ -79,4 +97,4 @@ tags:
         async with aiofiles.open(self.directory_file, "a", encoding='utf-8') as f:
             await f.write(append_content)
 
-        print(f"Processed todos from: {filename}", flush=True)
+        logger.info("Processed todos from: %s", filename)
