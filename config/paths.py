@@ -6,6 +6,7 @@ class Paths:
     # Base paths
     knowledgebot_path: Path = Path("G:/My Drive/KnowledgeBot")
     vault_path: Path = Path("G:/My Drive/Obsidian")
+    runtime_path: Path = Path(".")
     vault_knowledgebot_path: Path = vault_path / "KnowledgeBot"
     
     # Audio processing paths
@@ -36,6 +37,9 @@ class Paths:
     
     # LinkedIn paths
     linkedin_messages: Path = vault_path / "LinkedIn Messages"
+
+    # data
+    data: Path = runtime_path / "data"
 
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""

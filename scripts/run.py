@@ -74,10 +74,12 @@ def main():
     parser.add_argument('--profile-urns-file', help='Path to CSV file containing LinkedIn profile URNs')
     parser.add_argument('--keywords', help='Search keywords')
     
-    # Add LinkedIn messenger specific arguments
-    parser.add_argument('--template-file', help='Path to message template file for LinkedIn messenger')
+    # Add LinkedIn messenger and bulk email sender specific arguments
+    parser.add_argument('--template-file', help='Path to message/email template file')
     parser.add_argument('--contacts-file', help='Path to contacts JSON file for LinkedIn messenger')
     parser.add_argument('--campaign-file', help='Path to campaign markdown file for LinkedIn messenger')
+    parser.add_argument('--csv-file', help='Path to CSV file for bulk email sender')
+    parser.add_argument('--from-name', help='Display name for the email sender')
     
     args, unknown_args = parser.parse_known_args()
     
