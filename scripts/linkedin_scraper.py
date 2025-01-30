@@ -26,10 +26,13 @@ class LinkedInScraper(BaseScript):
         # Initialize rate limiter for LinkedIn API calls
         self.rate_limiter = RateLimiter(
             name="linkedin_api",
-            min_delay_seconds=4.0,  # Minimum 2 seconds between calls
-            max_delay_seconds=8.0,  # Add up to 2 seconds of jitter
-            max_per_day=2000
+            min_delay_seconds=10.0,  # Minimum 10 seconds between calls
+            max_delay_seconds=20.0,  # Add up to 10 seconds of jitter
+            max_per_day=1000
         )
+        
+        # Default profile refresh age in days
+        self.profile_refresh_days = 60
         
         # Create subdirectories for different types of data
         self.profiles_dir = self.output_dir / "profiles"
@@ -50,6 +53,33 @@ class LinkedInScraper(BaseScript):
     def description(self) -> str:
         return "Scrapes LinkedIn data including profiles, connections, and conversations"
     
+    def _needs_profile_update(self, file_id: str) -> bool:
+        """Check if a profile needs to be updated based on its age
+        
+        Args:
+            file_id: The profile ID or URN used in the filename
+            
+        Returns:
+            bool: True if profile should be updated, False otherwise
+        """
+        try:
+            # Look for any existing profile files with this ID
+            existing_files = list(self.profiles_dir.glob(f"{file_id}_*.json"))
+            if not existing_files:
+                return True
+                
+            # Get the most recent file
+            latest_file = max(existing_files, key=lambda p: p.stat().st_mtime)
+            
+            # Check if file is older than refresh threshold
+            file_age_days = (datetime.now().timestamp() - latest_file.stat().st_mtime) / (24 * 3600)
+            return file_age_days >= self.profile_refresh_days
+            
+        except Exception as e:
+            logger.error(f"Error checking profile age for {file_id}: {str(e)}")
+            # If there's any error checking the file, assume we should update
+            return True
+    
     def scrape_profile(self, profile_id: str = None, profile_urn: str = None) -> dict:
         """Scrape a single profile and save it to its own file
         
@@ -58,13 +88,23 @@ class LinkedInScraper(BaseScript):
             profile_urn: URN identifier of the LinkedIn profile
         """
         try:
+            # Use profile_id if available, otherwise use the URN
+            file_id = profile_id or profile_urn
+            
+            # Check if we need to update this profile
+            if not self._needs_profile_update(file_id):
+                logger.info(f"Profile {file_id} is up to date, skipping...")
+                # Find and return the most recent profile data
+                existing_files = list(self.profiles_dir.glob(f"{file_id}_*.json"))
+                latest_file = max(existing_files, key=lambda p: p.stat().st_mtime)
+                with open(latest_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            
             profile_json = self.client.get_profile(
                 public_id=profile_id,
                 urn_id=profile_urn
             )
             if profile_json:
-                # Use profile_id if available, otherwise use the URN
-                file_id = profile_id or profile_urn
                 self.save_json_output(profile_json, f"profiles/{file_id}")
             return profile_json
         except Exception as e:
@@ -119,16 +159,32 @@ class LinkedInScraper(BaseScript):
             logger.error(f"Failed to search connections for '{keywords}': {str(e)}\n{traceback.format_exc()}")
             return {}
 
-    def scrape_profiles(self, profile_ids: List[str] = None, profile_urns: List[str] = None) -> List[dict]:
+    def scrape_profiles(self, profile_ids: List[str] = None, profile_urns: List[str] = None,
+                     profile_data: List[dict] = None) -> List[dict]:
         """Scrape one or multiple profiles and save them to individual files
         
         Args:
             profile_ids: List of LinkedIn profile IDs to scrape
             profile_urns: List of LinkedIn profile URNs to scrape
+            profile_data: List of dicts containing profile_id and/or profile_urn for each profile
         """
         results = []
         
-        # Handle profile IDs
+        # Handle new profile data format
+        if profile_data:
+            for profile in profile_data:
+                self.rate_limiter.wait()
+                profile_id = profile.get('profile_id')
+                profile_urn = profile.get('profile_urn')
+                if profile_id or profile_urn:
+                    result = self.scrape_profile(
+                        profile_id=profile_id,
+                        profile_urn=profile_urn
+                    )
+                    results.append(result)
+            return results
+        
+        # Legacy support for separate lists
         if profile_ids:
             for profile_id in profile_ids:
                 # Apply rate limiting before each API call
@@ -136,7 +192,6 @@ class LinkedInScraper(BaseScript):
                 result = self.scrape_profile(profile_id=profile_id)
                 results.append(result)
         
-        # Handle profile URNs
         if profile_urns:
             for profile_urn in profile_urns:
                 # Apply rate limiting before each API call
@@ -239,12 +294,25 @@ class LinkedInScraper(BaseScript):
             logger.error(f"Failed to parse conversation URN {full_urn}: {str(e)}")
             return None
 
-    def scrape_specific_conversations(self, profile_urns: List[str]) -> List[dict]:
-        """Scrape conversations with specific profiles and save them"""
+    def scrape_specific_conversations(self, profile_urns: List[str] = None,
+                                    profile_data: List[dict] = None) -> List[dict]:
+        """Scrape conversations with specific profiles and save them
+        
+        Args:
+            profile_urns: List of LinkedIn profile URNs
+            profile_data: List of dicts containing profile_id and/or profile_urn for each profile
+        """
         try:
             results = []
-            for profile_urn in profile_urns:
-                # Apply rate limiting before each API call
+            
+            # Get list of URNs to process
+            urns_to_process = []
+            if profile_data:
+                urns_to_process = [p['profile_urn'] for p in profile_data if 'profile_urn' in p]
+            elif profile_urns:
+                urns_to_process = profile_urns
+                
+            for profile_urn in urns_to_process:
                 self.rate_limiter.wait()
                 try:
                     # First get conversation details to get the conversation URN
@@ -261,6 +329,8 @@ class LinkedInScraper(BaseScript):
                         conversation_id = self.extract_conversation_id(full_urn) if full_urn else None
                         
                         if conversation_id:
+                            # Apply rate limiting before getting full conversation
+                            self.rate_limiter.wait()
                             # Get full conversation using the parsed conversation ID
                             full_conversation = self.client.get_conversation(conversation_id)
                             if full_conversation:
@@ -290,7 +360,8 @@ class LinkedInScraper(BaseScript):
 
     def run(self, action: str = None, profile_ids: List[str] = None,
             profile_id: str = None, profile_urn: str = None, 
-            profile_urns: List[str] = None, keywords: str = None, **kwargs):
+            profile_urns: List[str] = None, keywords: str = None,
+            profile_data: List[dict] = None, **kwargs):
         """
         Run the LinkedIn scraping job
         
@@ -302,6 +373,7 @@ class LinkedInScraper(BaseScript):
             profile_urn: Single LinkedIn profile URN
             profile_urns: List of LinkedIn profile URNs
             keywords: Search terms when using 'search' action
+            profile_data: List of dicts containing profile_id and/or profile_urn for each profile
         """
         try:
             if not action:
@@ -312,15 +384,19 @@ class LinkedInScraper(BaseScript):
                 return
 
             # Handle profile_id backward compatibility
-            if profile_id and not profile_ids:
+            if profile_id and not profile_ids and not profile_data:
                 profile_ids = [profile_id]
             
             # Handle single profile_urn
-            if profile_urn and not profile_urns:
+            if profile_urn and not profile_urns and not profile_data:
                 profile_urns = [profile_urn]
 
             if action == "profile" or action == "profiles":
-                self.scrape_profiles(profile_ids=profile_ids, profile_urns=profile_urns)
+                self.scrape_profiles(
+                    profile_ids=profile_ids,
+                    profile_urns=profile_urns,
+                    profile_data=profile_data
+                )
             elif action == "connections":
                 self.scrape_connections(
                     profile_urn=profile_urn or MY_PROFILE_URN,
@@ -329,11 +405,14 @@ class LinkedInScraper(BaseScript):
             elif action == "conversations":
                 self.scrape_conversations()
             elif action == "specific_conversations":
-                if not profile_urns:
-                    logger.error("specific_conversations action requires profile_urns parameter")
+                if not profile_urns and not profile_data:
+                    logger.error("specific_conversations action requires profile_urns parameter or profile_data")
                     self.print_usage()
                     return
-                self.scrape_specific_conversations(profile_urns)
+                self.scrape_specific_conversations(
+                    profile_urns=profile_urns,
+                    profile_data=profile_data
+                )
             elif action == "search":
                 if not keywords:
                     logger.error("Search action requires keywords parameter")
