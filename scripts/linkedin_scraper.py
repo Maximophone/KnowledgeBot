@@ -100,6 +100,9 @@ class LinkedInScraper(BaseScript):
                 with open(latest_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             
+            # Apply rate limiting only when we need to make an API call
+            self.rate_limiter.wait()
+            
             profile_json = self.client.get_profile(
                 public_id=profile_id,
                 urn_id=profile_urn
@@ -173,7 +176,6 @@ class LinkedInScraper(BaseScript):
         # Handle new profile data format
         if profile_data:
             for profile in profile_data:
-                self.rate_limiter.wait()
                 profile_id = profile.get('profile_id')
                 profile_urn = profile.get('profile_urn')
                 if profile_id or profile_urn:
@@ -187,15 +189,11 @@ class LinkedInScraper(BaseScript):
         # Legacy support for separate lists
         if profile_ids:
             for profile_id in profile_ids:
-                # Apply rate limiting before each API call
-                self.rate_limiter.wait()
                 result = self.scrape_profile(profile_id=profile_id)
                 results.append(result)
         
         if profile_urns:
             for profile_urn in profile_urns:
-                # Apply rate limiting before each API call
-                self.rate_limiter.wait()
                 result = self.scrape_profile(profile_urn=profile_urn)
                 results.append(result)
                 
