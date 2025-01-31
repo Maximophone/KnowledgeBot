@@ -14,6 +14,7 @@ A powerful Python framework that combines AI capabilities with personal knowledg
   - Document processing (Google Docs, Markdown)
 - **Interactive Tools**: Keyboard-triggered popup window for quick text processing and AI interactions
 - **Extensible Toolsets**: Ready-to-use AI tools for various services (LinkedIn, Coda, etc.)
+- **Automation Scripts**: Ready-to-use scripts for LinkedIn automation, bulk email sending, and more
 
 ## Use Cases
 
@@ -22,6 +23,9 @@ A powerful Python framework that combines AI capabilities with personal knowledg
 - Enhance your notes with AI-powered insights
 - Process and improve text with customizable AI actions
 - Integrate external services into your knowledge workflow
+- Automate LinkedIn networking and data collection
+- Send personalized bulk emails with templates
+- Manage and track outreach campaigns
 
 ## AI Engine
 
@@ -437,6 +441,131 @@ ai_model = AI("claude-3-sonnet", tools=[
 response = ai_model.message("Find my recent work emails")
 ```
 
+## Scripts
+
+The system includes a powerful collection of automation scripts for various tasks, built on a standardized framework. Each script inherits from a common base class that provides logging, output management, and error handling.
+
+### Script Runner
+
+The system includes a unified script runner (`run.py`) that provides a consistent interface for all scripts:
+
+```bash
+# List available scripts
+python -m scripts.run --list
+
+# Run a specific script
+python -m scripts.run script_name [options]
+```
+
+### Available Scripts
+
+#### LinkedIn Automation (`linkedin_scraper.py`)
+A comprehensive LinkedIn data collection script with rate limiting and data persistence:
+
+- **Profile Scraping**: Collect detailed profile information
+  ```bash
+  # Scrape multiple profiles
+  python -m scripts.run linkedin_scraper --action profiles --profile-ids id1 id2 id3
+  # Use CSV input
+  python -m scripts.run linkedin_scraper --action profiles --profile-ids-file profiles.csv
+  ```
+
+- **Connection Management**: Download your network connections
+  ```bash
+  python -m scripts.run linkedin_scraper --action connections
+  ```
+
+- **Conversation History**: Archive message histories
+  ```bash
+  # All conversations
+  python -m scripts.run linkedin_scraper --action conversations
+  # Specific conversations
+  python -m scripts.run linkedin_scraper --action specific_conversations --profile-urns urn1 urn2
+  ```
+
+- **Network Search**: Search within your connections
+  ```bash
+  python -m scripts.run linkedin_scraper --action search --keywords "search terms"
+  ```
+
+#### Bulk Email Sender (`bulk_email_sender.py`)
+Send personalized emails to large recipient lists with built-in rate limiting:
+
+```bash
+python -m scripts.run bulk_email_sender --template-file template.md --csv-file recipients.csv
+```
+
+- Template support with variable substitution
+- CSV data integration for personalization
+- Rate limiting to respect Gmail limits
+- Detailed success/failure tracking
+
+#### LinkedIn Messenger (`linkedin_messenger.py`)
+Automated LinkedIn messaging with templates and campaign management:
+
+```bash
+python -m scripts.run linkedin_messenger --template-file template.md --contacts-file contacts.json
+```
+
+### Common Features
+
+All scripts in the system share these capabilities:
+
+- **Standardized Base Class**: Common functionality through `BaseScript`
+- **Rate Limiting**: Built-in protection against API rate limits
+- **Output Management**: 
+  - JSON output files with timestamps
+  - Organized directory structure
+  - Automatic file management
+- **Error Handling**: Robust error capture and logging
+- **CSV Integration**: Support for CSV input files
+- **Data Persistence**: Automatic caching and update management
+- **Detailed Logging**: Comprehensive logging of all operations
+
+### Script Output Structure
+
+Scripts store their output in organized directories under `data/script_outputs/`:
+
+```
+data/script_outputs/
+├── linkedin_scraper/
+│   ├── profiles/
+│   ├── connections/
+│   ├── conversations/
+│   └── search/
+├── bulk_email_sender/
+│   └── bulk_email_results_[timestamp].json
+└── linkedin_messenger/
+    └── campaign_results_[timestamp].json
+```
+
+### Creating Custom Scripts
+
+New scripts can be easily added by inheriting from `BaseScript`:
+
+```python
+from scripts.base_script import BaseScript
+
+class CustomScript(BaseScript):
+    def __init__(self):
+        self._name = "custom_script"
+        super().__init__()
+    
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def description(self) -> str:
+        return "Description of what the script does"
+    
+    def run(self, **kwargs):
+        # Implementation here
+        pass
+```
+
+The script will automatically be discovered by the script runner and inherit all common functionality.
+
 ## Installation & Setup
 
 This system requires several components and configurations to run properly. Follow these steps for a complete setup.
@@ -511,10 +640,14 @@ class PATHS:
 1. **LinkedIn Setup**
 - Use provided credentials in `.env`
 - Ensure 2FA is disabled or properly configured
+- Required for `linkedin_scraper.py` and `linkedin_messenger.py` scripts
+- Configure rate limits in `config/linkedin_config.py`
 
 2. **Gmail Setup**
 - Enable Gmail API in Google Cloud Console
 - Download credentials and configure Gmail client
+- Required for `bulk_email_sender.py` script
+- Configure rate limits in `config/gmail_config.py`
 
 3. **Coda Setup**
 - Generate API key from Coda settings
@@ -551,6 +684,7 @@ project_root/
 ├── obsidian/         # Obsidian integration components
 ├── processors/        # Content processors
 ├── prompts/          # System prompts
+├── scripts/          # Automation scripts
 ├── services/         # Core services
 ├── tests/            # Test suites
 ├── ui/               # User interfaces
@@ -602,5 +736,3 @@ This project uses several third-party libraries and services, each with their ow
 - AssemblyAI - Commercial API service
 - PyQt5 - GPL v3
 - Other dependencies as listed in `requirements.txt`
-
-
