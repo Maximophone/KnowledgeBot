@@ -5,7 +5,8 @@ from typing import List, Dict, Optional, Literal
 import json
 
 # Initialize LinkedIn client
-linkedin_client = get_linkedin_client(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
+def get_client():
+    return get_linkedin_client(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
 
 @tool(
     description="Search for LinkedIn profiles with various filters. This tool provides comprehensive search functionality for finding people on LinkedIn. It supports filtering by keywords, companies, regions, industries, schools, and more.",
@@ -34,7 +35,7 @@ def search_people(
     limit: int = 100
 ) -> str:
     """Search for LinkedIn profiles with various filters"""
-    results = linkedin_client.search_people(
+    results = get_client().search_people(
         keywords=keywords,
         current_company=current_company,
         past_companies=past_companies,
@@ -58,7 +59,7 @@ def get_profile(
     urn_id: str = None
 ) -> str:
     """Get detailed profile information for a LinkedIn user"""
-    profile = linkedin_client.get_profile(
+    profile = get_client().get_profile(
         public_id=public_id,
         urn_id=urn_id
     )
@@ -78,7 +79,7 @@ def get_profile_contact_info(
     urn_id: str = None
 ) -> str:
     """Get contact information for a LinkedIn profile"""
-    contact_info = linkedin_client.get_profile_contact_info(
+    contact_info = get_client().get_profile_contact_info(
         public_id=public_id,
         urn_id=urn_id
     )
@@ -95,7 +96,7 @@ def add_connection(
     message: str = ""
 ) -> str:
     """Send a connection request to a LinkedIn profile"""
-    result = linkedin_client.add_connection(
+    result = get_client().add_connection(
         profile_public_id=profile_public_id,
         message=message
     )
@@ -110,7 +111,7 @@ def remove_connection(
     public_profile_id: str
 ) -> str:
     """Remove a connection with a LinkedIn profile"""
-    result = linkedin_client.remove_connection(public_profile_id)
+    result = get_client().remove_connection(public_profile_id)
     return json.dumps({"success": not result})
 
 @tool(
@@ -138,7 +139,7 @@ def search_jobs(
     limit: int = 100
 ) -> str:
     """Search for jobs on LinkedIn"""
-    results = linkedin_client.search_jobs(
+    results = get_client().search_jobs(
         keywords=keywords,
         companies=companies,
         experience=experience,
@@ -159,7 +160,7 @@ def get_job(
     job_id: str
 ) -> str:
     """Get detailed information about a job posting"""
-    job = linkedin_client.get_job(job_id)
+    job = get_client().get_job(job_id)
     return json.dumps(job)
 
 @tool(
@@ -175,7 +176,7 @@ def send_message(
     recipients: List[str] = None
 ) -> str:
     """Send a message to LinkedIn connections"""
-    result = linkedin_client.send_message(
+    result = get_client().send_message(
         message_body=message_body,
         conversation_urn_id=conversation_urn_id,
         recipients=recipients
@@ -188,7 +189,7 @@ def send_message(
 )
 def get_conversations() -> str:
     """Get list of user's conversations"""
-    conversations = linkedin_client.get_conversations()
+    conversations = get_client().get_conversations()
     return json.dumps(conversations)
 
 @tool(
@@ -200,7 +201,7 @@ def get_conversation(
     conversation_urn_id: str
 ) -> str:
     """Get details of a specific conversation"""
-    conversation = linkedin_client.get_conversation(conversation_urn_id)
+    conversation = get_client().get_conversation(conversation_urn_id)
     return json.dumps(conversation)
 
 @tool(
@@ -212,7 +213,7 @@ def search_companies(
     keywords: List[str] = None
 ) -> str:
     """Search for companies on LinkedIn"""
-    companies = linkedin_client.search_companies(keywords=keywords)
+    companies = get_client().search_companies(keywords=keywords)
     return json.dumps(companies)
 
 @tool(
@@ -224,7 +225,7 @@ def get_company(
     public_id: str
 ) -> str:
     """Get detailed information about a company"""
-    company = linkedin_client.get_company(public_id)
+    company = get_client().get_company(public_id)
     return json.dumps(company)
 
 @tool(
@@ -238,7 +239,7 @@ def get_profile_skills(
     urn_id: str = None
 ) -> str:
     """Get skills listed on a LinkedIn profile"""
-    skills = linkedin_client.get_profile_skills(
+    skills = get_client().get_profile_skills(
         public_id=public_id,
         urn_id=urn_id
     )
@@ -257,7 +258,7 @@ def get_profile_posts(
     post_count: int = 10
 ) -> str:
     """Get posts from a LinkedIn profile"""
-    posts = linkedin_client.get_profile_posts(
+    posts = get_client().get_profile_posts(
         public_id=public_id,
         urn_id=urn_id,
         post_count=post_count
@@ -275,7 +276,7 @@ def get_post_comments(
     comment_count: int = 100
 ) -> str:
     """Get comments on a LinkedIn post"""
-    comments = linkedin_client.get_post_comments(
+    comments = get_client().get_post_comments(
         post_urn=post_urn,
         comment_count=comment_count
     )
@@ -292,7 +293,7 @@ def get_post_reactions(
     max_results: int = None
 ) -> str:
     """Get reactions on a LinkedIn post"""
-    reactions = linkedin_client.get_post_reactions(
+    reactions = get_client().get_post_reactions(
         urn_id=urn_id,
         max_results=max_results
     )
@@ -309,7 +310,7 @@ def react_to_post(
     reaction_type: Literal["LIKE", "PRAISE", "APPRECIATION", "EMPATHY", "INTEREST", "ENTERTAINMENT"] = "LIKE"
 ) -> str:
     """React to a LinkedIn post"""
-    result = linkedin_client.react_to_post(
+    result = get_client().react_to_post(
         post_urn_id=post_urn_id,
         reaction_type=reaction_type
     )
@@ -326,7 +327,7 @@ def get_invitations(
     limit: int = 3
 ) -> str:
     """Get connection invitations"""
-    invitations = linkedin_client.get_invitations(
+    invitations = get_client().get_invitations(
         start=start,
         limit=limit
     )
@@ -345,7 +346,7 @@ def reply_invitation(
     action: Literal["accept", "reject"] = "accept"
 ) -> str:
     """Reply to a connection invitation"""
-    result = linkedin_client.reply_invitation(
+    result = get_client().reply_invitation(
         invitation_entity_urn=invitation_entity_urn,
         invitation_shared_secret=invitation_shared_secret,
         action=action
@@ -361,7 +362,7 @@ def get_profile_network_info(
     public_profile_id: str
 ) -> str:
     """Get network information for a profile"""
-    network_info = linkedin_client.get_profile_network_info(public_profile_id)
+    network_info = get_client().get_profile_network_info(public_profile_id)
     return json.dumps(network_info)
 
 @tool(
@@ -373,7 +374,7 @@ def get_profile_privacy_settings(
     public_profile_id: str
 ) -> str:
     """Get privacy settings for a profile"""
-    privacy_settings = linkedin_client.get_profile_privacy_settings(public_profile_id)
+    privacy_settings = get_client().get_profile_privacy_settings(public_profile_id)
     return json.dumps(privacy_settings)
 
 @tool(
@@ -385,7 +386,7 @@ def get_profile_member_badges(
     public_profile_id: str
 ) -> str:
     """Get member badges for a profile"""
-    badges = linkedin_client.get_profile_member_badges(public_profile_id)
+    badges = get_client().get_profile_member_badges(public_profile_id)
     return json.dumps(badges)
 
 @tool(
@@ -397,7 +398,7 @@ def get_profile_experiences(
     urn_id: str
 ) -> str:
     """Get work experiences for a profile"""
-    experiences = linkedin_client.get_profile_experiences(urn_id)
+    experiences = get_client().get_profile_experiences(urn_id)
     return json.dumps(experiences)
 
 @tool(
@@ -409,7 +410,7 @@ def get_school(
     public_id: str
 ) -> str:
     """Get information about a school"""
-    school = linkedin_client.get_school(public_id)
+    school = get_client().get_school(public_id)
     return json.dumps(school)
 
 @tool(
@@ -425,7 +426,7 @@ def get_company_updates(
     max_results: int = None
 ) -> str:
     """Get company updates"""
-    updates = linkedin_client.get_company_updates(
+    updates = get_client().get_company_updates(
         public_id=public_id,
         urn_id=urn_id,
         max_results=max_results
@@ -443,7 +444,7 @@ def follow_company(
     following: bool = True
 ) -> str:
     """Follow or unfollow a company"""
-    result = linkedin_client.follow_company(
+    result = get_client().follow_company(
         following_state_urn=following_state_urn,
         following=following
     )
@@ -455,7 +456,7 @@ def follow_company(
 )
 def get_current_profile_views() -> str:
     """Get profile view statistics"""
-    views = linkedin_client.get_current_profile_views()
+    views = get_client().get_current_profile_views()
     return json.dumps(views)
 
 @tool(
@@ -471,7 +472,7 @@ def get_feed_posts(
     exclude_promoted_posts: bool = True
 ) -> str:
     """Get posts from LinkedIn feed"""
-    posts = linkedin_client.get_feed_posts(
+    posts = get_client().get_feed_posts(
         limit=limit,
         offset=offset,
         exclude_promoted_posts=exclude_promoted_posts
@@ -487,7 +488,7 @@ def get_job_skills(
     job_id: str
 ) -> str:
     """Get required skills for a job"""
-    skills = linkedin_client.get_job_skills(job_id)
+    skills = get_client().get_job_skills(job_id)
     return json.dumps(skills)
 
 @tool(
@@ -499,7 +500,7 @@ def unfollow_entity(
     urn_id: str
 ) -> str:
     """Unfollow a LinkedIn entity"""
-    result = linkedin_client.unfollow_entity(urn_id)
+    result = get_client().unfollow_entity(urn_id)
     return json.dumps({"success": not result})
 
 @tool(
@@ -509,7 +510,7 @@ def unfollow_entity(
 )
 def get_profile_connections(urn_id: str) -> str:
     """Get the connections for a LinkedIn profile using only the URN ID."""
-    results = linkedin_client.get_profile_connections(urn_id=urn_id)
+    results = get_client().get_profile_connections(urn_id=urn_id)
     return json.dumps(results)
 
 # Export the tools

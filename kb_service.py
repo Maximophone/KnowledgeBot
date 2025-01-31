@@ -7,6 +7,7 @@ from processors.audio.transcriber import AudioTranscriber
 from processors.notes.meditation import MeditationProcessor
 from processors.notes.ideas import IdeaProcessor
 from processors.notes.gdoc import GDocProcessor
+from processors.notes.coda import CodaProcessor
 from processors.notes.markdownload import MarkdownloadProcessor
 from processors.notes.speaker_identifier import SpeakerIdentifier
 from processors.notes.meeting import MeetingProcessor
@@ -59,6 +60,10 @@ async def setup_processors():
         input_dir=PATHS.gdoc_path
     )
 
+    coda_processor = CodaProcessor(
+        input_dir=PATHS.coda_path
+    )
+
     markdownload_processor = MarkdownloadProcessor(
         input_dir=PATHS.markdownload_path,
         output_dir=PATHS.sources_path,
@@ -100,24 +105,26 @@ async def setup_processors():
 
     video_to_audio_processor = VideoToAudioProcessor(
         input_dir=PATHS.audio_input,
-        output_dir=PATHS.audio_input
+        output_dir=PATHS.audio_input,
+        processed_dir=PATHS.audio_processed
     )
     
     # Register all processors with the repeater
-    slow_repeater.register(video_to_audio_processor.process_all)
-    slow_repeater.register(transcriber.process_all)
-    slow_repeater.register(meditation_processor.process_all)
-    slow_repeater.register(idea_processor.process_all)
-    slow_repeater.register(todo_processor.process_all)
-    slow_repeater.register(gdoc_processor.process_all)
-    slow_repeater.register(markdownload_processor.process_all)
-    slow_repeater.register(speaker_identifier_processor.process_all)
-    slow_repeater.register(meeting_processor.process_all)
-    slow_repeater.register(meeting_summary_processor.process_all)
-    slow_repeater.register(transcript_classifier_processor.process_all)
-    slow_repeater.register(conversation_processor.process_all)
-    slow_repeater.register(diary_processor.process_all)
-    slow_repeater.register(idea_cleanup_processor.process_all)
+    slow_repeater.register(video_to_audio_processor.process_all, name="video_to_audio_processor")
+    slow_repeater.register(transcriber.process_all, name="transcriber")
+    slow_repeater.register(meditation_processor.process_all, name="meditation_processor")
+    slow_repeater.register(idea_processor.process_all, name="idea_processor")
+    slow_repeater.register(todo_processor.process_all, name="todo_processor")
+    slow_repeater.register(gdoc_processor.process_all, name="gdoc_processor")
+    slow_repeater.register(coda_processor.process_all, name="coda_processor")
+    slow_repeater.register(markdownload_processor.process_all, name="markdownload_processor")
+    slow_repeater.register(speaker_identifier_processor.process_all, name="speaker_identifier_processor")
+    slow_repeater.register(meeting_processor.process_all, name="meeting_processor")
+    slow_repeater.register(meeting_summary_processor.process_all, name="meeting_summary_processor")
+    slow_repeater.register(transcript_classifier_processor.process_all, name="transcript_classifier_processor")
+    slow_repeater.register(conversation_processor.process_all, name="conversation_processor")
+    slow_repeater.register(diary_processor.process_all, name="diary_processor")
+    slow_repeater.register(idea_cleanup_processor.process_all, name="idea_cleanup_processor")
 
 async def run_processor_services():
     """Setup and start all processor services."""

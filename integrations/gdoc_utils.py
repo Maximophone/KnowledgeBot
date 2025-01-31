@@ -9,6 +9,9 @@ import io
 from googleapiclient.http import MediaIoBaseDownload
 from bs4 import BeautifulSoup
 import re
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
@@ -100,7 +103,7 @@ class GoogleDocUtils:
         return None
 
 def main():
-    # Usage example
+    """Example usage of GoogleDocUtils."""
     gdoc_utils = GoogleDocUtils()
     FILE_ID = '1kB8SSmauWQSqxMmdG04ubpOtw-rTN3h8P36rncubuwc'
     clean_html = gdoc_utils.get_clean_document(FILE_ID)

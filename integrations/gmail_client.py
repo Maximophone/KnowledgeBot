@@ -11,6 +11,10 @@ from googleapiclient.discovery import build
 import base64
 import quopri
 
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
+
 # Top level fields to keep
 ESSENTIAL_EMAIL_FIELDS = {
     'id',
@@ -225,17 +229,44 @@ class GmailClient:
 
         return build('gmail', 'v1', credentials=creds)
 
-    def send_email(self, to, subject, body):
+    def send_email(self, to, subject, body, cc=None, from_name=None):
         """
         Send a plain-text email.
-        :param to: Recipient email address
+        :param to: List of recipient email addresses or single address
         :param subject: Email subject
         :param body: Plain-text message content
+        :param cc: List of CC recipient email addresses or single address (optional)
+        :param from_name: Display name for the sender (optional)
         :return: API response dict containing message ID, etc.
         """
-        message = MIMEText(body)
-        message['to'] = to
+        # Create a simple message without any policy
+        message = MIMEText(body, 'html')
+        
+        # Handle to recipients (convert to comma-separated string if list)
+        if isinstance(to, list):
+            message['to'] = ', '.join(to)
+        else:
+            message['to'] = to
+
+        # Handle CC recipients if provided
+        if cc:
+            if isinstance(cc, list):
+                message['cc'] = ', '.join(cc)
+            else:
+                message['cc'] = cc
+
+        # Set the subject
         message['subject'] = subject
+        
+        # Get the sender's email address
+        sender_info = self.service.users().getProfile(userId='me').execute()
+        sender_email = sender_info['emailAddress']
+        
+        # Set the From header with display name if provided
+        if from_name:
+            message['from'] = f"{from_name} <{sender_email}>"
+        else:
+            message['from'] = sender_email
 
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         send_body = {'raw': raw_message}
@@ -374,7 +405,8 @@ if __name__ == '__main__':
     response = client.send_email(
         to='fournes.maxime@gmail.com',
         subject='Hello from Python!',
-        body='This is a test email.'
+        body='This is a test email.',
+        cc=['cc_recipient@example.com']
     )
     print("Email sent:", response)
 

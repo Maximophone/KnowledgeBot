@@ -6,6 +6,9 @@ from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ..common.markdown import sanitize_filename
 from ai import get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class MeditationProcessor(NoteProcessor):
     """Processes meditation transcripts into structured notes."""
@@ -25,13 +28,16 @@ class MeditationProcessor(NoteProcessor):
         return not (self.output_dir / filename).exists()
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing meditation: {filename}", flush=True)
+        """Process a meditation note."""
+        logger.info("Processing meditation: %s", filename)
+
+            
         content = await self.read_file(filename)
         
         # Parse frontmatter and content
         frontmatter = parse_frontmatter(content)
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
             
         transcript = content.split('---', 2)[2].strip()
@@ -75,4 +81,4 @@ class MeditationProcessor(NoteProcessor):
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
             await f.write(final_content)
             
-        print(f"Saved meditation note: {filename}", flush=True)
+        logger.info("Saved meditation note: %s", filename)

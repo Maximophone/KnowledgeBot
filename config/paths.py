@@ -6,6 +6,7 @@ class Paths:
     # Base paths
     knowledgebot_path: Path = Path("G:/My Drive/KnowledgeBot")
     vault_path: Path = Path("G:/My Drive/Obsidian")
+    runtime_path: Path = Path(".")
     vault_knowledgebot_path: Path = vault_path / "KnowledgeBot"
     
     # Audio processing paths
@@ -19,6 +20,7 @@ class Paths:
     ideas_directory: Path = vault_knowledgebot_path / "Ideas Directory.md"
     todo_directory: Path = vault_knowledgebot_path / "Todo Directory.md"
     gdoc_path: Path = vault_path / "gdoc"
+    coda_path: Path = vault_path / "coda"
     markdownload_path: Path = vault_path / "MarkDownload"
     sources_path: Path = vault_path / "Source"
     source_template_path: Path = vault_path / "Templates" / "source.md"
@@ -32,6 +34,12 @@ class Paths:
 
     # AI memory paths
     ai_memory: Path = vault_path / "AI Memory"
+    
+    # LinkedIn paths
+    linkedin_messages: Path = vault_path / "LinkedIn Messages"
+
+    # data
+    data: Path = runtime_path / "data"
 
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
@@ -43,12 +51,14 @@ class Paths:
             self.ideas,
             self.ideas_directory.parent,
             self.gdoc_path,
+            self.coda_path,
             self.markdownload_path,
             self.sources_path,
             self.meetings,
             self.conversations,
             self.diary,
-            self.ai_memory
+            self.ai_memory,
+            self.linkedin_messages
         ])
     
 PATHS = Paths()

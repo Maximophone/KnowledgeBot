@@ -6,6 +6,9 @@ from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ..common.markdown import create_wikilink
 from ai.types import Message, MessageContent
 from ai import get_prompt
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class IdeaProcessor(NoteProcessor):
@@ -41,13 +44,14 @@ tags:
         return f"[[{filename}]]" not in directory_content
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing ideas from: {filename}", flush=True)
-        content = await self.read_file(filename)
+        """Process ideas from a note."""
+        logger.info("Processing ideas from: %s", filename)
         
-        # Parse frontmatter and content
+        content = await self.read_file(filename)
         frontmatter = parse_frontmatter(content)
+        
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
             
         transcript = content.split('---', 2)[2].strip()
@@ -71,4 +75,4 @@ tags:
         async with aiofiles.open(self.directory_file, "a", encoding='utf-8') as f:
             await f.write(append_content)
             
-        print(f"Processed ideas from: {filename}", flush=True)
+        logger.info("Processed ideas from: %s", filename)

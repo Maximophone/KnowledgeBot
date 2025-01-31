@@ -3,6 +3,9 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class MeetingProcessor(NoteProcessor):
@@ -26,14 +29,15 @@ class MeetingProcessor(NoteProcessor):
         return not output_path.exists()
         
     async def process_file(self, filename: str) -> None:
-        print(f"Creating meeting note for: {filename}", flush=True)
+        """Process a meeting note."""
+        logger.info("Creating meeting note for: %s", filename)
         
         # Read source transcript
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter(content)
         
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
             
         # Read template
@@ -54,4 +58,4 @@ class MeetingProcessor(NoteProcessor):
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
             await f.write(template)
             
-        print(f"Created meeting note: {filename}", flush=True)
+        logger.info("Created meeting note: %s", filename)

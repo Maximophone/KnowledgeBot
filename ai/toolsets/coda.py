@@ -107,10 +107,10 @@ def list_table_rows(
     return json.dumps(rows)
 
 @tool(
-    description="Insert or update rows in a table. Requires specific JSON format for row data.",
+    description="Insert or update rows in a table. Requires specific JSON format for row data. Only specify columns that need values - others will get defaults. When specifying empty values (to override defaults), use empty string \"\" instead of null. Values must be boolean, number, string, or array thereof.",
     doc_id="The ID of the document containing the table",
     table_id_or_name="The ID or name of the table to update. ID is more reliable.",
-    rows_data="JSON string containing an array of row objects with format: [{\"cells\": [{\"column\": \"c-xxx\", \"value\": \"value\"}]}]. For relation columns, the value can be either a row ID (i-xxx) or the display value/name of the related row. Example: [{\"cells\": [{\"column\": \"c-columnId\", \"value\": \"text\"}, {\"column\": \"c-relationColumnId\", \"value\": \"Related Row Name\"}]}]",
+    rows_data="JSON string containing an array of row objects with format: [{\"cells\": [{\"column\": \"c-xxx\", \"value\": \"value\"}]}]. Only specify columns that need non-default values. For relation columns, the value can be either a row ID (i-xxx) or the display value/name of the related row. Example: [{\"cells\": [{\"column\": \"c-columnId\", \"value\": \"text\"}, {\"column\": \"c-relationColumnId\", \"value\": \"Related Row Name\"}]}]",
     safe=False
 )
 def upsert_table_rows(doc_id: str, table_id_or_name: str, rows_data: str) -> str:

@@ -4,6 +4,9 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class MeetingSummaryProcessor(NoteProcessor):
@@ -27,7 +30,8 @@ class MeetingSummaryProcessor(NoteProcessor):
         return True
         
     async def process_file(self, filename: str) -> None:
-        print(f"Generating meeting summary for: {filename}", flush=True)
+        """Generate a meeting summary."""
+        logger.info("Generating meeting summary for: %s", filename)
         
         # Read meeting note
         note_content = await self.read_file(filename)
@@ -130,7 +134,7 @@ class MeetingSummaryProcessor(NoteProcessor):
         # Replace existing summary section
         parts = note_content.split('## Executive Summary')
         if len(parts) != 2:
-            print(f"Warning: Could not find Executive Summary section in {filename}", flush=True)
+            logger.warning("Could not find Executive Summary section in %s", filename)
             return
             
         # Find the end of the summary section (next heading or end of file)

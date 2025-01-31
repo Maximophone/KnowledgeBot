@@ -13,7 +13,10 @@ from ai import AI, get_prompt
 from ai.types import Message, MessageContent
 import re
 import os
+import asyncio
+from config.logging_config import setup_logger
 
+logger = setup_logger(__name__)
 
 class AudioTranscriber:
     """Handles the transcription of audio files to markdown and JSON."""
@@ -98,7 +101,7 @@ class AudioTranscriber:
                 # Generate new title if none found in filename
                 title = self.generate_title(transcript.text)
 
-            print(f"Title: {title}", flush=True)
+            logger.info("Processing title: %s", title)
             
             # Create safe filename base
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -110,7 +113,7 @@ class AudioTranscriber:
             async with aiofiles.open(json_path, "w") as f:
                 await f.write(json.dumps(transcript.json_response, indent=2))
             
-            print(f"Saved JSON: {json_filename}", flush=True)
+            logger.debug("Saved JSON: %s", json_filename)
 
             new_filename = date_str + "_" + filename
 
@@ -133,15 +136,15 @@ class AudioTranscriber:
             async with aiofiles.open(md_path, "w", encoding='utf-8') as f:
                 await f.write(full_content)
             
-            print(f"Saved MD: {md_filename}", flush=True)
+            logger.debug("Saved MD: %s", md_filename)
 
             # Move original file to processed folder
             file_path.rename(self.processed_dir / new_filename)
             
-            print(f"Processed: {filename} -> {md_filename}", flush=True)
+            logger.info("Processed: %s -> %s", filename, md_filename)
             
         except Exception as e:
-            print(f"Error processing {filename}: {str(e)}", flush=True)
+            logger.error("Error processing %s: %s", filename, str(e))
             raise
         finally:
             self.files_in_process.remove(filename)
@@ -150,6 +153,7 @@ class AudioTranscriber:
         """Process all audio files in the input directory."""
         tasks = []
         for file_path in self.input_dir.iterdir():
+            await asyncio.sleep(0)
             filename = file_path.name
             if not self.should_process(filename, None):
                 continue
@@ -157,7 +161,7 @@ class AudioTranscriber:
             if filename in self.files_in_process:
                 continue
             self.files_in_process.add(filename)
-            print(f"Queuing transcription: {filename}", flush=True)
+            logger.info("Queuing transcription: %s", filename)
             task = asyncio.create_task(self.process_single_file(filename))
             tasks.append(task)
         if tasks:

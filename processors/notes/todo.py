@@ -6,6 +6,9 @@ import calendar
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class TodoProcessor(NoteProcessor):
     """Processes todo transcripts and adds them to a todo directory."""
@@ -28,6 +31,24 @@ tags:
 # Todo Directory
 
 """)
+        self.prompt_todos = """
+Analyze this transcript and extract ALL distinct todo items, even if some are only briefly mentioned.
+Important guidelines:
+- For each todo item, provide:
+    1. A concise description of the task
+    2. The due date, if explicitly stated or if it can be inferred from the context (e.g., "in 3 days", "by Monday")
+- If no due date is mentioned or can be inferred, leave the due date blank
+- Format each todo item as follows:
+    - [ ] {{Task description}} 📅 {{Due date}}
+- Use the "Tasks" plugin formatting for Obsidian
+- The recording date for this transcript is {recording_date.strftime('%Y-%m-%d')} ({weekday})
+Format your response as a list of todo items, nothing else.
+Example format:
+- [ ] Finish coding the todo processor 📅 2023-06-15
+- [ ] Test the todo processor
+- [ ] Deploy the todo processor to production 📅 2023-06-20
+Transcript:
+        """
 
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         if frontmatter.get("category") != "todo":
@@ -38,13 +59,16 @@ tags:
         return f"[[{filename}]]" not in directory_content
 
     async def process_file(self, filename: str) -> None:
-        print(f"Processing todos from: {filename}", flush=True)
+        """Process todos from a note."""
+        logger.info("Processing todos from: %s", filename)
+        
         content = await self.read_file(filename)
 
         # Parse frontmatter and content
         frontmatter = parse_frontmatter(content)
+        
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
 
         transcript = content.split('---', 2)[2].strip()
@@ -73,4 +97,4 @@ tags:
         async with aiofiles.open(self.directory_file, "a", encoding='utf-8') as f:
             await f.write(append_content)
 
-        print(f"Processed todos from: {filename}", flush=True)
+        logger.info("Processed todos from: %s", filename)

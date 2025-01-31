@@ -7,6 +7,9 @@ from integrations.gdoc_utils import GoogleDocUtils
 import os
 from ai import get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class GDocProcessor(NoteProcessor):
     """Processes Google Docs by pulling their content and converting to markdown."""
@@ -28,7 +31,8 @@ class GDocProcessor(NoteProcessor):
         return frontmatter.get("url")
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing gdoc: {filename}", flush=True)
+        """Process a Google Doc file."""
+        logger.info("Processing gdoc: %s", filename)
         
         # Read the file
         content = await self.read_file(filename)
@@ -55,4 +59,4 @@ class GDocProcessor(NoteProcessor):
             await f.write(final_content)
         os.utime(self.input_dir / filename, None)
 
-        print(f"Processed gdoc: {filename}", flush=True)
+        logger.info("Processed gdoc: %s", filename)

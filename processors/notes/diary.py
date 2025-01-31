@@ -5,6 +5,9 @@ from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ai import AI, get_prompt
 from ai.types import Message, MessageContent
+from config.logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 class DiaryProcessor(NoteProcessor):
     """Processes diary transcripts into clean, well-formatted entries."""
@@ -26,15 +29,17 @@ class DiaryProcessor(NoteProcessor):
         return not output_path.exists()
         
     async def process_file(self, filename: str) -> None:
-        print(f"Processing diary entry: {filename}", flush=True)
+        """Process a diary entry."""
+        logger.info("Processing diary entry: %s", filename)
         
         # Read source transcript
         content = await self.read_file(filename)
         
         # Parse frontmatter and content
         frontmatter = parse_frontmatter(content)
+        
         if not frontmatter:
-            print(f"No frontmatter found in {filename}", flush=True)
+            logger.warning("No frontmatter found in %s", filename)
             return
             
         transcript = content.split('---', 2)[2].strip()
@@ -71,4 +76,4 @@ class DiaryProcessor(NoteProcessor):
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as f:
             await f.write(final_content)
             
-        print(f"Processed diary entry: {filename}", flush=True)
+        logger.info("Processed diary entry: %s", filename)
