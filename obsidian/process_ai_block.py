@@ -7,6 +7,7 @@ import os
 from obsidian.parser.tag_parser import process_tags
 from ui.tool_confirmation import confirm_tool_execution
 from config.paths import PATHS
+from integrations.twitter_api import TwitterAPI
 import json
 import traceback
 from config.logging_config import setup_logger
@@ -24,6 +25,7 @@ PROMPT_MOD = "You will be passed a document and some instructions to modify this
 
 # Initialize AI model
 model = AI("claude-haiku")
+twitter_api = TwitterAPI()
 
 # Define replacement functions
 remove = lambda *_: ""
@@ -56,6 +58,7 @@ REPLACEMENTS_INSIDE = {
     "file": lambda v, t, c: insert_file_ref(v),
     "prompt": lambda v, t, c: insert_file_ref(v, "Prompts", "prompt"),
     "url": lambda v, t, c: f"<url>{v}</url>\n<content>{fetch_url_content(v)}</content>\n",
+    "tweet": lambda v, t, c: twitter_api.thread_to_markdown(v) or f"Error: Could not fetch tweet from {v}",
 }
 
 def process_ai_block(block: str, context: Dict, option: str) -> str:

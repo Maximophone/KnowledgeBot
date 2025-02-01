@@ -146,6 +146,20 @@ Please analyze this technical document.
 </ai!>
 ```
 
+Include external content in your notes:
+
+```markdown
+<!-- Include a Twitter thread -->
+<tweet!https://twitter.com/username/status/123456789>
+
+<!-- Include and analyze a Twitter thread -->
+<ai!>
+<tweet!https://twitter.com/username/status/123456789>
+
+Please analyze the key points from this thread.
+</ai!>
+```
+
 ### Special Commands
 
 - `<model!model_name>`: Specify different AI models
@@ -167,6 +181,8 @@ Please analyze this technical document.
 - `<md!path>`: Reference downloaded markdown
 - `<file!path>`: Reference any file
 - `<prompt!path>`: Include system prompt from prompts directory
+- `<url!url>`: Include content from a URL
+- `<tweet!url>`: Convert a Twitter thread to markdown format
 
 ### File Processing
 
@@ -736,3 +752,6 @@ This project uses several third-party libraries and services, each with their ow
 - AssemblyAI - Commercial API service
 - PyQt5 - GPL v3
 - Other dependencies as listed in `requirements.txt`
+
+
+
