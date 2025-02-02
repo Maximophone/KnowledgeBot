@@ -3,9 +3,6 @@
 from scripts.base_script import BaseScript
 import csv
 import re
-from pathlib import Path
-import time
-import logging
 from string import Formatter
 from typing import Dict, List, Tuple
 from integrations.gmail_client import GmailClient
@@ -151,11 +148,13 @@ class BulkEmailSender(BaseScript):
                 body=body,
                 from_name=self.from_name
             )
+            self.rate_limiter.record_success()
             return True, None
             
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Failed to send email to {row_data['email']}: {error_msg}")
+            self.rate_limiter.record_failure()
             return False, error_msg
     
     def run(self, template_file: str = None, csv_file: str = None, from_name: str = None, **kwargs):
@@ -204,7 +203,9 @@ class BulkEmailSender(BaseScript):
             # Process each row
             for row in data:
                 # Apply rate limiting
-                self.rate_limiter.wait()
+                if not self.rate_limiter.wait():
+                    logger.error("Daily email sending limit reached")
+                    break
                 
                 # Send email and get result
                 success, error_msg = self.send_templated_email(template_subject, template_body, row)
@@ -236,7 +237,7 @@ class BulkEmailSender(BaseScript):
             self.save_json_output(results, 'bulk_email_results')
             
             # Log summary
-            logger.info(f"Bulk email sending completed:")
+            logger.info("Bulk email sending completed:")
             logger.info(f"Total recipients: {results['total_recipients']}")
             logger.info(f"Successful: {results['successful_count']}")
             logger.info(f"Failed: {results['failed_count']}")

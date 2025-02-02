@@ -3,8 +3,9 @@
 from scripts.base_script import BaseScript
 from pathlib import Path
 import json
+import csv
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, time as dt_time
 from typing import List, Dict, Optional, NamedTuple
 import re
 from config.paths import PATHS
@@ -13,21 +14,21 @@ from config.secrets import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
 import os
 import time
 import random
+from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 # Rate limiting constants
-MIN_DELAY_SECONDS = 15  # Minimum delay between messages
-MAX_DELAY_SECONDS = 30  # Maximum delay between messages
+MIN_DELAY_SECONDS = 60  # Minimum delay between messages
+MAX_DELAY_SECONDS = 180  # Maximum delay between messages
 MAX_MESSAGES_PER_DAY = 200  # Maximum number of messages per day
 
 class MessageEntry(NamedTuple):
     """Represents a parsed message entry from the campaign file."""
     name: str
-    job_title: str
-    location: str
-    urn: str
+    urn_id: str
     message: str
+    metadata: Dict[str, str]  # Flexible metadata dictionary for all other fields
     approved: bool
     sent: bool
     raw_text: str  # Original text block for replacement
@@ -43,75 +44,15 @@ class LinkedInMessenger(BaseScript):
         # Initialize LinkedIn client
         self.client = get_linkedin_client(LINKEDIN_EMAIL, LINKEDIN_PASSWORD)
         
-        # Initialize rate limiting from persistent storage
-        self._init_rate_limiting()
-    
-    def _init_rate_limiting(self):
-        """Initialize rate limiting data from persistent storage."""
-        self.rate_limit_file = PATHS.linkedin_messages / "rate_limit_data.json"
-        
-        # Default rate limit data
-        self.rate_limit_data = {
-            "date": str(date.today()),
-            "messages_sent": 0,
-            "last_message_time": None
-        }
-        
-        # Load existing data if available
-        if self.rate_limit_file.exists():
-            try:
-                with open(self.rate_limit_file, 'r') as f:
-                    stored_data = json.load(f)
-                
-                # Reset counter if it's a new day
-                if stored_data["date"] == str(date.today()):
-                    self.rate_limit_data = stored_data
-                else:
-                    # It's a new day, save default data
-                    self._save_rate_limit_data()
-            except Exception as e:
-                logger.error(f"Error loading rate limit data: {e}")
-                # Use default data and save it
-                self._save_rate_limit_data()
-        else:
-            # No existing data, save default data
-            self._save_rate_limit_data()
-    
-    def _save_rate_limit_data(self):
-        """Save rate limiting data to persistent storage."""
-        try:
-            with open(self.rate_limit_file, 'w') as f:
-                json.dump(self.rate_limit_data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving rate limit data: {e}")
-    
-    def _wait_for_rate_limit(self):
-        """Implement rate limiting logic between messages."""
-        current_time = time.time()
-        
-        # Check if we've hit the daily limit
-        if self.rate_limit_data["messages_sent"] >= MAX_MESSAGES_PER_DAY:
-            raise Exception(f"Daily limit of {MAX_MESSAGES_PER_DAY} messages reached. Please try again tomorrow.")
-        
-        # If this isn't the first message, ensure minimum delay
-        if self.rate_limit_data["last_message_time"] is not None:
-            time_since_last = current_time - self.rate_limit_data["last_message_time"]
-            if time_since_last < MIN_DELAY_SECONDS:
-                # Calculate required wait time
-                wait_time = MIN_DELAY_SECONDS - time_since_last
-                # Add some random jitter
-                jitter = random.uniform(0, MAX_DELAY_SECONDS - MIN_DELAY_SECONDS)
-                total_wait = wait_time + jitter
-                
-                logger.info(f"Rate limiting: waiting {total_wait:.1f} seconds before next message...")
-                time.sleep(total_wait)
-        
-        # Update rate limit data
-        self.rate_limit_data["last_message_time"] = current_time
-        self.rate_limit_data["messages_sent"] += 1
-        self._save_rate_limit_data()
-        
-        logger.info(f"Messages sent today: {self.rate_limit_data['messages_sent']}/{MAX_MESSAGES_PER_DAY}")
+        # Initialize rate limiter
+        self.rate_limiter = RateLimiter(
+            name="linkedin_messenger",
+            min_delay_seconds=MIN_DELAY_SECONDS,
+            max_delay_seconds=MAX_DELAY_SECONDS,
+            max_per_day=MAX_MESSAGES_PER_DAY,
+            night_mode=True,
+            max_backoff_seconds=900,
+        )
     
     @property
     def name(self) -> str:
@@ -122,23 +63,44 @@ class LinkedInMessenger(BaseScript):
         return "Manages LinkedIn messaging campaigns with templating and tracking"
     
     def _replace_placeholders(self, template: str, contact: Dict) -> str:
-        """Replace placeholders in template with contact information."""
-        # Get first name by splitting full name
-        first_name = contact['name'].split()[0]
+        """Replace placeholders in template with contact information.
         
-        # Replace placeholders
-        message = template.replace("{first_name}", first_name)
+        Args:
+            template: Message template with placeholders
+            contact: Dictionary containing contact information with all necessary fields
+                    Any field in the contact dict can be used as a placeholder in the format {field_name}
+        
+        Returns:
+            Personalized message with placeholders replaced
+        """
+        # Create a copy of the template
+        message = template
+        
+        # Replace all placeholders that exist in the contact dict
+        for key, value in contact.items():
+            placeholder = "{" + key + "}"
+            if placeholder in message:
+                message = message.replace(placeholder, str(value))
         
         return message
     
     def _generate_markdown_entry(self, contact: Dict, message: str) -> str:
-        """Generate a markdown entry for a single contact with XML tags for parsing."""
+        """Generate a markdown entry for a single contact with XML tags for parsing.
+        
+        Args:
+            contact: Dictionary containing contact information
+            message: Personalized message for the contact
+        """
+        # Build metadata section with all available fields except the message
+        metadata_lines = []
+        for key, value in contact.items():
+            if key != 'message':  # Skip message field if present
+                metadata_lines.append(f"**{key}:** {value}")
+        
         return f"""
 <message_entry>
 ### {contact['name']}
-**Job Title:** {contact.get('jobtitle', 'N/A')}
-**Location:** {contact.get('location', 'N/A')}
-**URN:** {contact['urn_id']}
+{chr(10).join(metadata_lines)}
 
 **Message:**
 ```
@@ -171,21 +133,17 @@ class LinkedInMessenger(BaseScript):
             raw_text = block.group(0)
             entry_text = block.group(1)
             
-            # Extract name
+            # Extract name from header
             name_match = re.search(r'### (.*?)\n', entry_text)
             name = name_match.group(1) if name_match else ''
             
-            # Extract job title
-            job_match = re.search(r'\*\*Job Title:\*\* (.*?)\n', entry_text)
-            job_title = job_match.group(1) if job_match else 'N/A'
-            
-            # Extract location
-            location_match = re.search(r'\*\*Location:\*\* (.*?)\n', entry_text)
-            location = location_match.group(1) if location_match else 'N/A'
-            
-            # Extract URN
-            urn_match = re.search(r'\*\*URN:\*\* (.*?)\n', entry_text)
-            urn = urn_match.group(1) if urn_match else ''
+            # Extract all metadata fields
+            metadata = {}
+            metadata_matches = re.finditer(r'\*\*(.*?):\*\* (.*?)\n', entry_text)
+            for match in metadata_matches:
+                key = match.group(1).lower()  # normalize keys to lowercase
+                value = match.group(2)
+                metadata[key] = value
             
             # Extract message
             message_match = re.search(r'```\n(.*?)\n```', entry_text, re.DOTALL)
@@ -195,12 +153,19 @@ class LinkedInMessenger(BaseScript):
             approved = '- [x] approve_sending' in entry_text
             sent = '- [x] sent' in entry_text
             
+            # Get required fields
+            urn_id = metadata.pop('urn_id', '')
+            
+            # Validate required fields
+            if not all([name, urn_id]):
+                logger.error(f"Entry missing required fields: name and/or urn_id")
+                continue
+            
             entries.append(MessageEntry(
                 name=name,
-                job_title=job_title,
-                location=location,
-                urn=urn,
+                urn_id=urn_id,
                 message=message,
+                metadata=metadata,
                 approved=approved,
                 sent=sent,
                 raw_text=raw_text
@@ -250,29 +215,48 @@ class LinkedInMessenger(BaseScript):
                 if entry.approved and not entry.sent:
                     try:
                         # Apply rate limiting
-                        self._wait_for_rate_limit()
-                        
-                        logger.info(f"Sending message to {entry.name} ({entry.urn})")
+                        if not self.rate_limiter.wait():
+                            logger.error(
+                                f"Daily limit of {self.rate_limiter.max_per_day} operations reached for {self.rate_limiter.name}. "
+                                f"Please try again tomorrow."
+                            )
+                            return
+
+                        logger.info(f"Sending message to {entry.name} ({entry.urn_id})")
                         
                         # Send message using profile URN
                         result = self.client.send_message(
                             message_body=entry.message,
-                            recipients=[entry.urn]
+                            recipients=[entry.urn_id]
                         )
                         
                         if not result:  # LinkedIn client returns False on success
                             logger.info(f"Successfully sent message to {entry.name}")
+                            self.rate_limiter.record_success()
                             # Update file immediately after successful send
                             self._update_campaign_file(campaign_file, entry)
                         else:
-                            logger.error(f"Failed to send message to {entry.name}")
+                            logger.error(
+                                f"Failed to send message to {entry.name}. "
+                                f"LinkedIn API returned unexpected response: {result}"
+                            )
+                            self.rate_limiter.record_failure()
                             
                     except Exception as e:
-                        logger.error(f"Error sending message to {entry.name}: {str(e)}")
+                        logger.error(
+                            f"Error sending message to {entry.name} ({entry.urn_id}). "
+                            f"Exception type: {type(e).__name__}. "
+                            f"Error details: {str(e)}"
+                        )
+                        self.rate_limiter.record_failure()
                         continue
                         
         except Exception as e:
-            logger.error(f"Failed to process campaign file: {str(e)}")
+            logger.error(
+                f"Failed to process campaign file: {campaign_file}. "
+                f"Exception type: {type(e).__name__}. "
+                f"Error details: {str(e)}"
+            )
             raise
 
     def prepare_messages(self, template_file: str, contacts_file: str) -> Path:
@@ -280,7 +264,11 @@ class LinkedInMessenger(BaseScript):
         
         Args:
             template_file: Path to the message template file
-            contacts_file: Path to the JSON file containing journalist contacts
+            contacts_file: Path to the CSV or JSON file containing contacts
+                The file must contain at minimum the following fields:
+                - name: Full name of the contact
+                - first_name: First name of the contact
+                - urn_id: LinkedIn URN identifier
         
         Returns:
             Path to the generated markdown file
@@ -290,9 +278,29 @@ class LinkedInMessenger(BaseScript):
             with open(template_file, 'r', encoding='utf-8') as f:
                 template = f.read().strip()
             
-            # Read contacts
-            with open(contacts_file, 'r', encoding='utf-8') as f:
-                contacts = json.load(f)
+            # Read contacts based on file extension
+            file_extension = Path(contacts_file).suffix.lower()
+            contacts = []
+            
+            if file_extension == '.json':
+                with open(contacts_file, 'r', encoding='utf-8') as f:
+                    contacts = json.load(f)
+            elif file_extension == '.csv':
+                with open(contacts_file, 'r', encoding='utf-8', newline='') as f:
+                    reader = csv.DictReader(f)
+                    contacts = list(reader)
+            else:
+                raise ValueError(f"Unsupported file format: {file_extension}. Please use CSV or JSON files.")
+            
+            # Validate required fields
+            required_fields = ['name', 'first_name', 'urn_id']
+            for contact in contacts:
+                missing_fields = [field for field in required_fields if not contact.get(field)]
+                if missing_fields:
+                    raise ValueError(
+                        f"Contact is missing required fields: {', '.join(missing_fields)}. "
+                        f"Each contact must have: {', '.join(required_fields)}"
+                    )
             
             # Generate markdown content
             markdown_content = "# LinkedIn Message Campaign\n"

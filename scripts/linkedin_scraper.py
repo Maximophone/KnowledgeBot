@@ -26,8 +26,8 @@ class LinkedInScraper(BaseScript):
         # Initialize rate limiter for LinkedIn API calls
         self.rate_limiter = RateLimiter(
             name="linkedin_api",
-            min_delay_seconds=10.0,  # Minimum 10 seconds between calls
-            max_delay_seconds=20.0,  # Add up to 10 seconds of jitter
+            min_delay_seconds=30.0,  # Minimum 10 seconds between calls
+            max_delay_seconds=60.0,  # Add up to 10 seconds of jitter
             max_per_day=1000
         )
         
@@ -100,8 +100,10 @@ class LinkedInScraper(BaseScript):
                 with open(latest_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             
-            # Apply rate limiting only when we need to make an API call
-            self.rate_limiter.wait()
+            # Apply rate limiting
+            if not self.rate_limiter.wait():
+                logger.error("Daily API limit reached")
+                return {}
             
             profile_json = self.client.get_profile(
                 public_id=profile_id,
@@ -109,8 +111,13 @@ class LinkedInScraper(BaseScript):
             )
             if profile_json:
                 self.save_json_output(profile_json, f"profiles/{file_id}")
-            return profile_json
+                self.rate_limiter.record_success()
+                return profile_json
+            else:
+                self.rate_limiter.record_failure()
+                return {}
         except Exception as e:
+            self.rate_limiter.record_failure()
             logger.error(f"Failed to scrape profile {profile_id or profile_urn}: {str(e)}\n{traceback.format_exc()}")
             return {}
     
@@ -311,12 +318,15 @@ class LinkedInScraper(BaseScript):
                 urns_to_process = profile_urns
                 
             for profile_urn in urns_to_process:
-                self.rate_limiter.wait()
+                if not self.rate_limiter.wait():
+                    logger.error("Daily API limit reached")
+                    break
+                
                 try:
-                    # First get conversation details to get the conversation URN
+                    # First get conversation details
                     conversation_details = self.client.get_conversation_details(profile_urn)
                     if conversation_details:
-                        # Save conversation details
+                        self.rate_limiter.record_success()
                         self.save_json_output(
                             conversation_details,
                             f"conversations/conversation_details_{profile_urn}"
@@ -328,11 +338,14 @@ class LinkedInScraper(BaseScript):
                         
                         if conversation_id:
                             # Apply rate limiting before getting full conversation
-                            self.rate_limiter.wait()
+                            if not self.rate_limiter.wait():
+                                logger.error("Daily API limit reached")
+                                break
+                            
                             # Get full conversation using the parsed conversation ID
                             full_conversation = self.client.get_conversation(conversation_id)
                             if full_conversation:
-                                # Save full conversation
+                                self.rate_limiter.record_success()
                                 self.save_json_output(
                                     full_conversation,
                                     f"conversations/conversation_full_{profile_urn}"
@@ -346,9 +359,15 @@ class LinkedInScraper(BaseScript):
                                 )
                                 
                                 results.append(full_conversation)
+                            else:
+                                self.rate_limiter.record_failure()
                         else:
+                            self.rate_limiter.record_failure()
                             logger.error(f"Could not extract conversation ID from URN for profile {profile_urn}")
+                    else:
+                        self.rate_limiter.record_failure()
                 except Exception as e:
+                    self.rate_limiter.record_failure()
                     logger.error(f"Failed to scrape conversation with URN {profile_urn}: {str(e)}")
                     continue
             return results
