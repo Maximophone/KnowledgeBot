@@ -5,7 +5,7 @@ def main():
     twitter = TwitterAPI()
     
     # Example thread URL
-    thread_url = "https://twitter.com/naval/status/1002103360646823936"
+    thread_url = "https://x.com/Yoshua_Bengio/status/1884593469265502482"
     
     # Convert thread to markdown
     markdown = twitter.thread_to_markdown(thread_url)
