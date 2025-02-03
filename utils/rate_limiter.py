@@ -199,6 +199,7 @@ class RateLimiter:
             self.max_backoff_seconds
         )
         
+        self.rate_limit_data["last_operation_time"] = time.time()
         logger.warning(
             f"Operation failed for {self.name}. "
             f"Consecutive failures: {self.consecutive_failures}. "
