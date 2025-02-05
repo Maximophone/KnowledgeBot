@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy, QVBoxLayout, QWidget, QLabel, QDialogButtonBox, QDialog
 from PyQt5.QtCore import Qt
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from ai.tools import Tool
 import json
 
-def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
+def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Show a Qt popup to confirm execution of an unsafe tool.
     
@@ -13,39 +13,58 @@ def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> bool:
         arguments: The arguments to be passed to the tool
     
     Returns:
-        bool: True if user confirms, False otherwise
+        Tuple[bool, str]: (True if user confirms, False otherwise, Optional message to AI)
     """
     # Ensure we have a QApplication instance
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
     
-    # Create custom dialog with scrollable text area
-    msg_box = QMessageBox()
-    msg_box.setIcon(QMessageBox.Warning)
-    msg_box.setWindowTitle("Confirm Tool Execution")
+    # Create custom dialog
+    dialog = QDialog()
+    dialog.setWindowTitle("Confirm Tool Execution")
+    # dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowStaysOnTopHint)  # Make window stay on top
     
-    # Create main text
-    main_text = f"The AI wants to execute tool: {tool.name}\n"
-    main_text += f"Description: {tool.description}"
-    msg_box.setText(main_text)
+    # Create layout
+    layout = QVBoxLayout()
     
-    # Create scrollable detailed text for arguments
-    msg_box.setDetailedText(json.dumps(arguments, indent=2))
+    # Add warning icon and main text
+    main_text = QLabel(f"The AI wants to execute tool: {tool.name}\nDescription: {tool.description}")
+    layout.addWidget(main_text)
     
-    msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    msg_box.setDefaultButton(QMessageBox.No)  # Safer default
+    # Add arguments text area
+    args_label = QLabel("Arguments:")
+    layout.addWidget(args_label)
     
-    # Find and modify the text edit widget
-    textEdit = msg_box.findChild(QTextEdit)
-    if textEdit is not None:
-        # Set a larger fixed size for the text area
-        textEdit.setMinimumHeight(300)
-        textEdit.setMinimumWidth(400)
-        # Make sure the text edit can expand
-        textEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        textEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        # Ensure the widget can grow as needed
-        textEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+    args_text = QTextEdit()
+    args_text.setPlainText(json.dumps(arguments, indent=2))
+    args_text.setReadOnly(True)
+    args_text.setMinimumHeight(200)
+    args_text.setMinimumWidth(400)
+    layout.addWidget(args_text)
     
-    return msg_box.exec_() == QMessageBox.Yes 
+    # Add message to AI field
+    message_label = QLabel("Optional message to AI:")
+    layout.addWidget(message_label)
+    
+    message_text = QTextEdit()
+    message_text.setPlaceholderText("Enter a message to send back to the AI (optional)")
+    message_text.setMinimumHeight(100)
+    layout.addWidget(message_text)
+    
+    # Add buttons
+    button_box = QDialogButtonBox(QDialogButtonBox.Yes | QDialogButtonBox.No)
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+    layout.addWidget(button_box)
+    
+    dialog.setLayout(layout)
+    
+    # Play the system alert sound
+    QApplication.beep()
+    
+    # Show dialog and get result
+    dialog.raise_()  # Bring window to front
+    dialog.activateWindow()  # Activate the window
+    result = dialog.exec_()
+    return (result == QDialog.Accepted, message_text.toPlainText().strip()) 

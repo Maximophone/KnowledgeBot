@@ -167,13 +167,17 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                     
                     # Check if tool needs confirmation
                     if not tool.tool.safe:
-                        if not confirm_tool_execution(tool.tool, tool_call.arguments):
+                        confirmed, user_message = confirm_tool_execution(tool.tool, tool_call.arguments)
+                        if not confirmed:
                             # User rejected the tool execution
+                            error_msg = "Tool execution rejected by user"
+                            if user_message:
+                                error_msg += f"\nUser message: {user_message}"
                             tool_result = ToolResult(
                                 name=tool_call.name,
                                 result=None,
                                 tool_call_id=tool_call.id,
-                                error="Tool execution rejected by user"
+                                error=error_msg
                             )
                             tool_results.append(tool_result)
                             tool_result_text = format_tool_result(tool_result)
