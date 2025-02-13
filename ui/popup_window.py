@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QPushButton, QTextEdit, QLabel, QShortcut, QComboBox
+from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QPushButton, QTextEdit, QLabel, QShortcut, QComboBox, QApplication
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtCore import Qt
 import os
@@ -6,6 +6,7 @@ import pyperclip
 from ai import AI, get_prompt
 from ai.types import Message, MessageContent
 from config.paths import PATHS
+import sys
 
 ai_model = AI("haiku3.5")
 
@@ -31,6 +32,9 @@ def load_prompts(directory):
 class PopupWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Add these window flags to make the window stay on top
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        
         self.prompts = load_prompts(PATHS.prompts_library)
         self.setWindowTitle("Text Processor")
         self.setGeometry(100, 100, 600, 400)
