@@ -56,4 +56,4 @@ class TranscriptClassifier(NoteProcessor):
         frontmatter["tags"].append(category)
         
         update_front_matter(file_path, frontmatter)
-        print(f"Updated classification for: {filename}", flush=True)
+        logger.info("Updated classification for: %s", filename)

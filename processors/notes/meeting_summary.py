@@ -149,4 +149,4 @@ class MeetingSummaryProcessor(NoteProcessor):
         async with aiofiles.open(self.input_dir / filename, 'w', encoding='utf-8') as f:
             await f.write(new_content)
             
-        print(f"Added summary to meeting note: {filename}", flush=True)
+        logger.info("Added summary to meeting note: %s", filename)
