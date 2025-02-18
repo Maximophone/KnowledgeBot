@@ -4,6 +4,7 @@ from typing import Dict, Any, Tuple
 from ai.tools import Tool
 import json
 import codecs
+import sys
 
 def format_argument_value(param_type: str, value: Any) -> str:
     """
@@ -20,8 +21,14 @@ def format_argument_value(param_type: str, value: Any) -> str:
         return "None"
     
     if param_type == "string" and isinstance(value, str):
-        # Decode escape sequences in the string
-        return codecs.decode(value, 'unicode_escape')
+        try:
+            # First try to encode the string as raw string to handle escapes
+            raw_str = str(value).encode('raw_unicode_escape')
+            # Then decode it back to handle the escapes
+            return raw_str.decode('unicode_escape')
+        except Exception:
+            # If decoding fails, return the original string
+            return value
     return str(value)
 
 def create_argument_widget(name: str, value: Any, param_type: str, description: str) -> QFrame:
@@ -81,13 +88,23 @@ def confirm_tool_execution(tool: Tool, arguments: Dict[str, Any]) -> Tuple[bool,
     Returns:
         Tuple[bool, str]: (True if user confirms, False otherwise, Optional message to AI)
     """
-    # Ensure we have a QApplication instance
+    # Get the existing QApplication instance
     app = QApplication.instance()
     if app is None:
-        app = QApplication([])
+        app = QApplication(sys.argv)
     
-    # Create custom dialog
-    dialog = QDialog()
+    # Find the active window, which might be the PopupWindow
+    parent = QApplication.activeWindow()
+    if parent is None:
+        # If no active window, try to get the PopupWindow instance if it exists
+        try:
+            from ui.popup_window import PopupWindow
+            parent = PopupWindow.get_instance()
+        except Exception:
+            parent = None
+    
+    # Create custom dialog with proper parent
+    dialog = QDialog(parent)
     dialog.setWindowTitle("Confirm Tool Execution")
     dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowStaysOnTopHint)  # Make window stay on top
     dialog.setMinimumWidth(650)  # Set minimum width for the entire dialog
