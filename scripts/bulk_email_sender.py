@@ -27,8 +27,8 @@ class BulkEmailSender(BaseScript):
         # Initialize rate limiter with email-specific settings
         self.rate_limiter = RateLimiter(
             name="gmail_sender",
-            min_delay_seconds=0.5,
-            max_delay_seconds=0.5, 
+            min_delay_seconds=18,
+            max_delay_seconds=22, 
             max_per_day=1500  # Gmail's limit is around 500, we're being conservative
         )
         
