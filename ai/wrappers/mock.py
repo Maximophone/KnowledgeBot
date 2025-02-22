@@ -48,4 +48,8 @@ class MockWrapper(AIWrapper):
                     response += f"[tool_result: {content.tool_result}]\n"
         response += "---MESSAGES END---\n"
 
-        return AIResponse(content=response) 
+        mock_reasoning = "Mock reasoning: This is a simulated chain of thought from the mock wrapper."
+        return AIResponse(
+            content=response,
+            reasoning=mock_reasoning
+        ) 

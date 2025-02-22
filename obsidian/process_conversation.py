@@ -4,6 +4,7 @@ from obsidian.parser.tag_parser import process_tags
 import json
 from ai.types import Message, MessageContent, ToolCall, ToolResult
 from ai.image_utils import validate_image, encode_image
+import re
 
 remove = lambda *_: ""
 
@@ -93,6 +94,9 @@ def process_conversation(txt: str) -> List[Message]:
             Message(role="user", content=[MessageContent(type="text", text="Thanks!")])
         ]
     """
+    # Remove chain-of-thought blocks so they don't get parsed into messages
+    txt = re.sub(r'\|THOUGHT\|.*?\|/THOUGHT\|', '', txt, flags=re.DOTALL)
+
     cut = [t.split(beacon_me) for t in txt.split(beacon_ai)]
     if len(cut[0]) == 1:
         cut[0] = ["", cut[0][0]]

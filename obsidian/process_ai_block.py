@@ -22,6 +22,9 @@ logger = setup_logger(__name__)
 DEFAULT_LLM = "sonnet3.5"
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
 
+# New constants
+beacon_thought = "|THOUGHT|"
+beacon_end_thought = "|/THOUGHT|"
 
 # Initialize AI model
 model = AI("claude-haiku")
@@ -135,6 +138,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools)
         response = ""
+        thoughts = ""
         
         start = True
         while True:  # Process responses until no more tool calls
@@ -148,6 +152,12 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                     context["file_path"]
                 )
                 start = False
+                if ai_response.reasoning and ai_response.reasoning.strip():
+                    logger.debug("Reasoning: %s", ai_response.reasoning[:100])
+                    escaped_reasoning = escape_response(ai_response.reasoning)
+                    thought_block = f"\n{beacon_thought}\n{escaped_reasoning}\n{beacon_end_thought}\n"
+                    thoughts += thought_block
+                    current_content = update_file_content(current_content, thought_block, context["file_path"])
 
             if not ai_response.tool_calls:
                 break  # No (more) tool calls, we're done
@@ -259,7 +269,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
 
         response = escape_response(response)
         if option is None:
-            new_block = f"{block}{beacon_ai}\n{response}\n{beacon_me}\n"
+            new_block = f"{block}{beacon_ai}\n{thoughts}\n{response}\n{beacon_me}\n"
         elif option == "rep":
             return response
         elif option == "all":
