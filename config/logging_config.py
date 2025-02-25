@@ -4,12 +4,22 @@ import sys
 # Create formatters
 DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
+# Default logging level - can be overridden
+DEFAULT_LOG_LEVEL = 'INFO'
+
 # Example of how to set different levels for different components
 LOGGER_LEVELS = {
     'services.file_watcher': 'INFO',
     'services.repeater': 'INFO',
     # Add more components as needed
 }
+
+def set_default_log_level(level: str):
+    """
+    Set the default logging level for all loggers.
+    """
+    global DEFAULT_LOG_LEVEL
+    DEFAULT_LOG_LEVEL = level.upper()
 
 def setup_logger(name: str, level: str = None) -> logging.Logger:
     """
@@ -22,10 +32,8 @@ def setup_logger(name: str, level: str = None) -> logging.Logger:
     logger.propagate = False
 
     if level is None:
-        # We are setting the default logging level to 'INFO'. 
-        # Then, we check if the logger's name starts with any of the keys in LOGGER_LEVELS.
-        # If it does, we override the default level with the specified level from LOGGER_LEVELS.
-        level = 'INFO'
+        # Use the global default level, but check for component-specific overrides
+        level = DEFAULT_LOG_LEVEL
         for logger_name, logger_level in LOGGER_LEVELS.items():
             if name.startswith(logger_name):
                 level = logger_level
