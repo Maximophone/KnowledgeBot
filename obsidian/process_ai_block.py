@@ -47,6 +47,7 @@ REPLACEMENTS_INSIDE = {
     "max_tokens": remove,
     "mock": remove,
     "tools": remove,
+    "think": remove,
     "this": lambda v, t, context: f"<document>{context}</document>\n",
     "repo": pack_repo,
     "vault": lambda *_: pack_vault(),
@@ -102,6 +103,15 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         max_tokens = int(params.get("max_tokens", DEFAULT_MAX_TOKENS))
         tools_keys = [v for n, v, t in results if n == "tools" and v]
         tools = merge_tools(tools_keys)
+        # Check if thinking mode is enabled
+        thinking = "think" in params
+        thinking_budget_tokens = None
+        if thinking and params.get("think"):
+            try:
+                thinking_budget_tokens = int(params.get("think"))
+            except ValueError:
+                logger.warning("Invalid thinking budget: %s. Using default.", params.get("think"))
+        
         if "mock" in params:
             model_name = "mock"
 
@@ -113,6 +123,8 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             logger.debug("---CONVERTED TEXT START---")
             logger.debug("%s", conv_txt.encode("utf-8"))
             logger.debug("---CONVERTED TEXT END---")
+            if thinking:
+                logger.debug("Thinking mode enabled. Budget: %s", thinking_budget_tokens or "default")
 
         logger.info("Answering with %s...", model_name)
         if option != "all":
@@ -136,7 +148,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         
         ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
-                                    tools=tools)
+                                    tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
         response = ""
         thoughts = ""
         
@@ -265,7 +277,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             # Get AI's response to tool results
             ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
                                     max_tokens=max_tokens, temperature=temperature,
-                                    tools=tools)
+                                    tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
 
         response = escape_response(response)
         if option is None:

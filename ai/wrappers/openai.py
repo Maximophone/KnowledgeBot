@@ -14,7 +14,8 @@ class GPTWrapper(AIWrapper):
 
     def _messages(self, model_name: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
+                 tools: Optional[List[Tool]] = None,
+                 thinking: bool = False, thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         if system_prompt:
             messages = [Message(role="system", content=[MessageContent(type="text", text=system_prompt)])] + messages
             

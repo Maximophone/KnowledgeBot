@@ -20,6 +20,7 @@ class AI:
         self.system_prompt = system_prompt
         self.tools = tools or []
         self._history = []
+        self._last_reasoning = None
         self.debug = debug
 
     def _prepare_messages(self, message: Union[str, Message], image_paths: List[str] = None) -> List[Message]:
@@ -58,12 +59,14 @@ class AI:
     def message(self, message: Union[str, Message], system_prompt: str = None, 
                 model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                 temperature: float = 0.0, xml: bool = False, debug: bool = False,
-                image_paths: List[str] = None, tools: Optional[List[Tool]] = None) -> AIResponse:
+                image_paths: List[str] = None, tools: Optional[List[Tool]] = None,
+                thinking: bool = False, thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         messages = self._prepare_messages(message, image_paths)
 
         response = self.messages(messages, system_prompt, model_override, 
                                max_tokens, temperature, debug=debug,
-                               tools=tools)
+                               tools=tools, thinking=thinking, 
+                               thinking_budget_tokens=thinking_budget_tokens)
         if xml:
             response.content = f"<response>{response.content}</response>"
         return response
@@ -71,7 +74,8 @@ class AI:
     def messages(self, messages: List[Message], system_prompt: str = None, 
                  model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                  temperature: float = 0.0, xml: bool = False, debug: bool = False,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
+                 tools: Optional[List[Tool]] = None, thinking: bool = False,
+                 thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         debug = debug | self.debug
         if model_override:
             model_name = get_model(model_override) or self.model_name
@@ -105,9 +109,12 @@ class AI:
                     elif content.type == "tool_result":
                         print("content (tool result): ", str(content.tool_result), flush=True)
             print("--MESSAGES RECEIVED END--", flush=True)
+            if thinking:
+                print(f"--THINKING: Enabled (budget: {thinking_budget_tokens or 'auto'})--", flush=True)
 
         response = client.messages(model_name, messages, system_prompt, 
-                                 max_tokens, temperature, tools=tools_to_use)
+                                 max_tokens, temperature, tools=tools_to_use,
+                                 thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
             
         if xml:
             response.content = f"<response>{response.content}</response>"
@@ -115,21 +122,40 @@ class AI:
             print("--RESPONSE START--", flush=True)
             print(response.content.encode("utf-8"), flush=True)
             print("--RESPONSE END--", flush=True)
+            if response.reasoning:
+                print("--REASONING START--", flush=True)
+                print(response.reasoning[:500] + ("..." if len(response.reasoning) > 500 else ""), flush=True)
+                print("--REASONING END--", flush=True)
         return response
     
     def conversation(self, message: str, system_prompt: str = None, 
                      model_override: str = None, max_tokens: int = DEFAULT_MAX_TOKENS, 
                      temperature: float = 0.0, xml: bool = False, debug: bool = False,
-                     image_paths: List[str] = None):
+                     image_paths: List[str] = None, thinking: bool = False,
+                     thinking_budget_tokens: Optional[int] = None):
         messages = self._history + self._prepare_messages(message, image_paths)
-        response = self.messages(messages, system_prompt, model_override, max_tokens, temperature, debug=debug)
+        response = self.messages(messages, system_prompt, model_override, max_tokens, 
+                               temperature, debug=debug, thinking=thinking,
+                               thinking_budget_tokens=thinking_budget_tokens)
+        
+        # Create assistant message content
+        assistant_content = [MessageContent(
+            type="text",
+            text=response.content
+        )]
+        
+        # Store the conversation history
         self._history = messages + [Message(
             role="assistant",
-            content=[MessageContent(
-                type="text",
-                text=response.content
-            )]
+            content=assistant_content
         )]
+        
+        # Store reasoning separately if available (not part of the conversation history)
+        if response.reasoning:
+            self._last_reasoning = response.reasoning
+        else:
+            self._last_reasoning = None
+        
         if xml:
             response.content = f"<response>{response.content}</response>"
         return response
