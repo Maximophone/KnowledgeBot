@@ -17,7 +17,7 @@ class NoteProcessor(ABC):
     def __init__(self, input_dir: Path):
         self.input_dir = input_dir
         self.files_in_process = set()
-        self.ai_model = AI("sonnet3.5")
+        self.ai_model = AI("sonnet3.7")
         self.stage_name = None
         self.required_stage = None
     

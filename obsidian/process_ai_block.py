@@ -14,12 +14,12 @@ from config.logging_config import setup_logger
 from obsidian.beacons import beacon_tool_start, beacon_tool_end
 from ai.toolsets import TOOL_SETS
 from ai.tools import Tool
+from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
 
 logger = setup_logger(__name__)
 
 # Constants
-DEFAULT_LLM = "sonnet3.5"
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
 
 # New constants
@@ -95,7 +95,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         conv_txt, results = process_tags(conv_txt, REPLACEMENTS_INSIDE, context=context["doc"])
         params = dict([(n, v) for n, v, t in results])
 
-        model_name = params.get("model", DEFAULT_LLM)
+        model_name = params.get("model", DEFAULT_MODEL)
         system_prompt = params.get("system")
         debug = ("debug" in params)
         temperature = float(params.get("temperature", DEFAULT_TEMPERATURE))

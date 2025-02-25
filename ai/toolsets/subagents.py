@@ -93,7 +93,7 @@ def _handle_tool_calls(agent: AI, response: Message, tools: List[Tool]) -> Tuple
                 "- The subagent should reference these notes using their full path when citing sources\n\n"
                 "Available Models:\n"
                 "- haiku3.5: Fast and cost-effective, but with reduced performance. Best for simple tasks.\n"
-                "- sonnet3.5: Well-balanced performance and cost. Good all-around choice for most tasks.\n"
+                "- sonnet3.7: Well-balanced performance and cost. Good all-around choice for most tasks.\n"
                 "- deepseek-reasoner: Specialized in complex reasoning and problem-solving tasks.\n\n"
                 "Available Toolsets:\n"
                 "- memory: Tools for storing and retrieving information persistently\n"
