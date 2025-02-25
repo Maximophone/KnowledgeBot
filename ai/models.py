@@ -7,6 +7,7 @@ _MODELS_DICT = {
     "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
     "sonnet3.5": "claude-3-5-sonnet-latest",
+    "sonnet3.7": "claude-3-7-sonnet-latest",
     "haiku3.5": "claude-3-5-haiku-latest",
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
@@ -25,6 +26,8 @@ _MODELS_DICT = {
     "sonar": "sonar",
     "sonar-pro": "sonar-pro",
 }
+
+DEFAULT_MODEL = "sonnet3.7"
 
 def get_model(model_name: str) -> str:
     return _MODELS_DICT.get(model_name, model_name)
