@@ -44,11 +44,9 @@ jiter==0.8.2
 keyboard==0.13.5
 linkedin_api==2.2.0
 lxml==5.3.0
-lz4==4.3.3
 moviepy==2.1.1
 multidict==6.1.0
 mutagen==1.47.0
-numpy==2.0.2
 oauthlib==3.2.2
 openai==1.59.3
 patch-ng==1.18.1
@@ -85,3 +83,4 @@ watchdog==6.0.0
 websockets==14.1
 WMI==1.5.1
 yarl==1.18.3
+discord.py>=2.0.0
