@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any, Callable, Optional, Union
 import discord
 from discord import Message, User, DMChannel, TextChannel, Member
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -308,4 +309,42 @@ class DiscordIOCore:
 
     async def close(self):
         """Close the connection to Discord and cleanup."""
-        await self.client.close() 
+        await self.client.close()
+        
+    async def reconnect(self):
+        """Reconnect the Discord bot to Discord's servers."""
+        try:
+            logger.info("Attempting to reconnect Discord bot...")
+            # Close the existing client connection
+            await self.client.close()
+            
+            # We need to recreate intents and the client
+            intents = discord.Intents.default()
+            intents.message_content = True
+            intents.members = True
+            
+            # Create a new client instance
+            self.client = discord.Client(intents=intents)
+            
+            # Re-register event handlers
+            self.client.event(self.on_ready)
+            self.client.event(self.on_message)
+            
+            # Start the bot with the token
+            await self.client.login(self.token)
+            
+            # Send a ready event through the callback
+            if self.event_callback:
+                ready_event = {
+                    'type': 'ready',
+                    'timestamp': datetime.now().isoformat(),
+                    'bot_name': self.client.user.name,
+                    'bot_id': str(self.client.user.id)
+                }
+                await self.event_callback(ready_event)
+                
+            # Return success
+            return True
+        except Exception as e:
+            logger.error(f"Error during reconnection: {str(e)}")
+            return False 
