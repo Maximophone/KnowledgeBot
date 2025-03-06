@@ -33,7 +33,92 @@ twitter_api = TwitterAPI()
 # Define replacement functions
 remove = lambda *_: ""
 REPLACEMENTS_OUTSIDE = {
-    "help": lambda *_: "This is the help\n",
+    "help": lambda *_: """# KnowledgeBot Help
+
+## Basic Usage
+Use AI capabilities in your notes with the following tags:
+
+### AI Tag
+```markdown
+<ai!>
+Your question or instructions here
+</ai!>
+```
+
+### Required Tags Inside AI Blocks
+- `<reply!>` - Marks where the AI should respond
+
+## Advanced Options
+
+### AI Model & Parameters
+- `<model!model_name>` - Specify different AI model (default: claude-haiku)
+- `<temperature!value>` - Set temperature (0.0-1.0) for response randomness
+- `<max_tokens!value>` - Set maximum tokens for response
+- `<system!prompt_name>` - Use custom system prompt from prompts directory
+- `<debug!>` - Enable debug mode to see parameter and conversion details
+- `<mock!>` - Use mock model for testing
+- `<think!>` - Enable thinking mode (optional token budget)
+
+### Content References
+- `<this!>` - Reference the current document
+- `<repo!path>` - Include repository context
+- `<vault!>` - Include entire vault context
+- `<meeting!path>` - Reference meeting transcription
+- `<transcription!path>` - Reference any transcription
+- `<daily!path>` - Reference daily note
+- `<idea!path>` - Reference idea transcription
+- `<unsorted!path>` - Reference unsorted transcription
+- `<doc!path>` - Reference any document
+- `<pdf!path>` - Reference PDF document
+- `<md!path>` - Reference downloaded markdown
+- `<file!path>` - Reference any file
+- `<prompt!path>` - Include system prompt from prompts directory
+- `<url!url>` - Include content from a URL
+- `<tweet!url>` - Convert a Twitter thread to markdown format
+
+### Tools
+- `<tools!toolset>` - Enable specific tool sets
+
+## Format
+Tags can be used in these formats:
+- `<name!value>content</name!>`
+- `<name!"quoted value">content</name!>`
+- `<name![[value]]>content</name!>`
+- `<name!>content</name!>`
+- `<name!value>` (self-closing)
+- `<name!"quoted value">` (self-closing)
+- `<name![[value]]>` (self-closing)
+- `<name!>` (self-closing)
+
+## Examples
+
+Basic question:
+```markdown
+<ai!>
+What are the key points in this note?
+</ai!>
+```
+
+Advanced usage with parameters:
+```markdown
+<ai!>
+<model!sonnet3.5>
+<temperature!0.7>
+<system!expert_analysis>
+Please analyze this technical document.
+<reply! -- deactivated to avoid triggering the AI to respond -- >
+</ai!>
+```
+
+Include external content:
+```markdown
+<ai!>
+<tweet!https://twitter.com/username/status/123456789>
+<reply! -- deactivated to avoid triggering the AI to respond -- >
+Please analyze the key points from this thread.
+</ai!>
+```
+""",
     "ai": lambda value, text, context: process_ai_block(text, context, value),
 }
 
