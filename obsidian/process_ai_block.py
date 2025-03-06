@@ -75,6 +75,7 @@ Your question or instructions here
 - `<prompt!path>` - Include system prompt from prompts directory
 - `<url!url>` - Include content from a URL
 - `<tweet!url>` - Convert a Twitter thread to markdown format
+- `<image!path>` - Include an image for AI analysis (supports JPEG, PNG, etc.)
 
 ### Tools
 - `<tools!toolset>` - Enable specific tool sets
@@ -96,6 +97,7 @@ Basic question:
 ```markdown
 <ai!>
 What are the key points in this note?
+<reply! -- deactivated to avoid triggering the AI to respond -- >
 </ai!>
 ```
 
@@ -116,6 +118,15 @@ Include external content:
 <tweet!https://twitter.com/username/status/123456789>
 <reply! -- deactivated to avoid triggering the AI to respond -- >
 Please analyze the key points from this thread.
+</ai!>
+```
+
+Image analysis:
+```markdown
+<ai!>
+<image!Images/photo.jpg>
+<reply! -- deactivated to avoid triggering the AI to respond -- >
+What can you see in this image?
 </ai!>
 ```
 """,
