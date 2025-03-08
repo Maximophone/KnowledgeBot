@@ -63,3 +63,5 @@ IMPORTANT: Never include the full chunk content. Only include the start_text and
 4. Output chunks according to the required JSON format
 
 Before your JSON output, provide a brief explanation of your chunking strategy for this particular document.
+
+MAX_TOKEN_COUNT_PER_CHUNK = {max_token_count} 
