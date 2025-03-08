@@ -190,7 +190,7 @@ class LLMChunker(ChunkingStrategy):
     
     def _calculate_target_chunk_count(self, text: str, max_token_count: Optional[int] = None) -> Optional[str]:
         """
-        Calculate a target number of chunks based on document size and max token count. Target is 50% of the max token count.
+        Calculate a target number of chunks based on document size and max token count.
         
         Args:
             text: The text to chunk
@@ -206,7 +206,7 @@ class LLMChunker(ChunkingStrategy):
         total_tokens = n_tokens(text)
         
         # Calculate estimated number of chunks
-        estimated_chunks = total_tokens / (max_token_count * 0.5)
+        estimated_chunks = total_tokens / max_token_count
         
         # Adjust for document structure (add 10-20% more chunks for semantic boundaries)
         adjusted_min = math.ceil(estimated_chunks)
@@ -332,7 +332,7 @@ class LLMChunker(ChunkingStrategy):
         all_errors = []
         
         # Extract chunks from markers and collect extraction errors
-        successful_chunks, failed_chunks = extract_chunks_from_markers(text, json_data)
+        successful_chunks, failed_chunks, coverage_error = extract_chunks_from_markers(text, json_data)
         
         # Add extraction errors to all_errors list
         for chunk in failed_chunks:
@@ -347,17 +347,32 @@ class LLMChunker(ChunkingStrategy):
             size_errors = self._validate_chunk_sizes(successful_chunks, max_token_count)
             all_errors.extend(size_errors)
         
-        # If there are any errors (extraction or size), we need to retry
+        # Check for coverage errors - if all extraction and size checks passed but there are gaps
+        if not all_errors and coverage_error:
+            all_errors.append({
+                "id": 0,  # Coverage is a global issue, not specific to a chunk
+                "type": "coverage_incomplete",
+                "message": coverage_error
+            })
+        
+        # If there are any errors (extraction, size, or coverage), we need to retry
         if all_errors:
-            logger.warning(f"Found {len(all_errors)} issues with chunks: "
-                          f"{len(failed_chunks)} extraction errors, "
-                          f"{len(all_errors) - len(failed_chunks)} size issues.")
+            logger.warning(f"Found {len(all_errors)} issues with chunks")
+            
+            extraction_errors_count = len([e for e in all_errors if e["type"] == "extraction_failed"])
+            size_errors_count = len([e for e in all_errors if e["type"] in ["size_exceeded", "size_too_small"]])
+            coverage_errors_count = len([e for e in all_errors if e["type"] == "coverage_incomplete"])
+            
+            logger.warning(f"Issues breakdown: {extraction_errors_count} extraction errors, "
+                          f"{size_errors_count} size issues, "
+                          f"{coverage_errors_count} coverage problems.")
             
             if retry_count < self.max_retries:
                 # Format error message with all issues
                 extraction_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "extraction_failed"])
                 size_exceeded_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "size_exceeded"])
                 size_too_small_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "size_too_small"])
+                coverage_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "coverage_incomplete"])
                 
                 error_msg = f"""I found {len(all_errors)} issues with your chunking solution that need to be fixed:
 
@@ -377,20 +392,26 @@ class LLMChunker(ChunkingStrategy):
 {size_too_small_errors}
 
 """
+                if coverage_errors:
+                    error_msg += f"""COVERAGE ERRORS:
+{coverage_errors}
+
+"""
                 
                 error_msg += f"""Please fix ALL these issues and provide a new chunking solution that:
 1. Uses exact text markers from the document
 2. Ensures no chunk exceeds {max_token_count} tokens ({max_token_count * CHARS_PER_TOKEN} characters)
 3. Ensures each chunk is at least {max_token_count // 10} tokens ({max_token_count * CHARS_PER_TOKEN // 10} characters), unless the document is very small
-4. Respects semantic boundaries while meeting size constraints
+4. Ensures the entire document is covered (no gaps between chunks)
+5. Respects semantic boundaries while meeting size constraints
 
-All chunks must be valid for the solution to be accepted.
+All chunks must be valid and the entire document must be covered for the solution to be accepted.
 """
                 return False, None, error_msg
             else:
                 return False, None, f"Max retries exceeded. Found {len(all_errors)} issues with chunks."
         
-        # If we got this far with no errors, all chunks are valid
+        # If we got this far with no errors, all chunks are valid and cover the entire document
         return True, successful_chunks, None
     
     def chunk(self, text: str, max_chunk_size: Optional[int] = None,
@@ -452,7 +473,7 @@ All chunks must be valid for the solution to be accepted.
             
         # Calculate target chunk count
         target_chunks = self._calculate_target_chunk_count(text, max_chunk_size)
-        target_chunks_text = f"\n**LOOSE TARGET: {target_chunks} CHUNKS**" if target_chunks else ""
+        target_chunks_text = f"\nTarget: {target_chunks}" if target_chunks else ""
         
         # Prepare initial message with schema reminder at the end
         user_message = f"""Please analyze and chunk the following document:
@@ -470,6 +491,11 @@ Size requirements:
 - Maximum chunk size: {max_chunk_size if max_chunk_size else 'Use your judgment'} tokens ({max_char_limit})
 - Minimum recommended chunk size: {max_chunk_size // 10 if max_chunk_size else 'Use your judgment'} tokens ({min_char_limit})
 - Exception: If the document is very small, it can be a single chunk below the minimum size{target_chunks_text}
+
+Coverage requirements:
+- Your chunks MUST cover the ENTIRE document with no gaps
+- Every non-whitespace character in the document must be included in exactly one chunk
+- Ensure your start_text and end_text markers form a continuous sequence when put together
 
 Make sure to:
 - Wrap your JSON in ```json and ``` markers

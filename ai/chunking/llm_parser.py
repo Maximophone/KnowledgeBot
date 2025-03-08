@@ -211,7 +211,81 @@ def find_chunk_boundaries(text: str, chunk_markers: Dict[str, Any]) -> Tuple[boo
     return True, start_pos, end_pos, None
 
 
-def extract_chunks_from_markers(text: str, chunk_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def verify_complete_coverage(text: str, chunks: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
+    """
+    Verify that the extracted chunks cover the entire document (excluding whitespace).
+    
+    Args:
+        text: The full document text
+        chunks: List of successfully extracted chunks with start_pos and end_pos
+        
+    Returns:
+        Tuple containing:
+            - Success flag (True if entire document is covered)
+            - Error message with gap information if failed, None otherwise
+    """
+    if not chunks:
+        return False, "No chunks available to verify coverage"
+    
+    # Create a coverage array to track which parts of the document are covered
+    coverage = [False] * len(text)
+    
+    # Mark the covered areas for each chunk
+    for chunk in chunks:
+        start = chunk["start_pos"]
+        end = chunk["end_pos"] + 1  # end is inclusive in our Chunk class
+        for i in range(start, min(end, len(coverage))):
+            coverage[i] = True
+    
+    # Find uncovered regions that contain non-whitespace characters
+    gaps = []
+    i = 0
+    
+    while i < len(text):
+        # Skip fully covered characters
+        while i < len(text) and coverage[i]:
+            i += 1
+            
+        if i >= len(text):
+            break
+            
+        # Start of a potentially uncovered region
+        gap_start = i
+        has_non_whitespace = False
+        
+        # Continue until we find a covered character
+        while i < len(text) and not coverage[i]:
+            if not text[i].isspace():
+                has_non_whitespace = True
+            i += 1
+            
+        # Only record the gap if it contains at least one non-whitespace character
+        if has_non_whitespace:
+            gap_text = text[gap_start:i]
+            gaps.append((gap_start, i, gap_text))
+    
+    # Return result
+    if gaps:
+        # Format gap information
+        gap_details = []
+        for start, end, content in gaps:
+            # Show context around the gap for better understanding
+            context_before = text[max(0, start-10):start] if start > 0 else ""
+            context_after = text[end:min(len(text), end+10)] if end < len(text) else ""
+            
+            gap_details.append(f"Gap ({end-start} chars): '{content}'")
+            gap_details.append(f"  Context: '...{context_before}[GAP]{context_after}...'")
+        
+        gap_info = "\n".join(gap_details[:10])  # Limit to first 5 gaps with their context
+        if len(gaps) > 5:
+            gap_info += f"\n...and {len(gaps) - 5} more gaps"
+            
+        return False, f"Found {len(gaps)} uncovered regions in the document:\n{gap_info}"
+    
+    return True, None
+
+
+def extract_chunks_from_markers(text: str, chunk_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[str]]:
     """
     Extract chunks from text using the markers provided by the LLM.
     
@@ -223,6 +297,7 @@ def extract_chunks_from_markers(text: str, chunk_data: Dict[str, Any]) -> Tuple[
         Tuple containing:
             - List of successfully extracted chunks with content
             - List of failed chunks with error messages
+            - Coverage error message if coverage check fails, None otherwise
     """
     successful_chunks = []
     failed_chunks = []
@@ -253,7 +328,14 @@ def extract_chunks_from_markers(text: str, chunk_data: Dict[str, Any]) -> Tuple[
         }
         successful_chunks.append(chunk_entry)
     
-    return successful_chunks, failed_chunks
+    # If we have successful chunks, verify they cover the entire document
+    coverage_error = None
+    if successful_chunks and not failed_chunks:
+        complete_coverage, coverage_error = verify_complete_coverage(text, successful_chunks)
+        if not complete_coverage:
+            logger.warning(f"Incomplete document coverage: {coverage_error}")
+    
+    return successful_chunks, failed_chunks, coverage_error
 
 
 def get_expected_schema_example() -> str:
