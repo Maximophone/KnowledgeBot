@@ -124,7 +124,12 @@ def save_debug_info(base_filename, llm_chunker, chunks=None, error=None):
         chunks: The resulting chunks (if successful)
         error: The error message (if failed)
     """
-    debug_filename = f"{base_filename}_debug.json"
+    # Generate debug filename
+    if not base_filename:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_filename = f"chunker_debug_{timestamp}.json"
+    else:
+        debug_filename = f"{base_filename}_debug.json"
     
     # Prepare debug data
     debug_data = {
