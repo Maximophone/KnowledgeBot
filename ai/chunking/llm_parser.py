@@ -5,7 +5,9 @@ Utilities for parsing and validating LLM responses for document chunking.
 import json
 import re
 from typing import Dict, List, Any, Tuple, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
 def extract_json_from_response(response: str) -> str:
     """
@@ -210,6 +212,39 @@ def extract_chunks_from_markers(text: str, chunk_data: Dict[str, Any]) -> Tuple[
     return successful_chunks, failed_chunks
 
 
+def get_expected_schema_example() -> str:
+    """
+    Get an example of the expected JSON schema in string format.
+    
+    Returns:
+        A string containing an example of the expected schema
+    """
+    return """
+{
+  "chunks": [
+    {
+      "id": 1,
+      "metadata": {
+        "topic": "Brief description of chunk content",
+        "type": "section|paragraph|list|code|etc"
+      },
+      "start_text": "First 50-70 characters of the chunk",
+      "end_text": "Last 50-70 characters of the chunk"
+    },
+    {
+      "id": 2,
+      "metadata": {
+        "topic": "Next chunk topic description",
+        "type": "section|paragraph|list|code|etc"
+      },
+      "start_text": "First 50-70 characters of this chunk",
+      "end_text": "Last 50-70 characters of this chunk"
+    }
+  ]
+}
+"""
+
+
 def format_error_message(success_parse: bool, json_data: Dict[str, Any], 
                         schema_valid: bool, validation_error: Optional[str], 
                         parsing_error: Optional[str]) -> str:
@@ -226,18 +261,28 @@ def format_error_message(success_parse: bool, json_data: Dict[str, Any],
     Returns:
         Formatted error message for the LLM
     """
+    # Get the expected schema example
+    expected_schema = get_expected_schema_example()
+    
     if not success_parse:
         return f"""
 I was unable to parse the JSON in your previous response.
 
 Error details: {parsing_error}
 
-Please provide a valid JSON response that follows the schema from the original prompt. Make sure:
-1. Your JSON is properly formatted without syntax errors
-2. You include the JSON within ```json and ``` markers
-3. You follow the exact schema specified with all required fields
+You MUST follow these requirements:
+1. Your response MUST contain valid JSON
+2. The JSON must be properly formatted without syntax errors
+3. Include the JSON within ```json and ``` markers
+4. Follow the EXACT schema specified with all required fields
 
-Please try again.
+Here is the exact schema your JSON must follow:
+```json
+{expected_schema.strip()}
+```
+
+Please try again with a valid JSON object that follows this structure exactly.
+Ensure your response begins with a brief explanation of your chunking strategy, followed by the JSON wrapped in ```json markers.
 """
     
     if not schema_valid:
@@ -246,25 +291,19 @@ I was able to parse your JSON, but it doesn't conform to the expected schema.
 
 Error details: {validation_error}
 
-Please fix your response to follow the expected schema:
+Your JSON must follow this exact schema:
 ```json
-{{
-  "chunks": [
-    {{
-      "id": 1,
-      "metadata": {{
-        "topic": "Brief description of chunk content",
-        "type": "section|paragraph|list|code|etc"
-      }},
-      "start_text": "First 50-70 characters of the chunk",
-      "end_text": "Last 50-70 characters of the chunk"
-    }},
-    ...
-  ]
-}}
+{expected_schema.strip()}
 ```
 
-Make sure all required fields are present and have the correct types.
+Critical requirements:
+- The "chunks" array MUST contain at least one chunk
+- Every chunk MUST have: id, metadata (with topic and type), start_text, and end_text
+- The start_text and end_text fields MUST contain actual text from the document
+- The id field MUST be a number
+- The metadata must include "topic" and "type" fields
+
+Please fix your response to follow these requirements exactly.
 """
     
     return "Your response is valid, but something else went wrong." 

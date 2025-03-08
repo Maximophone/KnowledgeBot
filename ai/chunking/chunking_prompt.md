@@ -64,4 +64,14 @@ IMPORTANT: Never include the full chunk content. Only include the start_text and
 
 Before your JSON output, provide a brief explanation of your chunking strategy for this particular document.
 
+## CRITICAL OUTPUT REQUIREMENTS
+- Your response MUST contain valid JSON in the exact format specified above
+- The JSON output MUST begin with {{ and end with }}
+- Always wrap your JSON in ```json and ``` markers
+- The "chunks" array MUST contain at least one chunk
+- Every chunk MUST have: id, metadata (with topic and type), start_text, and end_text
+- The start_text and end_text MUST be exact text from the document (not paraphrased)
+- Never skip any required fields
+- For Gemini models: Make sure to output ONLY the JSON format specified above
+
 MAX_TOKEN_COUNT_PER_CHUNK = {max_token_count} 

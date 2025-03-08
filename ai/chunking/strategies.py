@@ -8,7 +8,8 @@ from .llm_parser import (
     parse_json_response, 
     validate_chunk_schema,
     extract_chunks_from_markers,
-    format_error_message
+    format_error_message,
+    get_expected_schema_example
 )
 import sys
 import os
@@ -310,12 +311,24 @@ Please provide more accurate start_text and end_text markers that can be found i
         # Reset conversation history
         self.conversation_history = []
         
-        # Prepare initial message
+        # Get the schema example for the reminder
+        expected_schema = get_expected_schema_example().strip()
+        
+        # Prepare initial message with schema reminder at the end
         user_message = f"""Please analyze and chunk the following document:
 
-```
+```txt
 {text}
 ```
+
+REMINDER: Your response MUST include valid JSON in this exact format:
+```json
+{expected_schema}
+```
+
+Make sure to wrap your JSON in ```json and ``` markers and ensure your start_text and end_text contain exact text from the document.
+
+Target size for individual chunks: 1000 tokens.
 """
         # Add the initial user message to conversation history
         self.conversation_history.append(self._create_message(user_message))
