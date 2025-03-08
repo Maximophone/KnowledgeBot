@@ -12,6 +12,7 @@ import logging
 import json
 import traceback
 from datetime import datetime
+import time
 
 # Configure logging first before imports
 logging.basicConfig(
@@ -115,89 +116,82 @@ def chunk_document(file_path, chunker, max_chunk_size, overlap):
 
 def save_debug_info(base_filename, llm_chunker, chunks=None, error=None):
     """
-    Save debug information including conversation history and chunks to a file.
+    Save debugging information about the chunking process.
     
     Args:
-        base_filename: Base filename to use for the debug file
-        llm_chunker: LLMChunker instance with conversation history
-        chunks: List of generated chunks (can be None if chunking failed)
-        error: Error information if chunking failed
-        
-    Returns:
-        Path to the debug file
+        base_filename: The base filename to use for the debug file
+        llm_chunker: The LLMChunker instance used
+        chunks: The resulting chunks (if successful)
+        error: The error message (if failed)
     """
-    # Generate debug filename based on base_filename
-    if not base_filename:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        debug_filename = f"chunker_debug_{timestamp}.txt"
-    else:
-        # Use the same directory as the base_filename but with _debug suffix
-        dirname = os.path.dirname(base_filename)
-        basename = os.path.basename(base_filename)
-        name, ext = os.path.splitext(basename)
-        debug_filename = os.path.join(dirname, f"{name}_debug.txt")
+    debug_filename = f"{base_filename}_debug.json"
     
-    logger.info(f"Saving debug information to {debug_filename}")
+    # Prepare debug data
+    debug_data = {
+        "timestamp": time.time(),
+        "model": llm_chunker.model_name,
+        "max_retries": llm_chunker.max_retries,
+        "result": "success" if chunks is not None else "failure"
+    }
     
-    with open(debug_filename, "w", encoding="utf-8") as f:
-        # Write header
-        f.write(f"=== CHUNKER DEBUG INFO ===\n")
-        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Model: {llm_chunker.model_name}\n")
-        if error:
-            f.write(f"Status: FAILED - {error}\n")
-        else:
-            f.write(f"Status: SUCCESS\n")
-        f.write("\n")
+    # Add error message if failed
+    if error:
+        debug_data["error"] = str(error)
         
-        # Write system prompt
-        f.write("=== SYSTEM PROMPT ===\n")
-        token_value = "Use your judgment" if not hasattr(llm_chunker, '_last_max_chunk_size') else llm_chunker._last_max_chunk_size
-        try:
-            system_prompt = llm_chunker.prompt_template.format(max_token_count=token_value)
-            f.write(system_prompt)
-        except Exception as e:
-            f.write(f"Error formatting system prompt: {str(e)}\n")
-            f.write(f"Raw prompt template:\n{llm_chunker.prompt_template}\n")
-        f.write("\n\n")
+    # Add chunk information if successful
+    if chunks:
+        debug_chunks = []
+        for chunk in chunks:
+            chunk_data = {
+                "id": chunk.id,
+                "start_pos": chunk.start_pos,
+                "end_pos": chunk.end_pos,
+                "content_snippet": chunk.content[:50] + "..." if len(chunk.content) > 50 else chunk.content,
+                "token_estimate": chunk.metadata.get("token_estimate", 0),
+                "metadata": chunk.metadata
+            }
+            debug_chunks.append(chunk_data)
+        debug_data["chunks"] = debug_chunks
+    
+    # Convert conversation history to dict format
+    conversation_history = []
+    for msg in llm_chunker.conversation_history:
+        content = msg.content[0].text if msg.content else ""
+        conversation_history.append({
+            "role": msg.role,
+            "content": content
+        })
+    debug_data["conversation_history"] = conversation_history
+    
+    # Add split conversations if available
+    if hasattr(llm_chunker, 'split_conversations') and llm_chunker.split_conversations:
+        # Process split conversations to JSON-serializable format
+        serialized_split_conversations = []
         
-        # Write conversation history
-        f.write("=== CONVERSATION HISTORY ===\n")
-        if hasattr(llm_chunker, 'conversation_history') and llm_chunker.conversation_history:
-            for i, message in enumerate(llm_chunker.conversation_history):
-                f.write(f"--- Message {i+1} ({message.role}) ---\n")
-                for content in message.content:
-                    if content.type == "text":
-                        f.write(content.text)
-                    else:
-                        f.write(f"[Content type: {content.type}]")
-                f.write("\n\n")
-        else:
-            f.write("No conversation history available.\n\n")
-        
-        # Write error information if available
-        if error:
-            f.write("=== ERROR INFORMATION ===\n")
-            f.write(f"{error}\n\n")
-        
-        # Write final chunks
-        f.write("=== FINAL CHUNKS ===\n")
-        if chunks and len(chunks) > 0:
-            f.write(f"Total chunks: {len(chunks)}\n\n")
+        for split_convo in llm_chunker.split_conversations:
+            # Convert Message objects to dictionaries
+            serialized_messages = []
+            for msg in split_convo["conversation"]:
+                content = msg.content[0].text if msg.content else ""
+                serialized_messages.append({
+                    "role": msg.role,
+                    "content": content
+                })
             
-            for i, chunk in enumerate(chunks):
-                f.write(f"--- Chunk {i+1} ---\n")
-                f.write(f"ID: {chunk.id}\n")
-                f.write(f"Position: {chunk.start_pos} - {chunk.end_pos}\n")
-                f.write(f"Size: {chunk.size} characters\n")
-                f.write(f"Metadata: {json.dumps(chunk.metadata, indent=2)}\n")
-                f.write(f"Content preview: {chunk.content[:100]}...\n")
-                f.write("\n")
-        else:
-            f.write("No chunks generated due to error or empty result.\n")
+            # Create serializable conversation entry
+            serialized_entry = {
+                "metadata": split_convo["metadata"],
+                "conversation": serialized_messages
+            }
+            serialized_split_conversations.append(serialized_entry)
+        
+        debug_data["split_conversations"] = serialized_split_conversations
     
-    logger.info(f"Debug information saved to {debug_filename}")
-    return debug_filename
+    # Save to file
+    with open(debug_filename, "w", encoding="utf-8") as f:
+        json.dump(debug_data, f, ensure_ascii=False, indent=2)
+    
+    print(f"Debug info saved to {debug_filename}")
 
 
 def main():
@@ -317,13 +311,12 @@ def main():
         # Save debug information if requested or if there was an error
         if (args.save_debug or args.verbose or error_info) and llm_chunker:
             try:
-                debug_file = save_debug_info(
+                save_debug_info(
                     args.output, 
                     llm_chunker, 
                     chunks=chunks, 
                     error=error_info
                 )
-                print(f"Debug information saved to {debug_file}")
             except Exception as debug_e:
                 logger.error(f"Error saving debug information: {str(debug_e)}")
         
