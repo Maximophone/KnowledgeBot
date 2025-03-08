@@ -16,6 +16,7 @@ import os
 import json
 import logging
 import traceback
+import math
 
 # Add parent directory to path to allow importing from ai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,6 +28,9 @@ from ai.types import Message, MessageContent
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Approximate characters per token (for estimation purposes)
+CHARS_PER_TOKEN = 4
 
 
 class SimpleChunker(ChunkingStrategy):
@@ -107,7 +111,7 @@ class LLMChunker(ChunkingStrategy):
     """
     
     def __init__(self, ai_client=None, prompt_template=None, model_name=None, 
-                 max_retries=3, fallback=False):
+                 max_retries=5, fallback=False):
         """
         Initialize the LLM chunker.
         
@@ -184,13 +188,98 @@ class LLMChunker(ChunkingStrategy):
             ]
         )
     
-    def _process_llm_response(self, response: str, text: str, retry_count: int = 0) -> Tuple[bool, Optional[List[Dict[str, Any]]], Optional[str]]:
+    def _calculate_target_chunk_count(self, text: str, max_token_count: Optional[int] = None) -> Optional[str]:
+        """
+        Calculate a target number of chunks based on document size and max token count. Target is 50% of the max token count.
+        
+        Args:
+            text: The text to chunk
+            max_token_count: Maximum token count per chunk
+            
+        Returns:
+            A string describing the target number of chunks, or None if max_token_count is not specified
+        """
+        if not max_token_count or max_token_count <= 0:
+            return None
+            
+        # Estimate total tokens in the document
+        total_tokens = n_tokens(text)
+        
+        # Calculate estimated number of chunks
+        estimated_chunks = total_tokens / (max_token_count * 0.5)
+        
+        # Adjust for document structure (add 10-20% more chunks for semantic boundaries)
+        adjusted_min = math.ceil(estimated_chunks)
+        adjusted_max = math.ceil(estimated_chunks * 1.2)
+        
+        # Handle very small documents
+        if adjusted_min == 0:
+            return "1 chunk (very small document)"
+            
+        # For larger documents, provide a range
+        if adjusted_min == adjusted_max:
+            return f"approximately {adjusted_min} chunks"
+        else:
+            return f"approximately {adjusted_min}-{adjusted_max} chunks"
+    
+    def _validate_chunk_sizes(self, chunks: List[Dict[str, Any]], 
+                             max_token_count: Optional[int] = None) -> List[Dict[str, str]]:
+        """
+        Validate that chunks meet size constraints (both upper and lower bounds).
+        
+        Args:
+            chunks: List of extracted chunks
+            max_token_count: Maximum token count per chunk
+            
+        Returns:
+            List of error messages for invalid chunks, empty list if all valid
+        """
+        if not max_token_count or not chunks:
+            return []
+        
+        # Calculate approximate character limits
+        max_char_limit = max_token_count * CHARS_PER_TOKEN
+        min_char_limit = max(max_token_count * CHARS_PER_TOKEN // 10, 50)  # At least 50 chars
+        
+        errors = []
+        
+        # For single chunk case (very small document), skip the lower bound check
+        skip_lower_bound = len(chunks) == 1
+        
+        for chunk in chunks:
+            content_length = len(chunk["content"])
+            token_estimate = n_tokens(chunk["content"])
+            chunk_id = chunk["id"]
+            
+            # Check upper bound
+            if token_estimate > max_token_count or content_length > max_char_limit:
+                errors.append({
+                    "id": chunk_id,
+                    "type": "size_exceeded",
+                    "message": f"Chunk {chunk_id} exceeds maximum size: {token_estimate} tokens ({content_length} chars), max allowed: {max_token_count} tokens ({max_char_limit} chars)"
+                })
+                continue
+                
+            # Check lower bound (skip for single chunk case)
+            if not skip_lower_bound and (token_estimate < max_token_count // 10 or content_length < min_char_limit):
+                errors.append({
+                    "id": chunk_id,
+                    "type": "size_too_small",
+                    "message": f"Chunk {chunk_id} is too small: {token_estimate} tokens ({content_length} chars), min recommended: {max_token_count // 10} tokens ({min_char_limit} chars)"
+                })
+                
+        return errors
+    
+    def _process_llm_response(self, response: str, text: str, 
+                             max_token_count: Optional[int] = None,
+                             retry_count: int = 0) -> Tuple[bool, Optional[List[Dict[str, Any]]], Optional[str]]:
         """
         Process and validate the LLM response, with retry logic.
         
         Args:
             response: Raw LLM response
             text: Original text being chunked
+            max_token_count: Maximum token count per chunk
             retry_count: Current retry attempt number
             
         Returns:
@@ -239,29 +328,69 @@ class LLMChunker(ChunkingStrategy):
             else:
                 return False, None, f"Max retries exceeded. Schema validation failed: {validation_error}"
         
-        # Extract chunks from markers
+        # Collect all validation errors
+        all_errors = []
+        
+        # Extract chunks from markers and collect extraction errors
         successful_chunks, failed_chunks = extract_chunks_from_markers(text, json_data)
         
-        if not successful_chunks:
-            logger.warning(f"No chunks were successfully extracted. {len(failed_chunks)} chunks failed extraction.")
+        # Add extraction errors to all_errors list
+        for chunk in failed_chunks:
+            all_errors.append({
+                "id": chunk["id"],
+                "type": "extraction_failed",
+                "message": f"Chunk {chunk['id']}: {chunk['error']}"
+            })
+        
+        # Validate chunk sizes if max_token_count is provided
+        if max_token_count and successful_chunks:
+            size_errors = self._validate_chunk_sizes(successful_chunks, max_token_count)
+            all_errors.extend(size_errors)
+        
+        # If there are any errors (extraction or size), we need to retry
+        if all_errors:
+            logger.warning(f"Found {len(all_errors)} issues with chunks: "
+                          f"{len(failed_chunks)} extraction errors, "
+                          f"{len(all_errors) - len(failed_chunks)} size issues.")
             
             if retry_count < self.max_retries:
-                error_list = "\n".join([f"- Chunk {c['id']}: {c['error']}" for c in failed_chunks])
-                error_msg = f"""
-I was able to parse your JSON and it conforms to the schema, but I couldn't extract any chunks from the document using your markers.
+                # Format error message with all issues
+                extraction_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "extraction_failed"])
+                size_exceeded_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "size_exceeded"])
+                size_too_small_errors = "\n".join([e["message"] for e in all_errors if e["type"] == "size_too_small"])
+                
+                error_msg = f"""I found {len(all_errors)} issues with your chunking solution that need to be fixed:
 
-Errors:
-{error_list}
+"""
+                if extraction_errors:
+                    error_msg += f"""EXTRACTION ERRORS:
+{extraction_errors}
 
-Please provide more accurate start_text and end_text markers that can be found in the original document.
+"""
+                if size_exceeded_errors:
+                    error_msg += f"""SIZE EXCEEDED ERRORS:
+{size_exceeded_errors}
+
+"""
+                if size_too_small_errors:
+                    error_msg += f"""SIZE TOO SMALL ERRORS:
+{size_too_small_errors}
+
+"""
+                
+                error_msg += f"""Please fix ALL these issues and provide a new chunking solution that:
+1. Uses exact text markers from the document
+2. Ensures no chunk exceeds {max_token_count} tokens ({max_token_count * CHARS_PER_TOKEN} characters)
+3. Ensures each chunk is at least {max_token_count // 10} tokens ({max_token_count * CHARS_PER_TOKEN // 10} characters), unless the document is very small
+4. Respects semantic boundaries while meeting size constraints
+
+All chunks must be valid for the solution to be accepted.
 """
                 return False, None, error_msg
             else:
-                return False, None, f"Max retries exceeded. Failed to extract chunks using provided markers."
+                return False, None, f"Max retries exceeded. Found {len(all_errors)} issues with chunks."
         
-        if failed_chunks:
-            logger.warning(f"{len(failed_chunks)} chunks failed extraction. {len(successful_chunks)} chunks were successful.")
-        
+        # If we got this far with no errors, all chunks are valid
         return True, successful_chunks, None
     
     def chunk(self, text: str, max_chunk_size: Optional[int] = None,
@@ -283,7 +412,7 @@ Please provide more accurate start_text and end_text markers that can be found i
         """
         logger.info("Starting LLM chunking process")
         logger.info(f"Text length: {len(text)} characters")
-        logger.info(f"Max chunk size: {max_chunk_size}")
+        logger.info(f"Max chunk size: {max_chunk_size} tokens (approx. {max_chunk_size * CHARS_PER_TOKEN if max_chunk_size else 'Not specified'} chars)")
         
         # Check if we have a valid AI client
         if self.ai_client is None:
@@ -314,10 +443,21 @@ Please provide more accurate start_text and end_text markers that can be found i
         # Get the schema example for the reminder
         expected_schema = get_expected_schema_example().strip()
         
+        # Calculate size limits for user message
+        max_char_limit = "not specified"
+        min_char_limit = "not specified"
+        if max_chunk_size:
+            max_char_limit = f"approximately {max_chunk_size * CHARS_PER_TOKEN} characters"
+            min_char_limit = f"approximately {max(max_chunk_size * CHARS_PER_TOKEN // 10, 50)} characters"
+            
+        # Calculate target chunk count
+        target_chunks = self._calculate_target_chunk_count(text, max_chunk_size)
+        target_chunks_text = f"\n**LOOSE TARGET: {target_chunks} CHUNKS**" if target_chunks else ""
+        
         # Prepare initial message with schema reminder at the end
         user_message = f"""Please analyze and chunk the following document:
 
-```txt
+```
 {text}
 ```
 
@@ -326,9 +466,16 @@ REMINDER: Your response MUST include valid JSON in this exact format:
 {expected_schema}
 ```
 
-Make sure to wrap your JSON in ```json and ``` markers and ensure your start_text and end_text contain exact text from the document.
+Size requirements:
+- Maximum chunk size: {max_chunk_size if max_chunk_size else 'Use your judgment'} tokens ({max_char_limit})
+- Minimum recommended chunk size: {max_chunk_size // 10 if max_chunk_size else 'Use your judgment'} tokens ({min_char_limit})
+- Exception: If the document is very small, it can be a single chunk below the minimum size{target_chunks_text}
 
-Target size for individual chunks: 1000 tokens.
+Make sure to:
+- Wrap your JSON in ```json and ``` markers
+- Ensure your start_text and end_text contain EXACT text from the document
+- Respect semantic boundaries (paragraphs, sections) when possible
+- Balance chunk sizes to stay within the limits while preserving meaning
 """
         # Add the initial user message to conversation history
         self.conversation_history.append(self._create_message(user_message))
@@ -363,9 +510,9 @@ Target size for individual chunks: 1000 tokens.
                 # Add the assistant response to the conversation history
                 self.conversation_history.append(self._create_message(response, role="assistant"))
                 
-                # Process the response
+                # Process the response with size validation
                 success, chunks_data, error_msg = self._process_llm_response(
-                    response, text, retry_count
+                    response, text, max_chunk_size, retry_count
                 )
                 
                 if success:

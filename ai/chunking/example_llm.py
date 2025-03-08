@@ -210,7 +210,7 @@ def main():
                         help="Maximum chunk size (tokens)")
     parser.add_argument("--overlap", "-o", type=int, default=0,
                         help="Overlap between chunks")
-    parser.add_argument("--retries", "-r", type=int, default=3,
+    parser.add_argument("--retries", "-r", type=int, default=5,
                         help="Maximum retry attempts")
     parser.add_argument("--fallback", action="store_true",
                         help="Enable fallback to SimpleChunker if LLM chunking fails")

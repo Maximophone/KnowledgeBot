@@ -134,6 +134,7 @@ def validate_chunk_schema(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
 def find_chunk_boundaries(text: str, chunk_markers: Dict[str, Any]) -> Tuple[bool, Optional[int], Optional[int], Optional[str]]:
     """
     Find the start and end positions of a chunk in the text using start_text and end_text markers.
+    Handles start and end markers separately, with truncation as a fallback for each.
     
     Args:
         text: The full text to search in
@@ -148,22 +149,65 @@ def find_chunk_boundaries(text: str, chunk_markers: Dict[str, Any]) -> Tuple[boo
     """
     start_text = chunk_markers["start_text"]
     end_text = chunk_markers["end_text"]
+    chunk_id = chunk_markers["id"]
     
-    # Find the start position
-    start_pos = text.find(start_text)
-    if start_pos == -1:
-        return False, None, None, f"Could not find start marker: '{start_text}'"
+    # ----- STEP 1: Find the start marker -----
+    start_pos = None
     
-    # Find the end position, starting from after the start marker
-    search_start = start_pos + len(start_text)
-    end_marker_pos = text[search_start:].find(end_text)
+    # First try: Exact start marker
+    exact_start_pos = text.find(start_text)
+    if exact_start_pos != -1:
+        # Found exact start marker
+        start_pos = exact_start_pos
+        start_len = len(start_text)
+        logger.debug(f"Found exact start marker for chunk {chunk_id}")
+    else:
+        # Second try: Truncated start marker (first 60 chars)
+        truncated_start = start_text[:min(60, len(start_text))]
+        
+        # Skip truncation if the marker is already short
+        if len(truncated_start) == len(start_text):
+            return False, None, None, f"Could not find start marker for chunk {chunk_id}: '{start_text}'"
+        
+        truncated_start_pos = text.find(truncated_start)
+        if truncated_start_pos != -1:
+            # Found truncated start marker
+            start_pos = truncated_start_pos
+            start_len = len(truncated_start)
+            logger.info(f"Using truncated start marker for chunk {chunk_id}: '{truncated_start}'")
+        else:
+            # Failed to find start marker (both exact and truncated)
+            return False, None, None, f"Could not find start marker for chunk {chunk_id}: '{start_text}' (truncated: '{truncated_start}')"
     
-    if end_marker_pos == -1:
-        return False, None, None, f"Could not find end marker: '{end_text}'"
+    # ----- STEP 2: Find the end marker -----
+    # Only search for end marker after the start marker
+    search_start = start_pos + start_len
+    end_pos = None
     
-    # Calculate the absolute end position
-    end_pos = search_start + end_marker_pos + len(end_text)
+    # First try: Exact end marker
+    exact_end_pos = text[search_start:].find(end_text)
+    if exact_end_pos != -1:
+        # Found exact end marker
+        end_pos = search_start + exact_end_pos + len(end_text)
+        logger.debug(f"Found exact end marker for chunk {chunk_id}")
+    else:
+        # Second try: Truncated end marker (last 60 chars)
+        truncated_end = end_text[-min(60, len(end_text)):]
+        
+        # Skip truncation if the marker is already short
+        if len(truncated_end) == len(end_text):
+            return False, None, None, f"Could not find end marker for chunk {chunk_id}: '{end_text}'"
+        
+        truncated_end_pos = text[search_start:].find(truncated_end)
+        if truncated_end_pos != -1:
+            # Found truncated end marker
+            end_pos = search_start + truncated_end_pos + len(truncated_end)
+            logger.info(f"Using truncated end marker for chunk {chunk_id}: '{truncated_end}'")
+        else:
+            # Failed to find end marker (both exact and truncated)
+            return False, None, None, f"Could not find end marker for chunk {chunk_id}: '{end_text}' (truncated: '{truncated_end}')"
     
+    # Success! Found both markers
     return True, start_pos, end_pos, None
 
 
