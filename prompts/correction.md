@@ -2,3 +2,4 @@ Corrige les accents et l'orthographe du texte suivant. Tu peux également améli
 
 IMPORTANT : Retourne uniquement le texte corrigé, aucun commentaire, rien d'autre.
 
+Input:

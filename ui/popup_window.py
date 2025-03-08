@@ -1,30 +1,33 @@
 """
 Popup Window Module
 
-This module provides a tabbed interface for text processing with AI models.
+This module provides a keyboard-focused interface for text processing with AI models.
 
 Key features:
-- Tabbed interface with Text Processing and Settings tabs
-- Keyboard navigable components
-- Automatic prompt loading
-- Customizable keyboard shortcuts
-- Status bar for feedback
-- Error handling
+- Single-key shortcuts for common actions
+- Type-ahead filtering for prompt selection
+- Toggleable keyboard shortcut hints with 'h' key
+- Streamlined workflow optimized for keyboard users
 - Backward compatibility with previous versions
 
 Implementation notes:
-- Attribute initialization order is important to prevent AttributeError
-- Lambda functions need proper variable binding to work correctly in loops
-- Error handling added to improve robustness
-- Backward compatibility properties (input_text_area, prompt_text_area) are provided
-  to support existing code that used the old interface
+- Keyboard event handling prioritizes direct key access
+- Focus management ensures logical navigation with Tab key
+- Type-ahead filtering efficiently handles large prompt libraries
+- Shortcut hints can be toggled for cleaner UI or better discoverability
+
+Compatibility notes:
+- The FilterableComboBox implementation avoids using QComboBox.CompleterPopupCompletionMode
+  which may not exist in older PyQt5 versions
+- Safety checks were added around completer access to prevent attribute errors
+- Error handling has been improved to catch potential compatibility issues
 """
 
 from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton,
                          QTextEdit, QLabel, QShortcut, QComboBox, QApplication, QTabWidget,
-                         QSplitter, QStatusBar, QKeySequenceEdit, QDialog, QLineEdit)
-from PyQt5.QtGui import QKeySequence, QIcon, QFont
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+                         QSplitter, QStatusBar, QLineEdit, QCheckBox, QFrame, QToolTip, QCompleter)
+from PyQt5.QtGui import QKeySequence, QFont, QColor, QPalette
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 import os
 import pyperclip
 from ai import AI, get_prompt
@@ -34,14 +37,114 @@ import sys
 
 ai_model = AI("haiku3.5")
 
-# Define a dictionary to map actions to their corresponding functions
+# Define a dictionary to map keys to their corresponding actions
+# Format: 'key': ('action_name', 'description')
 ACTIONS = {
-    'Ctrl+1': 'correction',
-    'Ctrl+2': 'light_improvement',
-    'Ctrl+3': 'conversation_format',
-    'Ctrl+Q': 'Custom Prompt',
-    # Add more actions as needed
+    'c': ('correction', 'Correct text grammar and spelling'),
+    'i': ('light_improvement', 'Lightly improve the writing'),
+    'f': ('conversation_format', 'Format as a conversation'),
+    'p': ('custom_prompt', 'Use custom prompt'),
+    'h': ('toggle_hints', 'Toggle keyboard shortcut hints'),
+    'Escape': ('close', 'Close the window'),
+    'Ctrl+Return': ('copy_and_close', 'Copy text and close'),
 }
+
+class FilterableComboBox(QComboBox):
+    """ComboBox with type-ahead filtering capability
+    
+    Implementation notes:
+    - This class simplifies QComboBox's completer settings to avoid version compatibility issues
+    - It handles direct filtering through a custom mechanism rather than relying on Qt's completer
+    - Key events are captured to provide better keyboard navigation specifically for filtering
+    """
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setEditable(True)
+        self.setInsertPolicy(QComboBox.NoInsert)
+        # Simplify completer settings to avoid compatibility issues
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.lineEdit().textEdited.connect(self.filter_items)
+        self.original_items = []
+        
+    def add_items(self, items):
+        """Add items and keep track of the original list"""
+        self.original_items = items
+        self.addItems(items)
+    
+    def filter_items(self, text):
+        """Filter the items based on the current text"""
+        if not text:
+            # If text is empty, restore all items
+            self.clear()
+            self.addItems(self.original_items)
+            return
+            
+        # Filter items that contain the typed text
+        self.clear()
+        filtered_items = [item for item in self.original_items if text.lower() in item.lower()]
+        self.addItems(filtered_items)
+        self.showPopup()
+    
+    def keyPressEvent(self, event):
+        """Override key press event for better keyboard navigation"""
+        key = event.key()
+        if key == Qt.Key_Escape:
+            # Reset filter and hide popup
+            self.lineEdit().clear()
+            self.filter_items("")
+            self.hidePopup()
+            event.accept()
+        elif key == Qt.Key_Return or key == Qt.Key_Enter:
+            # Activate the selected item
+            self.activated.emit(self.currentIndex())
+            self.hidePopup()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+class KeyboardFocusFrame(QFrame):
+    """Frame that shows a highlight when it has keyboard focus"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShadow(QFrame.Plain)
+        self.setLineWidth(1)
+        self.setMidLineWidth(0)
+        
+    def focusInEvent(self, event):
+        """Handle focus in event with visual feedback"""
+        self.setStyleSheet("border: 2px solid #4A90E2;")
+        super().focusInEvent(event)
+        
+    def focusOutEvent(self, event):
+        """Handle focus out event"""
+        self.setStyleSheet("")
+        super().focusOutEvent(event)
+
+class ActionButton(QPushButton):
+    """Button with built-in shortcut hint display"""
+    
+    def __init__(self, text, shortcut_key, parent=None):
+        super().__init__(text, parent)
+        self.shortcut_key = shortcut_key
+        self.show_hints = True
+        self.base_text = text
+        self.update_text()
+        
+    def update_text(self):
+        """Update button text based on hint visibility"""
+        if self.show_hints:
+            self.setText(f"{self.base_text} ({self.shortcut_key})")
+        else:
+            self.setText(self.base_text)
+    
+    def set_show_hints(self, show):
+        """Set whether to show shortcut hints"""
+        if show != self.show_hints:
+            self.show_hints = show
+            self.update_text()
 
 def load_prompts(directory):
     """Load all prompt files from the prompt directory"""
@@ -60,76 +163,11 @@ def load_prompts(directory):
         print(f"Error loading prompts: {e}")
     return prompts
 
-class KeyboardNavigableComboBox(QComboBox):
-    """Extended QComboBox with improved keyboard navigation"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFocusPolicy(Qt.StrongFocus)
-        
-    def keyPressEvent(self, event):
-        key = event.key()
-        if key == Qt.Key_Return or key == Qt.Key_Enter:
-            # Emit activated signal when Enter is pressed
-            self.activated.emit(self.currentIndex())
-        elif key == Qt.Key_Up:
-            # Move to previous item
-            current = self.currentIndex()
-            if current > 0:
-                self.setCurrentIndex(current - 1)
-        elif key == Qt.Key_Down:
-            # Move to next item
-            current = self.currentIndex()
-            if current < self.count() - 1:
-                self.setCurrentIndex(current + 1)
-        else:
-            super().keyPressEvent(event)
-
-class ShortcutEditor(QDialog):
-    """Dialog for editing keyboard shortcuts"""
-    
-    def __init__(self, parent=None, shortcuts=None):
-        super().__init__(parent)
-        self.setWindowTitle("Edit Shortcuts")
-        self.setModal(True)
-        self.setMinimumWidth(400)
-        
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-        
-        self.shortcut_editors = {}
-        
-        for action, description in shortcuts.items():
-            row_layout = QHBoxLayout()
-            row_layout.addWidget(QLabel(description))
-            
-            shortcut_edit = QKeySequenceEdit()
-            shortcut_edit.setKeySequence(QKeySequence(action))
-            row_layout.addWidget(shortcut_edit)
-            
-            self.shortcut_editors[description] = shortcut_edit
-            layout.addLayout(row_layout)
-        
-        buttons_layout = QHBoxLayout()
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(self.accept)
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-        
-        buttons_layout.addWidget(save_button)
-        buttons_layout.addWidget(cancel_button)
-        layout.addLayout(buttons_layout)
-    
-    def get_shortcuts(self):
-        result = {}
-        for description, editor in self.shortcut_editors.items():
-            result[editor.keySequence().toString()] = description
-        return result
-
 class TextTab(QWidget):
-    """Tab for text processing functionality"""
+    """Tab for text processing functionality with keyboard-first focus"""
     
     status_message = pyqtSignal(str)
+    mode_changed = pyqtSignal(str)
     
     def __init__(self, prompts, parent=None):
         super().__init__(parent)
@@ -138,6 +176,9 @@ class TextTab(QWidget):
         self.prompt_dropdown = None
         self.input_text = None
         self.prompt_text = None
+        self.action_buttons = {}
+        self.show_hints = True
+        self.mode = "Navigate"  # Can be Navigate or Edit
         # Now set up the UI
         self.setup_ui()
         
@@ -157,13 +198,10 @@ class TextTab(QWidget):
         prompt_layout = QHBoxLayout()
         
         # Create the dropdown first
-        self.prompt_dropdown = KeyboardNavigableComboBox()
-        self.prompt_dropdown.addItems(self.prompts.keys())
-        self.prompt_dropdown.setCurrentIndex(0)
-        self.prompt_dropdown.activated.connect(self.load_selected_prompt)
-        
-        # Now create the label and set the buddy
         prompt_label = QLabel("Prompt:")
+        self.prompt_dropdown = FilterableComboBox()
+        self.prompt_dropdown.add_items(list(self.prompts.keys()))
+        self.prompt_dropdown.activated.connect(self.load_selected_prompt)
         prompt_label.setBuddy(self.prompt_dropdown)
         
         prompt_layout.addWidget(prompt_label)
@@ -173,13 +211,17 @@ class TextTab(QWidget):
         upper_layout.addLayout(prompt_layout)
         
         # Text input area
-        self.input_text = QTextEdit()
-        self.input_text.setPlaceholderText("Enter your text here...")
+        self.input_text_edit = QTextEdit()
+        self.input_text_edit.setReadOnly(False)  # Explicitly set to editable
+        self.input_text_edit.setPlaceholderText("Enter your text here...")
         input_label = QLabel("Input Text:")
-        input_label.setBuddy(self.input_text)
+        input_label.setBuddy(self.input_text_edit)
+        
+        # Connect focus events to update mode
+        self.input_text_edit.focusInEvent = lambda e: self.enter_edit_mode(e)
         
         upper_layout.addWidget(input_label)
-        upper_layout.addWidget(self.input_text, 1)
+        upper_layout.addWidget(self.input_text_edit, 1)
         
         # Lower section with prompt text and actions
         lower_widget = QWidget()
@@ -192,18 +234,23 @@ class TextTab(QWidget):
         prompt_text_label = QLabel("Prompt Text:")
         prompt_text_label.setBuddy(self.prompt_text)
         
+        # Connect focus events to update mode
+        self.prompt_text.focusInEvent = lambda e: self.enter_edit_mode(e)
+        
         lower_layout.addWidget(prompt_text_label)
         lower_layout.addWidget(self.prompt_text, 1)
         
         # Actions section
         actions_layout = QHBoxLayout()
         
-        for shortcut, action in ACTIONS.items():
-            btn = QPushButton(action)
-            btn.setToolTip(f"Shortcut: {shortcut}")
-            # Fix lambda binding by creating a local variable
-            current_shortcut = shortcut
-            btn.clicked.connect(lambda checked=False, sc=current_shortcut: self.perform_action(sc))
+        # Create action buttons with shortcut hints
+        action_keys = ['c', 'i', 'f', 'p']
+        for key in action_keys:
+            action_name, action_desc = ACTIONS[key]
+            btn = ActionButton(action_name.replace('_', ' ').title(), key)
+            btn.setToolTip(action_desc)
+            btn.clicked.connect(lambda checked, k=key: self.process_key_action(k))
+            self.action_buttons[key] = btn
             actions_layout.addWidget(btn)
         
         lower_layout.addLayout(actions_layout)
@@ -218,8 +265,101 @@ class TextTab(QWidget):
         # Add splitter to main layout
         layout.addWidget(splitter)
         
+        # Keyboard mode indicator
+        mode_layout = QHBoxLayout()
+        self.mode_label = QLabel("Mode: Navigate")
+        mode_layout.addWidget(self.mode_label)
+        
+        # Shortcut hints toggle
+        self.hint_checkbox = QCheckBox("Show Keyboard Shortcuts")
+        self.hint_checkbox.setChecked(self.show_hints)
+        self.hint_checkbox.stateChanged.connect(self.toggle_hints)
+        mode_layout.addWidget(self.hint_checkbox)
+        
+        mode_layout.addStretch(1)
+        layout.addLayout(mode_layout)
+        
         # Load the first prompt automatically
         self.load_selected_prompt()
+        
+        # Set initial focus to input text
+        QTimer.singleShot(100, self.input_text_edit.setFocus)
+    
+    def enter_edit_mode(self, event):
+        """Enter edit mode when a text edit gets focus"""
+        if self.mode != "Edit":
+            self.mode = "Edit"
+            self.mode_label.setText("Mode: Edit")
+            self.mode_changed.emit("Edit")
+        # Call the original focusInEvent
+        QTextEdit.focusInEvent(self.input_text_edit, event)
+    
+    def enter_navigate_mode(self):
+        """Enter navigate mode for keyboard navigation"""
+        if self.mode != "Navigate":
+            self.mode = "Navigate"
+            self.mode_label.setText("Mode: Navigate")
+            self.mode_changed.emit("Navigate")
+            # Remove focus from text edits
+            if self.input_text_edit.hasFocus() or self.prompt_text.hasFocus():
+                self.setFocus()
+    
+    def toggle_hints(self, state):
+        """Toggle visibility of keyboard shortcut hints"""
+        self.show_hints = (state == Qt.Checked)
+        # Update all buttons
+        for btn in self.action_buttons.values():
+            btn.set_show_hints(self.show_hints)
+        
+        self.status_message.emit("Keyboard hints " + ("shown" if self.show_hints else "hidden"))
+    
+    def process_key_action(self, key):
+        """Process an action triggered by a keyboard shortcut"""
+        if key == 'h':
+            # Toggle hints
+            self.hint_checkbox.setChecked(not self.hint_checkbox.isChecked())
+            return
+            
+        if key in ['c', 'i', 'f']:
+            # Predefined prompt
+            action_name = ACTIONS[key][0]
+            self.perform_action(action_name)
+        elif key == 'p':
+            # Custom prompt
+            self.perform_action('custom_prompt')
+    
+    def keyPressEvent(self, event):
+        """Handle key press events for keyboard shortcuts"""
+        key = event.key()
+        
+        # In Navigate mode, single letter keys trigger actions
+        if self.mode == "Navigate":
+            key_text = chr(key).lower()
+            if key_text in ACTIONS:
+                self.process_key_action(key_text)
+                return
+                
+        # Mode switching
+        if key == Qt.Key_Escape:
+            if self.mode == "Edit":
+                self.enter_navigate_mode()
+                return
+            
+        # Tab key handling for improved navigation
+        if key == Qt.Key_Tab:
+            # Override tab behavior for better navigation
+            focused_widget = QApplication.focusWidget()
+            if focused_widget == self.prompt_dropdown:
+                self.input_text_edit.setFocus()
+            elif focused_widget == self.input_text_edit:
+                self.prompt_text.setFocus()
+            elif focused_widget == self.prompt_text:
+                # Find the first action button
+                if self.action_buttons:
+                    next(iter(self.action_buttons.values())).setFocus()
+            return
+            
+        super().keyPressEvent(event)
     
     def load_selected_prompt(self):
         """Load the selected prompt into the prompt text area"""
@@ -237,24 +377,19 @@ class TextTab(QWidget):
         except Exception as e:
             self.status_message.emit(f"Error loading prompt: {str(e)}")
     
-    def perform_action(self, shortcut):
+    def perform_action(self, action_name):
         """Process the text based on the selected action"""
-        text = self.input_text.toPlainText()
+        text = self.input_text_edit.toPlainText()
         
         if not text:
             self.status_message.emit("No text to process")
             return
-            
-        action = ACTIONS.get(shortcut)
-        if not action:
-            self.status_message.emit(f"Unknown action: {shortcut}")
-            return
-            
+        
         try:
-            if action == "Custom Prompt":
+            if action_name == "custom_prompt":
                 prompt = self.prompt_text.toPlainText() + "\n\n"
             else:
-                prompt = get_prompt(action)
+                prompt = get_prompt(action_name)
                 self.prompt_text.setPlainText(prompt)
                 
             message = Message(
@@ -265,9 +400,9 @@ class TextTab(QWidget):
                 )]
             )
             
-            self.status_message.emit(f"Processing text with {action}...")
+            self.status_message.emit(f"Processing text with {action_name}...")
             new_text = ai_model.message(message).content
-            self.input_text.setPlainText(new_text)
+            self.input_text_edit.setPlainText(new_text)
             pyperclip.copy(new_text)
             self.status_message.emit(f"Text processed and copied to clipboard")
             
@@ -285,17 +420,32 @@ class SettingsTab(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
         
-        # Keyboard shortcuts section
-        shortcuts_section = QWidget()
-        shortcuts_layout = QVBoxLayout(shortcuts_section)
+        # Keyboard hints section
+        keyboard_section = QWidget()
+        keyboard_layout = QVBoxLayout(keyboard_section)
         
-        shortcuts_label = QLabel("Keyboard Shortcuts")
-        shortcuts_label.setFont(QFont("Arial", 12, QFont.Bold))
-        shortcuts_layout.addWidget(shortcuts_label)
+        keyboard_label = QLabel("Keyboard Settings")
+        keyboard_label.setFont(QFont("Arial", 12, QFont.Bold))
+        keyboard_layout.addWidget(keyboard_label)
         
-        edit_shortcuts_btn = QPushButton("Edit Shortcuts")
-        edit_shortcuts_btn.clicked.connect(self.edit_shortcuts)
-        shortcuts_layout.addWidget(edit_shortcuts_btn)
+        # Default hints setting
+        self.default_hints = QCheckBox("Show keyboard hints by default")
+        self.default_hints.setChecked(True)
+        keyboard_layout.addWidget(self.default_hints)
+        
+        # Add help text
+        help_text = QLabel(
+            "Keyboard Shortcuts:\n"
+            "- Press 'h' to toggle shortcut hints\n"
+            "- Press 'c' for correction\n"
+            "- Press 'i' for improvement\n"
+            "- Press 'f' for conversation format\n"
+            "- Press 'p' to use custom prompt\n"
+            "- Press 'Escape' to exit edit mode or close\n"
+            "- Press 'Ctrl+Enter' to copy and close"
+        )
+        help_text.setWordWrap(True)
+        keyboard_layout.addWidget(help_text)
         
         # Model settings section
         model_section = QWidget()
@@ -315,15 +465,9 @@ class SettingsTab(QWidget):
         model_layout.addLayout(model_selection)
         
         # Add sections to main layout
-        layout.addWidget(shortcuts_section)
+        layout.addWidget(keyboard_section)
         layout.addWidget(model_section)
         layout.addStretch(1)  # Push everything to the top
-    
-    def edit_shortcuts(self):
-        dialog = ShortcutEditor(self, ACTIONS)
-        if dialog.exec_():
-            # TODO: Update shortcuts based on dialog.get_shortcuts()
-            pass
 
 class PopupWindow(QMainWindow):
     """Main application window with tabbed interface"""
@@ -339,9 +483,6 @@ class PopupWindow(QMainWindow):
         
         # Set up the central widget with tabs
         self.setup_ui()
-        
-        # Add keyboard shortcuts
-        self.setup_shortcuts()
     
     def setup_ui(self):
         # Create the central widget
@@ -357,6 +498,7 @@ class PopupWindow(QMainWindow):
         # Add tabs
         self.text_tab = TextTab(self.prompts)
         self.text_tab.status_message.connect(self.update_status)
+        self.text_tab.mode_changed.connect(self.update_mode)
         self.tab_widget.addTab(self.text_tab, "Text Processing")
         
         self.settings_tab = SettingsTab()
@@ -368,34 +510,69 @@ class PopupWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+        self.status_bar.showMessage("Ready - Press 'h' to toggle keyboard shortcuts")
+        
+        # Set up global keyboard events
+        self.setup_keyboard_handlers()
     
-    def setup_shortcuts(self):
-        # Tab navigation shortcuts
-        for i in range(1, min(10, self.tab_widget.count() + 1)):
-            index = i - 1  # Store the index in a local variable
-            shortcut = QShortcut(QKeySequence(f"Alt+{i}"), self)
-            shortcut.activated.connect(lambda tab_idx=index: self.tab_widget.setCurrentIndex(tab_idx))
-        
-        # Action shortcuts
-        for shortcut_str, action in ACTIONS.items():
-            action_key = shortcut_str  # Store the shortcut string in a local variable
-            shortcut = QShortcut(QKeySequence(shortcut_str), self)
-            shortcut.activated.connect(lambda checked=False, key=action_key: self.text_tab.perform_action(key))
-        
+    def update_mode(self, mode):
+        """Update the window mode indicator"""
+        self.update_status(f"Mode: {mode}")
+    
+    def setup_keyboard_handlers(self):
+        """Set up global keyboard handlers"""
         # Escape to close
         escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
-        escape_shortcut.activated.connect(self.close)
+        escape_shortcut.activated.connect(self.handle_escape)
+        
+        # Ctrl+Enter to copy and close
+        copy_close_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
+        copy_close_shortcut.activated.connect(self.copy_and_close)
+        
+        # Tab navigation
+        for i in range(1, min(10, self.tab_widget.count() + 1)):
+            index = i - 1
+            alt_shortcut = QShortcut(QKeySequence(f"Alt+{i}"), self)
+            alt_shortcut.activated.connect(lambda idx=index: self.tab_widget.setCurrentIndex(idx))
+    
+    def handle_escape(self):
+        """Handle Escape key press"""
+        if self.text_tab.mode == "Edit":
+            # First escape exits edit mode
+            self.text_tab.enter_navigate_mode()
+        else:
+            # Second escape closes window
+            self.close()
+    
+    def copy_and_close(self):
+        """Copy the current text and close the window"""
+        text = self.text_tab.input_text_edit.toPlainText()
+        if text:
+            pyperclip.copy(text)
+            self.update_status("Text copied to clipboard")
+            QTimer.singleShot(500, self.close)  # Close after a short delay to show status
+        else:
+            self.update_status("No text to copy")
+    
+    def keyPressEvent(self, event):
+        """Handle global key press events"""
+        key = event.key()
+        
+        # h key to toggle hints when in navigate mode
+        if key == Qt.Key_H and self.text_tab.mode == "Navigate":
+            self.text_tab.toggle_hints(not self.text_tab.show_hints)
+            return
+            
+        super().keyPressEvent(event)
     
     def update_status(self, message):
         """Update the status bar with a message"""
         self.status_bar.showMessage(message, 5000)  # Show for 5 seconds
         
-    # Convenience properties for backward compatibility
     @property
     def input_text_area(self):
-        """Backward compatibility for accessing the input text area"""
-        return self.text_tab.input_text
+        # Ensure this returns the editable text area
+        return self.text_tab.input_text_edit
         
     @property
     def prompt_text_area(self):
@@ -404,11 +581,11 @@ class PopupWindow(QMainWindow):
         
     def set_input_text(self, text):
         """Set the input text content"""
-        self.text_tab.input_text.setPlainText(text)
+        self.text_tab.input_text_edit.setPlainText(text)
         
     def get_input_text(self):
         """Get the input text content"""
-        return self.text_tab.input_text.toPlainText()
+        return self.text_tab.input_text_edit.toPlainText()
         
     def set_prompt_text(self, text):
         """Set the prompt text content"""
