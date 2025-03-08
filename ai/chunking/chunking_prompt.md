@@ -30,28 +30,28 @@ When chunking documents, follow these principles:
 Return a JSON array of chunk objects. DO NOT include the full text of each chunk, only the markers needed to locate them. Each chunk object should have this structure:
 
 ```json
-{
+{{
   "chunks": [
-    {
+    {{
       "id": 1,
-      "metadata": {
+      "metadata": {{
         "topic": "Brief description of chunk content",
         "type": "section|paragraph|list|code|etc"
-      },
+      }},
       "start_text": "First 50-70 characters of the chunk",
       "end_text": "Last 50-70 characters of the chunk"
-    },
-    {
+    }},
+    {{
       "id": 2,
-      "metadata": {
+      "metadata": {{
         "topic": "Next chunk topic description",
         "type": "section|paragraph|list|code|etc"
-      },
+      }},
       "start_text": "First 50-70 characters of this chunk",
       "end_text": "Last 50-70 characters of this chunk"
-    }
+    }}
   ]
-}
+}}
 ```
 
 IMPORTANT: Never include the full chunk content. Only include the start_text and end_text markers that can be used to locate the chunk boundaries in the original document.

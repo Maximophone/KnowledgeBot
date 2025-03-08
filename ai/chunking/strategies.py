@@ -14,11 +14,13 @@ import sys
 import os
 import json
 import logging
+import traceback
 
 # Add parent directory to path to allow importing from ai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai.tokens import n_tokens
 from ai.client import AI, DEFAULT_TEMPERATURE
+from ai.types import Message, MessageContent
 
 
 # Configure logging
@@ -104,43 +106,82 @@ class LLMChunker(ChunkingStrategy):
     """
     
     def __init__(self, ai_client=None, prompt_template=None, model_name=None, 
-                 max_retries=3, fallback=True):
+                 max_retries=3, fallback=False):
         """
         Initialize the LLM chunker.
         
         Args:
             ai_client: The AI client to use for chunking
             prompt_template: The prompt template to use for the LLM
-            model_name: The model to use (defaults to sonnet3.7)
+            model_name: The model to use (defaults to gemini2.0flash)
             max_retries: Maximum number of retry attempts
             fallback: Whether to fall back to SimpleChunker if LLM chunking fails
         """
+        logger.info("Initializing LLMChunker")
+        
         self.ai_client = ai_client
         self.prompt_path = "ai/chunking/chunking_prompt.md"
         self.model_name = model_name or "gemini2.0flash"
         self.max_retries = max_retries
         self.fallback = fallback
+        self.conversation_history = []
         
-        # Load default prompt if none provided
+        # Load prompt template
         if prompt_template is None and self.prompt_path:
             try:
+                logger.info(f"Loading prompt template from {self.prompt_path}")
                 with open(self.prompt_path, "r", encoding="utf-8") as f:
                     self.prompt_template = f.read()
+                logger.debug(f"Prompt template loaded ({len(self.prompt_template)} characters)")
             except Exception as e:
                 logger.error(f"Failed to load prompt template: {str(e)}")
-                self.prompt_template = "Please chunk this document into semantically coherent parts."
+                traceback.print_exc()
+                raise ValueError(f"Failed to load prompt template from {self.prompt_path}: {str(e)}")
         else:
             self.prompt_template = prompt_template
             
-        # Lazy initialization of AI client
+        # Check if prompt template contains required placeholder
+        if self.prompt_template and "{max_token_count}" not in self.prompt_template:
+            error_msg = "Prompt template does not contain {max_token_count} placeholder"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Initialize AI client
         if self.ai_client is None:
             try:
-                # Initialize the AI client with the system prompt from the chunking_prompt.md file
+                logger.info(f"Creating AI client with model {self.model_name}")
                 self.ai_client = AI(model_name=self.model_name)
-                logger.info(f"Initialized AI client with model {self.model_name}")
+                logger.info(f"AI client initialized successfully")
+                # Check if AI client has the expected methods
+                if not hasattr(self.ai_client, 'messages'):
+                    error_msg = f"AI client does not have 'messages' method. Available methods: {dir(self.ai_client)}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
             except Exception as e:
                 logger.error(f"Failed to initialize AI client: {str(e)}")
-                self.ai_client = None
+                traceback.print_exc()
+                raise
+    
+    def _create_message(self, text: str, role: str = "user") -> Message:
+        """
+        Create a message object for the AI conversation.
+        
+        Args:
+            text: The message text
+            role: The role of the message sender (user, assistant, system)
+            
+        Returns:
+            Message object
+        """
+        return Message(
+            role=role,
+            content=[
+                MessageContent(
+                    type="text",
+                    text=text
+                )
+            ]
+        )
     
     def _process_llm_response(self, response: str, text: str, retry_count: int = 0) -> Tuple[bool, Optional[List[Dict[str, Any]]], Optional[str]]:
         """
@@ -239,83 +280,108 @@ Please provide more accurate start_text and end_text markers that can be found i
         Raises:
             ValueError: If chunking fails and fallback is disabled
         """
+        logger.info("Starting LLM chunking process")
+        logger.info(f"Text length: {len(text)} characters")
+        logger.info(f"Max chunk size: {max_chunk_size}")
+        
         # Check if we have a valid AI client
         if self.ai_client is None:
-            logger.warning("No AI client available. Falling back to SimpleChunker.")
+            error_msg = "No AI client available"
+            logger.error(error_msg)
             if self.fallback:
+                logger.info("Falling back to SimpleChunker")
                 simple_chunker = SimpleChunker()
                 return simple_chunker.chunk(text, max_chunk_size, overlap, **kwargs)
             else:
-                raise ValueError("No AI client available and fallback is disabled")
+                raise ValueError(error_msg)
         
-        # Prepare the system prompt with the max token count
-        system_prompt = self.prompt_template
-        if max_chunk_size:
-            system_prompt = system_prompt.format(max_token_count=max_chunk_size)
-        else:
-            system_prompt = system_prompt.format(max_token_count="Not specified, use your judgment")
+        # Format the system prompt with max token count
+        try:
+            logger.info("Formatting system prompt with max token count")
+            token_value = max_chunk_size if max_chunk_size else "Use your judgment"
+            system_prompt = self.prompt_template.format(max_token_count=token_value)
+            logger.debug(f"System prompt formatted successfully")
+        except Exception as e:
+            error_msg = f"Error formatting system prompt: {str(e)}"
+            logger.error(error_msg)
+            traceback.print_exc()
+            raise ValueError(error_msg)
         
-        # Prepare a simple user message with just the document to chunk
+        # Reset conversation history
+        self.conversation_history = []
+        
+        # Prepare initial message
         user_message = f"""Please analyze and chunk the following document:
 
 ```
 {text}
 ```
 """
+        # Add the initial user message to conversation history
+        self.conversation_history.append(self._create_message(user_message))
+        
+        logger.debug("Initial user message prepared")
         
         # Initialize retry counter and result container
         retry_count = 0
         chunks_data = None
         success = False
         
-        # Initial request to the LLM
+        # Temperature setting
         temperature = kwargs.get('temperature', DEFAULT_TEMPERATURE)
-        try:
-            # Use the 'message' method with our system prompt and user message
-            ai_response = self.ai_client.message(
-                message=user_message,
-                system_prompt=system_prompt,
-                temperature=temperature,
-                max_tokens=kwargs.get('max_response_tokens', 2048)
-            )
-            response = ai_response.content
-        except Exception as e:
-            logger.error(f"Error calling AI: {str(e)}")
-            if self.fallback:
-                logger.warning("AI call failed. Falling back to SimpleChunker.")
-                simple_chunker = SimpleChunker()
-                return simple_chunker.chunk(text, max_chunk_size, overlap, **kwargs)
-            else:
-                raise ValueError(f"AI call failed: {str(e)}")
+        max_response_tokens = kwargs.get('max_response_tokens', 2048)
         
         while retry_count <= self.max_retries:
-            success, chunks_data, error_msg = self._process_llm_response(
-                response, text, retry_count
-            )
-            
-            if success:
-                break
-                
-            if retry_count == self.max_retries:
-                logger.warning(f"Max retries exceeded: {error_msg}")
-                break
-                
-            # Retry with the error message
-            logger.info(f"Retry {retry_count + 1}/{self.max_retries}: {error_msg}")
             try:
-                # Use the error message as the new user message for retry
-                ai_response = self.ai_client.message(
-                    message=error_msg,
+                # Use the 'messages' method with our conversation history
+                logger.info(f"Sending request to AI (retry {retry_count}/{self.max_retries})")
+                
+                ai_response = self.ai_client.messages(
+                    messages=self.conversation_history,
                     system_prompt=system_prompt,
                     temperature=temperature,
-                    max_tokens=kwargs.get('max_response_tokens', 2048)
+                    max_tokens=max_response_tokens
                 )
+                
+                logger.info("Received response from AI")
                 response = ai_response.content
-            except Exception as e:
-                logger.error(f"Error during retry: {str(e)}")
-                break
+                logger.debug(f"AI response received ({len(response) if response else 0} characters)")
+                
+                # Add the assistant response to the conversation history
+                self.conversation_history.append(self._create_message(response, role="assistant"))
+                
+                # Process the response
+                success, chunks_data, error_msg = self._process_llm_response(
+                    response, text, retry_count
+                )
+                
+                if success:
+                    logger.info("Successfully processed AI response")
+                    break
+                    
+                if retry_count == self.max_retries:
+                    logger.warning(f"Max retries exceeded: {error_msg}")
+                    break
+                    
+                # Retry with the error message
+                retry_count += 1
+                logger.info(f"Retry {retry_count}/{self.max_retries}: {error_msg[:100]}...")
+                
+                # Add the error feedback to the conversation history
+                self.conversation_history.append(self._create_message(error_msg))
             
-            retry_count += 1
+            except Exception as e:
+                error_msg = f"Error during AI interaction: {str(e)}"
+                logger.error(error_msg)
+                traceback.print_exc()
+                
+                if retry_count < self.max_retries:
+                    retry_count += 1
+                    logger.info(f"Retrying after error ({retry_count}/{self.max_retries})")
+                    continue
+                else:
+                    logger.error("Max retries exceeded after error")
+                    break
         
         # If LLM chunking failed and fallback is enabled, use SimpleChunker
         if not success and self.fallback:
@@ -344,4 +410,5 @@ Please provide more accurate start_text and end_text markers that can be found i
             )
             chunks.append(chunk)
         
+        logger.info(f"LLM chunking completed successfully with {len(chunks)} chunks")
         return chunks 
