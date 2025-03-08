@@ -56,7 +56,7 @@ def run_command(command: str) -> str:
     safe=True
 )
 def read_file(path: str) -> str:
-    CHAR_LIMIT = 100_000  # About the size of a small book
+    CHAR_LIMIT = 20_000  # About the size of a small book
     with open(path, 'r', encoding='utf-8') as file:
         content = file.read(CHAR_LIMIT)
         if len(content) == CHAR_LIMIT:
