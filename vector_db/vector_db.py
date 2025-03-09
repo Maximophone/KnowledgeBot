@@ -94,6 +94,7 @@ class VectorDB:
         content: str,
         timestamp: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        update_mode: str = "error",
         max_chunk_size: Optional[int] = None,
         overlap: int = 0,
         **chunking_kwargs
@@ -112,21 +113,48 @@ class VectorDB:
             content: Text content of the document
             timestamp: Timestamp of the document (defaults to current time)
             metadata: Additional metadata for the document
+            update_mode: How to handle existing documents:
+                - "error": Raise an error if document exists (default)
+                - "skip": Skip if document exists (silent)
+                - "update_if_newer": Update only if timestamp is newer
+                - "force": Always replace existing document
             max_chunk_size: Maximum size of each chunk (passed to chunker)
             overlap: Overlap between chunks (passed to chunker)
             **chunking_kwargs: Additional parameters for the chunking strategy
             
         Returns:
             Number of chunks processed and stored
+            
+        Raises:
+            ValueError: If document exists and update_mode is "error"
         """
-        # Check if document already exists and handle appropriately
-        if self.storage.document_exists(file_path):
-            logger.info(f"Document {file_path} already exists, deleting old version")
-            self.delete_document(file_path)
-        
         # Set default timestamp if not provided
         if timestamp is None:
             timestamp = datetime.now().isoformat()
+        
+        # Check if document already exists and handle based on update_mode
+        if self.storage.document_exists(file_path):
+            if update_mode == "error":
+                raise ValueError(f"Document {file_path} already exists. Use update_document() to update it or specify a different update_mode.")
+            
+            elif update_mode == "skip":
+                logger.info(f"Document {file_path} already exists, skipping (update_mode=skip)")
+                return 0
+                
+            elif update_mode == "update_if_newer":
+                existing_timestamp = self.storage.get_document_timestamp(file_path)
+                if existing_timestamp and existing_timestamp >= timestamp:
+                    logger.info(f"Document {file_path} already exists with same or newer timestamp, skipping (update_mode=update_if_newer)")
+                    return 0
+                logger.info(f"Document {file_path} already exists but has older timestamp, updating")
+                self.delete_document(file_path)
+                
+            elif update_mode == "force":
+                logger.info(f"Document {file_path} already exists, replacing (update_mode=force)")
+                self.delete_document(file_path)
+                
+            else:
+                raise ValueError(f"Invalid update_mode: {update_mode}. Must be one of: error, skip, update_if_newer, force")
         
         # Set default metadata if not provided
         if metadata is None:
@@ -200,6 +228,7 @@ class VectorDB:
         content: str,
         timestamp: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        create_if_missing: bool = True,
         max_chunk_size: Optional[int] = None,
         overlap: int = 0,
         **chunking_kwargs
@@ -212,22 +241,37 @@ class VectorDB:
             content: New text content of the document
             timestamp: New timestamp of the document
             metadata: New metadata for the document
+            create_if_missing: If True, create document if it doesn't exist
             max_chunk_size: Maximum size of each chunk
             overlap: Overlap between chunks
             **chunking_kwargs: Additional parameters for the chunking strategy
             
         Returns:
             Number of chunks processed and stored
+            
+        Raises:
+            ValueError: If document doesn't exist and create_if_missing is False
         """
-        # First delete the document
-        self.delete_document(file_path)
+        # Check if document exists
+        exists = self.storage.document_exists(file_path)
         
-        # Then add it again
+        if not exists and not create_if_missing:
+            raise ValueError(f"Document {file_path} does not exist and create_if_missing is False")
+        
+        # Delete the document if it exists
+        if exists:
+            logger.info(f"Updating existing document {file_path}")
+            self.delete_document(file_path)
+        else:
+            logger.info(f"Document {file_path} does not exist, creating new")
+        
+        # Add the document with new content
         return self.add_document(
             file_path=file_path,
             content=content,
             timestamp=timestamp,
             metadata=metadata,
+            update_mode="force",  # We've already handled the existence check
             max_chunk_size=max_chunk_size,
             overlap=overlap,
             **chunking_kwargs

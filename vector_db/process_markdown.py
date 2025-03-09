@@ -65,6 +65,7 @@ def process_markdown_files(
     recursive: bool = True,
     max_chunk_size: Optional[int] = None,
     overlap: int = 0,
+    update_mode: str = "update_if_newer",
     api_key: Optional[str] = None,
     model_name: str = "text-embedding-3-small",
     batch_size: int = 8
@@ -78,6 +79,11 @@ def process_markdown_files(
         recursive: Whether to search recursively in subfolders
         max_chunk_size: Maximum size of each chunk
         overlap: Overlap between chunks
+        update_mode: How to handle existing documents:
+            - "error": Raise an error if document exists
+            - "skip": Skip if document exists (silent)
+            - "update_if_newer": Update only if timestamp is newer (default)
+            - "force": Always replace existing document
         api_key: OpenAI API key
         model_name: Name of the embedding model
         batch_size: Batch size for embedding API calls
@@ -98,6 +104,8 @@ def process_markdown_files(
     
     # Process each file
     processed_count = 0
+    skipped_count = 0
+    error_count = 0
     total_chunks = 0
     start_time = time.time()
     
@@ -120,6 +128,7 @@ def process_markdown_files(
             # Skip empty files
             if not content.strip():
                 logger.warning(f"Skipping empty file: {file_path}")
+                skipped_count += 1
                 continue
             
             # Prepare metadata
@@ -133,25 +142,39 @@ def process_markdown_files(
                 "processed_at": datetime.now().isoformat()
             }
             
-            # Add document to vector database
-            chunks_added = db.add_document(
-                file_path=file_path,
-                content=content,
-                timestamp=timestamp,
-                metadata=metadata,
-                max_chunk_size=max_chunk_size,
-                overlap=overlap
-            )
-            
-            total_chunks += chunks_added
-            processed_count += 1
-            logger.info(f"Processed {file_path} ({chunks_added} chunks)")
-            
+            # Add document to vector database with the specified update mode
+            try:
+                chunks_added = db.add_document(
+                    file_path=file_path,
+                    content=content,
+                    timestamp=timestamp,
+                    metadata=metadata,
+                    update_mode=update_mode,
+                    max_chunk_size=max_chunk_size,
+                    overlap=overlap
+                )
+                
+                if chunks_added > 0:
+                    total_chunks += chunks_added
+                    processed_count += 1
+                    logger.info(f"Processed {file_path} ({chunks_added} chunks)")
+                else:
+                    skipped_count += 1
+                    logger.info(f"Skipped {file_path} (already processed)")
+            except ValueError as e:
+                if "already exists" in str(e):
+                    logger.warning(f"Skipped {file_path}: {str(e)}")
+                    skipped_count += 1
+                else:
+                    raise
+                
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}")
+            error_count += 1
     
     elapsed_time = time.time() - start_time
     logger.info(f"Finished processing {processed_count} files with {total_chunks} total chunks in {elapsed_time:.2f} seconds")
+    logger.info(f"Skipped: {skipped_count} files, Errors: {error_count} files")
     
     # Show database statistics
     stats = db.get_statistics()
@@ -191,6 +214,12 @@ def main():
         help="Overlap between chunks (default: 50)"
     )
     parser.add_argument(
+        "--update-mode",
+        choices=["error", "skip", "update_if_newer", "force"],
+        default="update_if_newer",
+        help="How to handle existing documents (default: update_if_newer)"
+    )
+    parser.add_argument(
         "--model-name", 
         default="text-embedding-3-small",
         help="Name of the embedding model (default: text-embedding-3-small)"
@@ -223,6 +252,7 @@ def main():
         recursive=args.recursive,
         max_chunk_size=args.max_chunk_size,
         overlap=args.overlap,
+        update_mode=args.update_mode,
         api_key=api_key,
         model_name=args.model_name,
         batch_size=args.batch_size
