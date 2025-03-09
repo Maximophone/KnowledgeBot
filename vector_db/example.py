@@ -11,6 +11,7 @@ from datetime import datetime
 # Add parent directory to Python path to import from project
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Import VectorDB using the proper path
 from vector_db import VectorDB
 from vector_db.similarity import CosineSimilarity, EuclideanDistance
 

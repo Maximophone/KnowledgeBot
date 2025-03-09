@@ -17,11 +17,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
-# Now import modules using their file paths directly
-sys.path.insert(0, current_dir)
-from vector_db import VectorDB  # This will now import from vector_db/__init__.py
-from storage import VectorStorage  # This will import from vector_db/storage.py
-from similarity import CosineSimilarity  # This will import from vector_db/similarity.py
+# Now import modules using relative imports
+from .vector_db import VectorDB
+from .storage import VectorStorage
+from .similarity import CosineSimilarity
 from ai.chunking.chunker import Chunker
 from ai.chunking.strategies import SimpleChunker, LLMChunker
 from ai.embeddings import OpenAIEmbedder

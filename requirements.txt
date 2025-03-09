@@ -40,6 +40,7 @@ httpx==0.28.1
 idna==3.10
 imageio==2.36.1
 imageio-ffmpeg==0.5.1
+inquirer==3.1.4
 jiter==0.8.2
 keyboard==0.13.5
 linkedin_api==2.2.0
@@ -66,10 +67,13 @@ PyQt5==5.15.11
 PyQt5-Qt5==5.15.2
 PyQt5_sip==12.16.1
 python-dotenv==1.0.1
+python-editor==1.0.4
 pywin32==308
 PyYAML==6.0.2
+readchar==4.0.5
 requests==2.32.3
 requests-oauthlib==2.0.0
+rich==13.7.1
 rsa==4.9
 shadowcopy==0.0.4
 smmap==5.0.2

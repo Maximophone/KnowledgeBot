@@ -13,6 +13,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
 # Import the VectorDB class directly from the file
-from vector_db import VectorDB
+from .vector_db import VectorDB
 
 __all__ = ['VectorDB'] 

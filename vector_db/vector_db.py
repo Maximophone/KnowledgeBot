@@ -8,9 +8,9 @@ from typing import List, Dict, Any, Optional, Tuple, Union, Callable
 from datetime import datetime
 from pathlib import Path
 
-# Use absolute imports instead of relative imports
-from storage import VectorStorage
-from similarity import VectorSearcher, SimilarityMetric, CosineSimilarity
+# Use relative imports for modules in the same package
+from .storage import VectorStorage
+from .similarity import VectorSearcher, SimilarityMetric, CosineSimilarity
 from ai.chunking.chunker import Chunker
 from ai.chunking.strategies import SimpleChunker
 from ai.embeddings import BaseEmbedder, OpenAIEmbedder
