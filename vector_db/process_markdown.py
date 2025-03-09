@@ -76,22 +76,18 @@ def process_markdown_files(
         folder_path: Path to the folder containing markdown files
         db_path: Path to the vector database
         recursive: Whether to search recursively in subfolders
-        max_chunk_size: Maximum size of each chunk
-        overlap: Overlap between chunks
-        update_mode: How to handle existing documents:
-            - "error": Raise an error if document exists
-            - "skip": Skip if document exists (silent)
-            - "update_if_newer": Update only if timestamp is newer (default)
-            - "force": Always replace existing document
-        api_key: OpenAI API key
-        model_name: Name of the embedding model
-        batch_size: Batch size for embedding API calls
+        max_chunk_size: Maximum size of each chunk (for chunker configuration)
+        overlap: Overlap between chunks (for chunker configuration)
+        update_mode: How to handle existing documents (error, skip, update_if_newer, force)
+        api_key: OpenAI API key (if not provided, will use OPENAI_API_KEY environment variable)
+        model_name: Embedding model name
+        batch_size: Number of embeddings to process in a batch
         
     Returns:
         Number of files processed
     """
     # Initialize components
-    chunker = Chunker(LLMChunker(max_direct_tokens=2000))
+    chunker = Chunker(LLMChunker(max_direct_tokens=2000, max_chunk_size=max_chunk_size, overlap=overlap))
     embedder = OpenAIEmbedder(model_name=model_name, api_key=api_key, batch_size=batch_size)
     
     # Initialize vector database
@@ -149,9 +145,7 @@ def process_markdown_files(
                         content=content,
                         timestamp=timestamp,
                         metadata=metadata,
-                        update_mode=update_mode,
-                        max_chunk_size=max_chunk_size,
-                        overlap=overlap
+                        update_mode=update_mode
                     )
                     
                     if chunks_added > 0:

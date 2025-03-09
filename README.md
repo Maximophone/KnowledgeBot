@@ -107,8 +107,8 @@ ai_model = AI("claude-3-sonnet", tools=memory.TOOLS)
 ```python
 from ai.chunking.strategies import LLMChunker
 
-chunker = LLMChunker(max_direct_tokens=2000)
-chunks = chunker.chunk(text, max_chunk_size=1000)
+chunker = LLMChunker(max_direct_tokens=2000, max_chunk_size=1000)
+chunks = chunker.chunk(text)
 ```
 For detailed documentation on the chunking system, see [LLMChunker Technical Documentation](ai/chunking/TECHNICAL.md)
 

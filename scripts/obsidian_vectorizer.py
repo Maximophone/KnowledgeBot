@@ -51,6 +51,7 @@ DEFAULT_CONFIG = {
     "db_path": "data/obsidian_vector_db.sqlite",
     "recursive": True,
     "max_chunk_size": 2000,
+    "max_direct_tokens": 2000,
     "overlap": 50,
     "update_mode": "update_if_newer",
     "model_name": "text-embedding-3-small",
@@ -104,6 +105,8 @@ def process_obsidian_vault(
     db_path: str,
     recursive: bool = True,
     max_chunk_size: Optional[int] = 2000,
+    max_direct_tokens: Optional[int] = 2000,
+    llm_chunker_model_name: Optional[str] = "gemini2.0flash",
     overlap: int = 0,
     update_mode: str = "update_if_newer",
     api_key: Optional[str] = None,
@@ -130,7 +133,7 @@ def process_obsidian_vault(
         Dictionary with statistics about the processing
     """
     # Initialize components
-    chunker = Chunker(LLMChunker(max_direct_tokens=2000))
+    chunker = Chunker(LLMChunker(model_name=llm_chunker_model_name, max_direct_tokens=max_direct_tokens, max_chunk_size=max_chunk_size, overlap=overlap))
     embedder = OpenAIEmbedder(model_name=model_name, api_key=api_key, batch_size=batch_size)
     
     # Initialize vector database
@@ -200,9 +203,7 @@ def process_obsidian_vault(
                             content=content,
                             timestamp=timestamp,
                             metadata=metadata,
-                            update_mode=update_mode,
-                            max_chunk_size=max_chunk_size,
-                            overlap=overlap
+                            update_mode=update_mode
                         )
                         
                         if chunks_added > 0:
@@ -345,6 +346,8 @@ class ObsidianVectorizer(BaseScript):
                         ('Database Path', 'db_path'),
                         ('Search Recursively', 'recursive'),
                         ('Maximum Chunk Size', 'max_chunk_size'),
+                        ("Maximum Direct Tokens", "max_direct_tokens"),
+                        ("LLM Chunker Model Name", "llm_chunker_model_name"),
                         ('Chunk Overlap', 'overlap'),
                         ('Update Mode', 'update_mode'),
                         ('Embedding Model', 'model_name'),
@@ -582,6 +585,8 @@ class ObsidianVectorizer(BaseScript):
                 db_path=config['db_path'],
                 recursive=config['recursive'],
                 max_chunk_size=config['max_chunk_size'],
+                max_direct_tokens=config['max_direct_tokens'],
+                llm_chunker_model_name=config['llm_chunker_model_name'],
                 overlap=config['overlap'],
                 update_mode=config['update_mode'],
                 api_key=api_key,

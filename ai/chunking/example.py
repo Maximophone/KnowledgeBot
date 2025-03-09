@@ -40,17 +40,17 @@ def main():
         print(f"Error loading file: {e}")
         return 1
     
-    # Create chunker with selected strategy
+    # Create chunker with the selected strategy
     if args.strategy == "simple":
-        chunker = Chunker(SimpleChunker())
+        chunker = Chunker(SimpleChunker(max_chunk_size=args.size, overlap=args.overlap))
         print(f"Using simple chunking strategy with max_chunk_size={args.size}, overlap={args.overlap}")
     else:  # args.strategy == "llm"
-        chunker = Chunker(LLMChunker())
+        chunker = Chunker(LLMChunker(max_chunk_size=args.size, overlap=args.overlap))
         print(f"Using LLM chunking strategy with max_chunk_size={args.size}, overlap={args.overlap}")
         print("Note: LLM chunking is not fully implemented and will use simple chunking as a fallback")
     
     # Perform chunking
-    chunks = chunker.chunk(text, max_chunk_size=args.size, overlap=args.overlap)
+    chunks = chunker.chunk(text)
     
     # Display results
     print(f"\nCreated {len(chunks)} chunks:")

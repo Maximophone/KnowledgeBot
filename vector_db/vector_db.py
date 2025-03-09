@@ -95,8 +95,6 @@ class VectorDB:
         timestamp: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         update_mode: str = "error",
-        max_chunk_size: Optional[int] = None,
-        overlap: int = 0,
         **chunking_kwargs
     ) -> int:
         """
@@ -109,22 +107,20 @@ class VectorDB:
         Args:
             file_path: Path of the document (used as unique identifier)
             content: Text content of the document
-            timestamp: Timestamp of the document (defaults to current time)
-            metadata: Additional metadata for the document
+            timestamp: Document timestamp (if None, current time will be used)
+            metadata: Additional metadata to store with the document
             update_mode: How to handle existing documents:
-                - "error": Raise an error if document exists (default)
-                - "skip": Skip if document exists (silent)
-                - "update_if_newer": Update only if timestamp is newer
-                - "force": Always replace existing document
-            max_chunk_size: Maximum size of each chunk (passed to chunker)
-            overlap: Overlap between chunks (passed to chunker)
-            **chunking_kwargs: Additional parameters for the chunking strategy
+                - error: Raise an error if document exists (default)
+                - skip: Skip if document exists
+                - update_if_newer: Update only if timestamp is newer
+                - force: Always replace existing document
+            **chunking_kwargs: Additional parameters for the chunking process
             
         Returns:
             Number of chunks processed and stored
             
         Raises:
-            ValueError: If document exists and update_mode is "error"
+            ValueError: If document already exists and update_mode='error'
         """
         # Set default timestamp if not provided
         if timestamp is None:
@@ -165,7 +161,7 @@ class VectorDB:
         
         # Chunk the document
         try:
-            chunks = self.chunker.chunk(content, max_chunk_size, overlap, **chunking_kwargs)
+            chunks = self.chunker.chunk(content, **chunking_kwargs)
             logger.info(f"Created {len(chunks)} chunks from document {file_path}")
             
             # Prepare all chunks and embeddings
@@ -273,8 +269,6 @@ class VectorDB:
         timestamp: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         create_if_missing: bool = True,
-        max_chunk_size: Optional[int] = None,
-        overlap: int = 0,
         **chunking_kwargs
     ) -> int:
         """
@@ -286,9 +280,7 @@ class VectorDB:
             timestamp: New timestamp of the document
             metadata: New metadata for the document
             create_if_missing: If True, create document if it doesn't exist
-            max_chunk_size: Maximum size of each chunk
-            overlap: Overlap between chunks
-            **chunking_kwargs: Additional parameters for the chunking strategy
+            **chunking_kwargs: Additional parameters for the chunking process
             
         Returns:
             Number of chunks processed and stored
@@ -315,8 +307,6 @@ class VectorDB:
             timestamp=timestamp,
             metadata=metadata,
             update_mode="force",  # We've already handled the existence check
-            max_chunk_size=max_chunk_size,
-            overlap=overlap,
             **chunking_kwargs
         )
     

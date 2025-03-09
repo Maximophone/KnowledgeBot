@@ -42,7 +42,7 @@ except Exception as e:
     sys.exit(1)
 
 
-def create_llm_chunker(model_name, max_retries, fallback, verbose):
+def create_llm_chunker(model_name, max_retries, fallback, verbose, max_chunk_size=None, overlap=0):
     """
     Create an LLMChunker with specified parameters.
     
@@ -51,11 +51,13 @@ def create_llm_chunker(model_name, max_retries, fallback, verbose):
         max_retries: Maximum retry attempts
         fallback: Whether to fall back to SimpleChunker if LLM chunking fails
         verbose: Enable verbose logging
+        max_chunk_size: Maximum size of each chunk in tokens (chunker configuration)
+        overlap: Number of tokens to overlap between chunks (chunker configuration)
         
     Returns:
         LLMChunker instance
     """
-    logger.info(f"Creating LLMChunker with model={model_name}, max_retries={max_retries}, fallback={fallback}")
+    logger.info(f"Creating LLMChunker with model={model_name}, max_retries={max_retries}, fallback={fallback}, max_chunk_size={max_chunk_size}, overlap={overlap}")
     
     if verbose:
         # Set logging level for all loggers
@@ -72,21 +74,21 @@ def create_llm_chunker(model_name, max_retries, fallback, verbose):
     chunker = LLMChunker(
         model_name=model_name,
         max_retries=max_retries,
-        fallback=fallback
+        fallback=fallback,
+        max_chunk_size=max_chunk_size,
+        overlap=overlap
     )
     logger.info(f"LLMChunker created successfully")
     return chunker
 
 
-def chunk_document(file_path, chunker, max_chunk_size, overlap):
+def chunk_document(file_path, chunker):
     """
     Chunk a document using the provided chunker.
     
     Args:
         file_path: Path to the document file
-        chunker: The chunking strategy to use
-        max_chunk_size: Maximum chunk size
-        overlap: Overlap between chunks
+        chunker: The chunking strategy to use (already configured with desired parameters such as max_chunk_size and overlap)
         
     Returns:
         List of chunks
@@ -104,11 +106,7 @@ def chunk_document(file_path, chunker, max_chunk_size, overlap):
     logger.debug(f"Document preview: {text[:100]}...")
     
     logger.info(f"Chunking document with {chunker.__class__.__name__}")
-    chunks = Chunker(chunker).chunk(
-        text, 
-        max_chunk_size=max_chunk_size, 
-        overlap=overlap
-    )
+    chunks = Chunker(chunker).chunk(text)
     
     logger.info(f"Created {len(chunks)} chunks")
     return chunks
@@ -136,6 +134,8 @@ def save_debug_info(base_filename, llm_chunker, chunks=None, error=None):
         "timestamp": time.time(),
         "model": llm_chunker.model_name,
         "max_retries": llm_chunker.max_retries,
+        "max_chunk_size": llm_chunker.max_chunk_size,
+        "overlap": llm_chunker.overlap,
         "result": "success" if chunks is not None else "failure"
     }
     
@@ -250,23 +250,20 @@ def main():
         file_path = os.path.normpath(args.file)
         logger.info(f"Normalized file path: {file_path}")
         
-        # Create LLM chunker
+        # Create LLM chunker with proper parameters
         llm_chunker = create_llm_chunker(
             model_name=args.model,
             max_retries=args.retries,
             fallback=args.fallback,
-            verbose=args.verbose
+            verbose=args.verbose,
+            max_chunk_size=args.size,
+            overlap=args.overlap
         )
-        
-        # Store the max_chunk_size value for debugging
-        llm_chunker._last_max_chunk_size = args.size
         
         # Chunk the document
         chunks = chunk_document(
             file_path=file_path,
-            chunker=llm_chunker,
-            max_chunk_size=args.size,
-            overlap=args.overlap
+            chunker=llm_chunker
         )
         
         # Display results
@@ -276,12 +273,10 @@ def main():
         # Compare with SimpleChunker if requested
         if args.compare:
             print("\nComparing with SimpleChunker:")
-            simple_chunker = SimpleChunker()
+            simple_chunker = SimpleChunker(max_chunk_size=args.size, overlap=args.overlap)
             simple_chunks = chunk_document(
                 file_path=file_path,
-                chunker=simple_chunker,
-                max_chunk_size=args.size,
-                overlap=args.overlap
+                chunker=simple_chunker
             )
             
             print(f"SimpleChunker created {len(simple_chunks)} chunks")

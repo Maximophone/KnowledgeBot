@@ -42,23 +42,32 @@ class SimpleChunker(ChunkingStrategy):
     by character count.
     """
     
-    def chunk(self, text: str, max_chunk_size: Optional[int] = 1000,
-              overlap: int = 0, **kwargs) -> List[Chunk]:
+    def __init__(self, max_chunk_size: int = 1000, overlap: int = 0):
+        """
+        Initialize the SimpleChunker with configuration.
+        
+        Args:
+            max_chunk_size: Maximum size of each chunk in characters
+            overlap: Number of characters to overlap between chunks
+        """
+        self.max_chunk_size = max_chunk_size
+        self.overlap = overlap
+    
+    def chunk(self, text: str, **kwargs) -> List[Chunk]:
         """
         Split text into chunks of equal size.
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk in characters
-            overlap: Number of characters to overlap between chunks
             **kwargs: Additional parameters (ignored in this implementation)
             
         Returns:
             List of Chunk objects
         """
-        if max_chunk_size is None:
-            max_chunk_size = 1000  # Default chunk size
-            
+        # Use instance variables
+        max_chunk_size = self.max_chunk_size
+        overlap = self.overlap
+        
         chunks = []
         text_length = len(text)
         
@@ -113,7 +122,8 @@ class LLMChunker(ChunkingStrategy):
     """
     
     def __init__(self, ai_client=None, prompt_template=None, model_name=None, 
-                 max_retries=5, fallback=False, max_direct_tokens=1000):
+                 max_retries=5, fallback=False, max_direct_tokens=1000,
+                 max_chunk_size=None, overlap=0):
         """
         Initialize the LLM chunker.
         
@@ -124,6 +134,8 @@ class LLMChunker(ChunkingStrategy):
             max_retries: Maximum number of retry attempts
             fallback: Whether to fall back to SimpleChunker if LLM chunking fails
             max_direct_tokens: Maximum token count for direct chunking (larger documents use recursive approach)
+            max_chunk_size: Maximum size of each chunk in tokens
+            overlap: Number of tokens to overlap between chunks
         """
         logger.info("Initializing LLMChunker")
         
@@ -134,6 +146,8 @@ class LLMChunker(ChunkingStrategy):
         self.fallback = fallback
         self.conversation_history = []
         self.max_direct_tokens = max_direct_tokens
+        self.max_chunk_size = max_chunk_size
+        self.overlap = overlap
         
         # Track all splitting conversations
         self.split_conversations = []
@@ -473,7 +487,7 @@ Try again and make sure the text appears word-for-word in the document."""
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk in tokens
+            max_chunk_size: Maximum size of each chunk in tokens (overrides instance value if provided)
             position_offset: Offset to add to positions (for recursive calls)
             chunk_id_offset: Offset to add to chunk IDs (for recursive calls)
             depth: Current recursion depth
@@ -485,6 +499,10 @@ Try again and make sure the text appears word-for-word in the document."""
                 - List of chunks or empty list if failed
                 - Error message if failed, None otherwise
         """
+        # Use instance variable if no override is provided
+        if max_chunk_size is None:
+            max_chunk_size = self.max_chunk_size
+        
         # Check if the document is small enough for direct chunking
         doc_token_count = n_tokens(text)
         logger.info(f"Recursive chunking at depth {depth}: {len(text)} chars, ~{doc_token_count} tokens")
@@ -570,7 +588,7 @@ Try again and make sure the text appears word-for-word in the document."""
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk in tokens
+            max_chunk_size: Maximum size of each chunk in tokens (overrides instance value if provided)
             position_offset: Offset to add to positions (for recursive calls)
             chunk_id_offset: Offset to add to chunk IDs (for recursive calls)
             **kwargs: Additional parameters passed to the LLM
@@ -581,6 +599,10 @@ Try again and make sure the text appears word-for-word in the document."""
                 - List of chunks or empty list if failed
                 - Error message if failed, None otherwise
         """
+        # Use instance variable if no override is provided
+        if max_chunk_size is None:
+            max_chunk_size = self.max_chunk_size
+        
         logger.info(f"Starting direct LLM chunking process")
         logger.info(f"Text length: {len(text)} characters")
         logger.info(f"Max chunk size: {max_chunk_size} tokens (approx. {max_chunk_size * CHARS_PER_TOKEN if max_chunk_size else 'Not specified'} chars)")
@@ -905,16 +927,13 @@ All chunks must be valid and the entire document must be covered for the solutio
         # If we got this far with no errors, all chunks are valid and cover the entire document
         return True, successful_chunks, None
     
-    def chunk(self, text: str, max_chunk_size: Optional[int] = None,
-              overlap: int = 0, **kwargs) -> List[Chunk]:
+    def chunk(self, text: str, **kwargs) -> List[Chunk]:
         """
         Split text into semantically coherent chunks using an LLM.
         For large documents, uses a recursive divide-and-conquer approach.
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk in tokens
-            overlap: Number of tokens to overlap between chunks (not directly used for LLM chunking)
             **kwargs: Additional parameters passed to the LLM
             
         Returns:
@@ -923,6 +942,10 @@ All chunks must be valid and the entire document must be covered for the solutio
         Raises:
             ValueError: If chunking fails and fallback is disabled
         """
+        # Use class instance variables
+        max_chunk_size = self.max_chunk_size
+        overlap = self.overlap
+        
         logger.info("Starting LLM chunking process")
         logger.info(f"Text length: {len(text)} characters")
         logger.info(f"Max chunk size: {max_chunk_size} tokens (approx. {max_chunk_size * CHARS_PER_TOKEN if max_chunk_size else 'Not specified'} chars)")
@@ -943,8 +966,8 @@ All chunks must be valid and the entire document must be covered for the solutio
             logger.error(error_msg)
             if self.fallback:
                 logger.info("Falling back to SimpleChunker")
-                simple_chunker = SimpleChunker()
-                return simple_chunker.chunk(text, max_chunk_size, overlap, **kwargs)
+                simple_chunker = SimpleChunker(max_chunk_size=max_chunk_size, overlap=overlap)
+                return simple_chunker.chunk(text, **kwargs)
             else:
                 raise ValueError(error_msg)
         
@@ -955,17 +978,17 @@ All chunks must be valid and the entire document must be covered for the solutio
         if doc_token_count <= self.max_direct_tokens:
             # Use direct chunking for small documents
             logger.info(f"Using direct chunking approach (document size <= {self.max_direct_tokens} tokens)")
-            success, chunks, error = self._direct_chunk(text, max_chunk_size, **kwargs)
+            success, chunks, error = self._direct_chunk(text, max_chunk_size=max_chunk_size, **kwargs)
         else:
             # Use recursive chunking for large documents
             logger.info(f"Using recursive chunking approach (document size > {self.max_direct_tokens} tokens)")
-            success, chunks, error = self._recursive_chunk(text, max_chunk_size, **kwargs)
+            success, chunks, error = self._recursive_chunk(text, max_chunk_size=max_chunk_size, **kwargs)
         
         # If chunking failed and fallback is enabled, use SimpleChunker
         if not success and self.fallback:
             logger.warning(f"LLM chunking failed: {error}. Falling back to SimpleChunker.")
-            simple_chunker = SimpleChunker()
-            return simple_chunker.chunk(text, max_chunk_size, overlap, **kwargs)
+            simple_chunker = SimpleChunker(max_chunk_size=max_chunk_size, overlap=overlap)
+            return simple_chunker.chunk(text, **kwargs)
         
         # If chunking failed and fallback is disabled, raise an error
         if not success:

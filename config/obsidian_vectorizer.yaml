@@ -1,46 +1,24 @@
-# Obsidian Vectorizer Configuration
-# This file contains the configuration for the Obsidian Vectorizer script
-
-# Path to the Obsidian vault (modify this to point to your vault)
-vault_path: "G:\\My Drive\\Obsidian"
-
-# Path to the vector database file
-db_path: "data/obsidian_vector_db.sqlite"
-
-# Whether to search recursively in subfolders
-recursive: true
-
-# Maximum size of each chunk in tokens
-max_chunk_size: 2000
-
-# Overlap between chunks in tokens
-overlap: 50
-
-# How to handle existing documents:
-# - "error": Raise an error if document exists
-# - "skip": Skip if document exists (silent)
-# - "update_if_newer": Update only if timestamp is newer (default)
-# - "force": Always replace existing document
-update_mode: "update_if_newer"
-
-# Name of the OpenAI embedding model to use
-model_name: "text-embedding-3-small"
-
-# Batch size for embedding API calls
 batch_size: 8
-
-# List of directories to exclude from vectorization
 blacklist_directories:
-  - ".obsidian"   # Obsidian configuration directory
-  - ".git"        # Git repository
-  - ".trash"      # Obsidian trash folder
-  - "templates"   # Template directory
-  - ".templates"  # Hidden template directory
-  - "attachments" # Attachments directory
-  - "_resources"  # Resources directory
-  - "Archive"     # Archive directory
-  - "KnowledgeBot/Unsorted"
-  - "KnowledgeBot/Meetings"
-  - "Prompts"
-  - "AI Chats"
-  - "AI Memory"
+- .obsidian
+- .git
+- .trash
+- templates
+- .templates
+- attachments
+- _resources
+- Archive
+- KnowledgeBot/Unsorted
+- KnowledgeBot/Meetings
+- Prompts
+- AI Chats
+- AI Memory
+db_path: data/obsidian_vector_db.sqlite
+llm_chunker_model_name: sonnet3.7
+max_chunk_size: 2000
+max_direct_tokens: 2000
+model_name: text-embedding-3-small
+overlap: 50
+recursive: true
+update_mode: update_if_newer
+vault_path: G:\My Drive\Obsidian

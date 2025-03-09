@@ -33,15 +33,12 @@ class ChunkingStrategy(ABC):
     """
     
     @abstractmethod
-    def chunk(self, text: str, max_chunk_size: Optional[int] = None,
-              overlap: int = 0, **kwargs) -> List[Chunk]:
+    def chunk(self, text: str, **kwargs) -> List[Chunk]:
         """
         Split text into chunks according to the strategy.
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk (implementation-dependent units)
-            overlap: Number of overlapping units between chunks
             **kwargs: Additional strategy-specific parameters
             
         Returns:
@@ -64,21 +61,18 @@ class Chunker:
         """
         self.strategy = strategy
     
-    def chunk(self, text: str, max_chunk_size: Optional[int] = None,
-              overlap: int = 0, **kwargs) -> List[Chunk]:
+    def chunk(self, text: str, **kwargs) -> List[Chunk]:
         """
         Split text into chunks using the current strategy.
         
         Args:
             text: The text to chunk
-            max_chunk_size: Maximum size of each chunk (strategy-dependent units)
-            overlap: Number of overlapping units between chunks
             **kwargs: Additional strategy-specific parameters
             
         Returns:
             List of Chunk objects
         """
-        return self.strategy.chunk(text, max_chunk_size, overlap, **kwargs)
+        return self.strategy.chunk(text, **kwargs)
     
     def set_strategy(self, strategy: ChunkingStrategy) -> None:
         """

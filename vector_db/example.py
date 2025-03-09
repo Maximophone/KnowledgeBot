@@ -37,7 +37,7 @@ def main():
         sys.exit(1)
 
     # Initialize components
-    chunker = Chunker(SimpleChunker())
+    chunker = Chunker(SimpleChunker(max_chunk_size=500, overlap=50))
     embedder = OpenAIEmbedder(model_name="text-embedding-3-small", api_key=api_key)
     similarity = CosineSimilarity()
     
@@ -87,9 +87,7 @@ def main():
             file_path=doc["file_path"],
             content=doc["content"],
             timestamp=timestamp,
-            metadata=metadata,
-            max_chunk_size=500,
-            overlap=50
+            metadata=metadata
         )
     
     # Show database statistics

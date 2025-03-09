@@ -30,7 +30,9 @@ class TestSimpleChunker(unittest.TestCase):
     def test_small_chunks(self):
         """Test chunking with small chunk size."""
         chunk_size = 30
-        chunks = self.chunker.chunk(self.text, max_chunk_size=chunk_size)
+        # Create a new chunker with the specified chunk size
+        small_chunker = Chunker(SimpleChunker(max_chunk_size=chunk_size))
+        chunks = small_chunker.chunk(self.text)
         
         # Calculate expected number of chunks
         expected_chunks = (len(self.text) + chunk_size - 1) // chunk_size
@@ -48,7 +50,9 @@ class TestSimpleChunker(unittest.TestCase):
         """Test chunking with overlap."""
         chunk_size = 50
         overlap = 10
-        chunks = self.chunker.chunk(self.text, max_chunk_size=chunk_size, overlap=overlap)
+        # Create a new chunker with the specified chunk size and overlap
+        overlap_chunker = Chunker(SimpleChunker(max_chunk_size=chunk_size, overlap=overlap))
+        chunks = overlap_chunker.chunk(self.text)
         
         # Check if chunks overlap correctly
         for i in range(len(chunks) - 1):
@@ -80,14 +84,16 @@ class TestLLMChunker(unittest.TestCase):
     
     def test_fallback_behavior(self):
         """Test that LLMChunker falls back to SimpleChunker for now."""
-        llm_chunks = self.chunker.chunk(self.text, max_chunk_size=30)
+        # Set the max_chunk_size during initialization
+        self.chunker.strategy.max_chunk_size = 30
+        llm_chunks = self.chunker.chunk(self.text)
         
         # Compare with SimpleChunker
-        simple_chunker = Chunker(SimpleChunker())
-        simple_chunks = simple_chunker.chunk(self.text, max_chunk_size=30)
+        simple_chunker = Chunker(SimpleChunker(max_chunk_size=30))
+        simple_chunks = simple_chunker.chunk(self.text)
         
         self.assertEqual(len(llm_chunks), len(simple_chunks))
-        
+
 
 if __name__ == "__main__":
     unittest.main() 

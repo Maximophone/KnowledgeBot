@@ -180,10 +180,9 @@ chunker = LLMChunker(
 with open("document.txt", "r") as f:
     text = f.read()
 
-chunks = chunker.chunk(
-    text=text,
-    max_chunk_size=1000  # Target token count per chunk
-)
+# Create chunker with desired configuration
+chunker = LLMChunker(max_chunk_size=1000)  # Target token count per chunk
+chunks = chunker.chunk(text)
 
 # Use the resulting chunks
 for chunk in chunks:
