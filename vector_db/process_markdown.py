@@ -63,7 +63,7 @@ def process_markdown_files(
     folder_path: str,
     db_path: str,
     recursive: bool = True,
-    max_chunk_size: Optional[int] = None,
+    max_chunk_size: Optional[int] = 2000,
     overlap: int = 0,
     update_mode: str = "update_if_newer",
     api_key: Optional[str] = None,
@@ -92,7 +92,7 @@ def process_markdown_files(
         Number of files processed
     """
     # Initialize components
-    chunker = Chunker(LLMChunker())
+    chunker = Chunker(LLMChunker(max_direct_tokens=2000))
     embedder = OpenAIEmbedder(model_name=model_name, api_key=api_key, batch_size=batch_size)
     
     # Initialize vector database
@@ -211,8 +211,8 @@ def main():
     parser.add_argument(
         "--max-chunk-size", 
         type=int,
-        default=1000,
-        help="Maximum size of each chunk (default: 1000)"
+        default=2000,
+        help="Maximum size of each chunk (default: 2000)"
     )
     parser.add_argument(
         "--overlap", 

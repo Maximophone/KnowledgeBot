@@ -214,10 +214,10 @@ class ReactiveRateLimiter:
     """
     def __init__(self, 
                  name: str,
-                 initial_backoff_seconds: float = 60.0,
+                 initial_backoff_seconds: float = 1.0,
                  backoff_factor: float = 2.0,
                  max_backoff_seconds: float = 600.0,
-                 max_retries: int = 3):
+                 max_retries: int = 10):
         """
         Initialize a new ReactiveRateLimiter.
         
