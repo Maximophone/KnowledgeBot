@@ -1,6 +1,6 @@
 # Vector DB Chunk Visualizer
 
-A standalone web application to visualize document chunks stored in a vector database. This tool helps you understand how documents are chunked for embedding in the vector database.
+A standalone web application to visualize document chunks stored in a vector database. This tool helps you understand how documents are chunked for embedding in the vector database and allows you to search across all documents using vector similarity.
 
 ## Features
 
@@ -10,6 +10,7 @@ A standalone web application to visualize document chunks stored in a vector dat
 - Search within document chunks
 - Toggle visibility of chunk metadata
 - Toggle chunk highlighting
+- **Vector Search**: Search across all documents using semantic similarity
 
 ## Getting Started
 
@@ -17,6 +18,7 @@ A standalone web application to visualize document chunks stored in a vector dat
 
 - Python 3.6+
 - Access to a vector database SQLite file
+- OpenAI API key (for vector search functionality)
 
 ### Installation
 
@@ -47,17 +49,37 @@ By default, the application will try to connect to a vector database at `../data
    - Toggle "Show Metadata" to show/hide chunk metadata
    - Toggle "Highlight Chunks" to enable/disable visual chunk highlighting
 
+### Vector Search
+
+The application includes a semantic search feature that uses the vector embeddings:
+
+1. Navigate to the Search page
+2. Enter your search query
+3. (Optional) Adjust advanced options:
+   - Number of results to return
+   - Similarity metric (Cosine, Euclidean, Dot Product)
+   - Embedding model
+4. View semantically relevant results from across all documents
+
 ## How It Works
 
 The application connects directly to the SQLite database used by the vector database system. It queries:
 
 1. The `documents` table to show all available documents
 2. The `chunks` table to retrieve chunks for a selected document
-3. Metadata is parsed from JSON stored in the database
+3. The `embeddings` table for vector search functionality
+4. Metadata is parsed from JSON stored in the database
+
+## Architecture
+
+- **Flask Backend**: Handles routing and database queries
+- **Bootstrap Frontend**: Provides responsive UI components
+- **Dynamic Import**: Special handling to properly import the vector_db module
+- **Vector Search**: Integrates with the vector_db module for semantic search
 
 ## Customization
 
-You can customize the appearance by modifying the CSS styles in `templates/base.html` and `templates/document.html`.
+You can customize the appearance by modifying the CSS styles in `templates/base.html`, `templates/document.html`, and `templates/search.html`.
 
 ## License
 
