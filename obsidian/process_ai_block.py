@@ -16,11 +16,22 @@ from ai.toolsets import TOOL_SETS
 from ai.tools import Tool
 from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
+from vector_db import VectorDB
 
 logger = setup_logger(__name__)
 
 # Constants
 PROMPT_MOD = "You will be passed a document and some instructions to modify this document. Please reply strictly with the text of the new document (no surrounding xml, no narration).\n"
+
+# Vector DB instance
+vector_db = None
+def get_vector_db():
+    """Get or initialize the vector database."""
+    global vector_db
+    if vector_db is None:
+        db_path = PATHS.obsidian_vector_db
+        vector_db = VectorDB(db_path)
+    return vector_db
 
 # New constants
 beacon_thought = "|THOUGHT|"
@@ -131,6 +142,7 @@ What can you see in this image?
 ```
 """,
     "ai": lambda value, text, context: process_ai_block(text, context, value),
+    "rag": lambda value, text, context: process_rag_block(text, context, value),
 }
 
 REPLACEMENTS_INSIDE = {
@@ -478,3 +490,79 @@ def update_file_content(current_content: str, new_text: str, file_path: str) -> 
     os.utime(file_path, None) # necessary to trigger Obsidian to reload the file
 
     return updated_content
+
+# Function to process RAG blocks
+def process_rag_block(block: str, context: Dict, option: str) -> str:
+    """
+    Process a RAG (Retrieval-Augmented Generation) query block in the document.
+    
+    This function searches the vector database for relevant chunks matching the query,
+    and returns them in an XML format that includes file paths, positions, and content.
+    
+    The expected format of the block is:
+    <rag!>
+    Your query text here
+    <reply!/>
+    </rag!>
+    
+    The function will process the query and insert the search results instead of the <reply!> tag.
+    
+    Args:
+        block (str): Content of the RAG block
+        context (Dict): Context information including file_path
+        option (str): Processing option (None or options)
+        
+    Returns:
+        str: Processed RAG block with retrieved information from the vector database
+    """
+    option_txt = option or ""
+    _, results = process_tags(block)
+    if "reply" not in set([n for n,v,t in results]):
+        return f"<rag!{option_txt}>{block}</rag!>"
+    
+    initial_block = block
+    block, results = process_tags(block, {"reply": remove})
+    
+    try:
+        # Add immediate feedback that RAG is processing
+        current_content = update_file_content(
+            initial_block,
+            f"{beacon_ai}\n_Searching..._\n",
+            context["file_path"]
+        )
+        
+        # Process the query
+        query = block.strip()
+        
+        # Get parameters from tag
+        params = dict([(n, v) for n, v, t in results])
+        top_k = int(params.get("top_k", 5))
+        
+        # Get RAG results
+        db = get_vector_db()
+        search_results = db.search(query, top_k=top_k)
+        
+        # Format results as XML
+        xml_results = "<rag_results>\n"
+        for result in search_results:
+            chunk_content = escape_response(result.get("content", "").strip())
+            file_path = escape_response(result.get("file_path", ""))
+            start_position = result.get("start_pos", 0)
+            end_position = result.get("end_pos", 0)
+            similarity = result.get("similarity_score", 0)
+            
+            xml_results += f'  <chunk similarity="{similarity:.4f}">\n'
+            xml_results += f'    <file_path>{file_path}</file_path>\n'
+            xml_results += f'    <position start="{start_position}" end="{end_position}" />\n'
+            xml_results += f'    <content>{chunk_content}</content>\n'
+            xml_results += '  </chunk>\n'
+        xml_results += "</rag_results>"
+        
+        # Update the file with results
+        response = xml_results
+
+        return f"<rag!{option_txt}>{block}{response}\n</rag!>"
+    except Exception as e:
+        error_msg = f"Error processing RAG request: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        return f"<rag!{option_txt}>{block}\n<reply!>\n_Error: {escape_response(str(e))}_\n</reply!></rag!>"
