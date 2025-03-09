@@ -205,3 +205,85 @@ class RateLimiter:
             f"Consecutive failures: {self.consecutive_failures}. "
             f"Next backoff delay: {self.current_backoff:.1f} seconds"
         )
+
+class ReactiveRateLimiter(RateLimiter):
+    """
+    A specialized rate limiter for handling API rate limits reactively.
+    Unlike the standard RateLimiter, this only introduces delays after encountering rate limit errors.
+    It implements exponential backoff and tracks retry attempts.
+    """
+    def __init__(self, 
+                 name: str,
+                 initial_backoff_seconds: float = 60.0,
+                 backoff_factor: float = 2.0,
+                 max_backoff_seconds: float = 600.0,
+                 max_retries: int = 3):
+        # Initialize with zero initial delay
+        super().__init__(
+            name=name,
+            min_delay_seconds=0,  # Start with no delay
+            max_delay_seconds=initial_backoff_seconds,
+            backoff_factor=backoff_factor,
+            max_backoff_seconds=max_backoff_seconds,
+            night_mode=False  # Typically not needed for API rate limiting
+        )
+        self._has_had_failures = False
+        self._retry_count = 0
+        self._max_retries = max_retries
+        
+    def wait(self) -> bool:
+        """
+        Wait based on current backoff status.
+        Returns immediately if no failures have occurred yet.
+        """
+        # Skip initial waiting if no failures yet
+        if not self._has_had_failures:
+            return True
+            
+        # Use parent's wait logic after failures
+        return super().wait()
+        
+    def record_failure(self):
+        """
+        Record a rate limit failure and increment retry count.
+        """
+        self._has_had_failures = True
+        self._retry_count += 1
+        super().record_failure()
+        
+    def exceeded_max_retries(self) -> bool:
+        """
+        Check if maximum retry attempts have been exceeded.
+        """
+        return self._retry_count >= self._max_retries
+
+    def reset_retries(self):
+        """
+        Reset retry count and failure status.
+        Useful when starting a new sequence of API calls.
+        """
+        self._retry_count = 0
+        self._has_had_failures = False
+        # Reset backoff to initial state
+        self.current_backoff = 0
+
+    def get_retry_count(self) -> int:
+        """Get the current retry count."""
+        return self._retry_count
+        
+    def get_max_retries(self) -> int:
+        """Get the maximum number of retries allowed."""
+        return self._max_retries
+        
+    def get_current_backoff(self) -> float:
+        """Get the current backoff time in seconds."""
+        return self.current_backoff
+        
+    def get_status_info(self) -> dict:
+        """Get a dictionary with the current status information."""
+        return {
+            "retry_count": self._retry_count,
+            "max_retries": self._max_retries,
+            "current_backoff": self.current_backoff,
+            "has_had_failures": self._has_had_failures
+        }
