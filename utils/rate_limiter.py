@@ -5,7 +5,7 @@ import time
 import logging
 from datetime import datetime, date, time as dt_time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Union
 from config.paths import PATHS
 from config.logging_config import setup_logger
 import random
@@ -206,7 +206,7 @@ class RateLimiter:
             f"Next backoff delay: {self.current_backoff:.1f} seconds"
         )
 
-class ReactiveRateLimiter(RateLimiter):
+class ReactiveRateLimiter:
     """
     A specialized rate limiter for handling API rate limits reactively.
     Unlike the standard RateLimiter, this only introduces delays after encountering rate limit errors.
@@ -218,44 +218,87 @@ class ReactiveRateLimiter(RateLimiter):
                  backoff_factor: float = 2.0,
                  max_backoff_seconds: float = 600.0,
                  max_retries: int = 3):
-        # Initialize with zero initial delay
-        super().__init__(
-            name=name,
-            min_delay_seconds=0,  # Start with no delay
-            max_delay_seconds=initial_backoff_seconds,
-            backoff_factor=backoff_factor,
-            max_backoff_seconds=max_backoff_seconds,
-            night_mode=False  # Typically not needed for API rate limiting
-        )
-        self._has_had_failures = False
+        """
+        Initialize a new ReactiveRateLimiter.
+        
+        Args:
+            name: Identifier for this rate limiter instance
+            initial_backoff_seconds: Initial delay in seconds after first rate limit
+            backoff_factor: Multiplier for exponential backoff (how much to increase delay after each failure)
+            max_backoff_seconds: Maximum delay in seconds
+            max_retries: Maximum number of retry attempts before giving up
+        """
+        self.name = name
+        self.initial_backoff_seconds = initial_backoff_seconds
+        self.backoff_factor = backoff_factor
+        self.max_backoff_seconds = max_backoff_seconds
+        self.max_retries = max_retries
+        
+        # Runtime state
+        self.current_backoff = 0
         self._retry_count = 0
-        self._max_retries = max_retries
+        self._has_had_failures = False
+        
+        self.logger = logging.getLogger(__name__)
         
     def wait(self) -> bool:
         """
         Wait based on current backoff status.
         Returns immediately if no failures have occurred yet.
+        
+        Returns:
+            bool: True if operation should proceed, False if it should be aborted
         """
         # Skip initial waiting if no failures yet
         if not self._has_had_failures:
             return True
-            
-        # Use parent's wait logic after failures
-        return super().wait()
+        
+        # Apply the current backoff
+        if self.current_backoff > 0:
+            self.logger.info(f"Rate limiting for {self.name}: waiting {self.current_backoff:.1f} seconds")
+            time.sleep(self.current_backoff)
+        
+        return True
+        
+    def record_success(self):
+        """
+        Record a successful API call. This doesn't reset the backoff completely,
+        but could be extended to gradually reduce backoff on consecutive successes.
+        """
+        # Currently we don't modify the backoff on success
+        # This could be extended to gradually reduce backoff on consecutive successes
+        pass
         
     def record_failure(self):
         """
-        Record a rate limit failure and increment retry count.
+        Record a rate limit failure and increase the backoff time.
         """
         self._has_had_failures = True
         self._retry_count += 1
-        super().record_failure()
+        
+        # Calculate new backoff with exponential increase
+        if self.current_backoff == 0:
+            self.current_backoff = self.initial_backoff_seconds
+        else:
+            self.current_backoff = min(
+                self.current_backoff * self.backoff_factor,
+                self.max_backoff_seconds
+            )
+            
+        self.logger.warning(
+            f"Operation failed for {self.name}. "
+            f"Consecutive failures: {self._retry_count}. "
+            f"Next backoff delay: {self.current_backoff:.1f} seconds"
+        )
         
     def exceeded_max_retries(self) -> bool:
         """
         Check if maximum retry attempts have been exceeded.
+        
+        Returns:
+            bool: True if max retries exceeded, False otherwise
         """
-        return self._retry_count >= self._max_retries
+        return self._retry_count >= self.max_retries
 
     def reset_retries(self):
         """
@@ -264,16 +307,15 @@ class ReactiveRateLimiter(RateLimiter):
         """
         self._retry_count = 0
         self._has_had_failures = False
-        # Reset backoff to initial state
         self.current_backoff = 0
-
+        
     def get_retry_count(self) -> int:
         """Get the current retry count."""
         return self._retry_count
         
     def get_max_retries(self) -> int:
         """Get the maximum number of retries allowed."""
-        return self._max_retries
+        return self.max_retries
         
     def get_current_backoff(self) -> float:
         """Get the current backoff time in seconds."""
@@ -283,7 +325,7 @@ class ReactiveRateLimiter(RateLimiter):
         """Get a dictionary with the current status information."""
         return {
             "retry_count": self._retry_count,
-            "max_retries": self._max_retries,
+            "max_retries": self.max_retries,
             "current_backoff": self.current_backoff,
             "has_had_failures": self._has_had_failures
         }

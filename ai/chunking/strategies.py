@@ -162,7 +162,7 @@ class LLMChunker(ChunkingStrategy):
         if self.ai_client is None:
             try:
                 logger.info(f"Creating AI client with model {self.model_name}")
-                self.ai_client = AI(model_name=self.model_name)
+                self.ai_client = AI(model_name=self.model_name, rate_limiting=True)
                 logger.info(f"AI client initialized successfully")
                 # Check if AI client has the expected methods
                 if not hasattr(self.ai_client, 'messages'):
