@@ -100,13 +100,11 @@ class VectorDB:
         **chunking_kwargs
     ) -> int:
         """
-        Add a document to the vector database.
+        Add a document to the vector database using a two-phase commit approach.
         
         This method:
-        1. Chunks the document content
-        2. Stores the document metadata
-        3. Stores the chunks with positions and content
-        4. Generates and stores embeddings for each chunk
+        1. Prepares chunks and embeddings in memory
+        2. Stores everything in a single transaction
         
         Args:
             file_path: Path of the document (used as unique identifier)
@@ -147,14 +145,16 @@ class VectorDB:
                     logger.info(f"Document {file_path} already exists with same or newer timestamp, skipping (update_mode=update_if_newer)")
                     return 0
                 logger.info(f"Document {file_path} already exists but has older timestamp, updating")
-                self.delete_document(file_path)
+                # Delete will happen in the transaction
                 
             elif update_mode == "force":
                 logger.info(f"Document {file_path} already exists, replacing (update_mode=force)")
-                self.delete_document(file_path)
+                # Delete will happen in the transaction
                 
             else:
                 raise ValueError(f"Invalid update_mode: {update_mode}. Must be one of: error, skip, update_if_newer, force")
+        
+        # PHASE 1: Prepare everything in memory
         
         # Set default metadata if not provided
         if metadata is None:
@@ -163,44 +163,72 @@ class VectorDB:
         # Add file path to metadata
         metadata["file_path"] = file_path
         
-        # Store document in database
-        document_id = self.storage.add_document(file_path, timestamp, metadata)
-        logger.info(f"Added document {file_path} with ID {document_id}")
-        
         # Chunk the document
-        chunks = self.chunker.chunk(content, max_chunk_size, overlap, **chunking_kwargs)
-        logger.info(f"Created {len(chunks)} chunks from document {file_path}")
+        try:
+            chunks = self.chunker.chunk(content, max_chunk_size, overlap, **chunking_kwargs)
+            logger.info(f"Created {len(chunks)} chunks from document {file_path}")
+            
+            # Prepare all chunks and embeddings
+            prepared_chunks = []
+            for chunk_index, chunk in enumerate(chunks):
+                try:
+                    embedding = self.embedder.embed_text(chunk.content)[0]
+                    chunk_metadata = chunk.metadata.copy()
+                    chunk_metadata["chunk_index"] = chunk_index
+                    prepared_chunks.append((chunk, embedding, chunk_metadata))
+                except Exception as e:
+                    logger.error(f"Failed to generate embedding for chunk from {file_path}: {str(e)}")
+                    raise  # Re-raise to abort the process
+        except Exception as e:
+            logger.error(f"Failed in preparation phase for document {file_path}: {str(e)}")
+            raise
         
-        # Process each chunk
-        for chunk_index, chunk in enumerate(chunks):
-            # Store chunk in database
-            chunk_metadata = chunk.metadata.copy()
-            chunk_metadata["chunk_index"] = chunk_index
+        # PHASE 2: Store everything in a transaction
+        
+        # Begin transaction
+        try:
+            conn = self.storage.begin_transaction()
             
-            chunk_id = self.storage.add_chunk(
-                document_id=document_id,
-                chunk_index=chunk_index,
-                start_pos=chunk.start_pos,
-                end_pos=chunk.end_pos,
-                content=chunk.content,
-                metadata=chunk_metadata
-            )
+            # Delete existing document if needed
+            if self.storage.document_exists(file_path):
+                self.storage.delete_document(file_path)
             
-            # Generate and store embedding
-            try:
-                embedding = self.embedder.embed_text(chunk.content)[0]
+            # Add document
+            document_id = self.storage.add_document(file_path, timestamp, metadata)
+            logger.info(f"Added document {file_path} with ID {document_id}")
+            
+            # Add all prepared chunks and embeddings
+            for chunk, embedding, chunk_metadata in prepared_chunks:
+                # Add chunk
+                chunk_id = self.storage.add_chunk(
+                    document_id=document_id,
+                    chunk_index=chunk_metadata["chunk_index"],
+                    start_pos=chunk.start_pos,
+                    end_pos=chunk.end_pos,
+                    content=chunk.content,
+                    metadata=chunk_metadata
+                )
+                
+                # Add embedding
                 self.storage.add_embedding(
                     chunk_id=chunk_id,
                     embedding=embedding,
                     model_name=getattr(self.embedder, "model_name", "default")
                 )
-            except Exception as e:
-                logger.error(f"Failed to generate embedding for chunk {chunk_id}: {str(e)}")
-        
-        # Reset embeddings cache
-        self._invalidate_cache()
-        
-        return len(chunks)
+            
+            # Commit the transaction
+            self.storage.commit_transaction()
+            
+            # Reset embeddings cache
+            self._invalidate_cache()
+            
+            return len(prepared_chunks)
+            
+        except Exception as e:
+            # Rollback the transaction on error
+            self.storage.rollback_transaction()
+            logger.error(f"Failed to add document {file_path} in transaction: {str(e)}")
+            raise
     
     def delete_document(self, file_path: str) -> bool:
         """
@@ -212,15 +240,31 @@ class VectorDB:
         Returns:
             True if document was found and deleted, False otherwise
         """
-        deleted = self.storage.delete_document(file_path)
-        if deleted:
-            # Reset embeddings cache
-            self._invalidate_cache()
-            logger.info(f"Deleted document {file_path}")
-        else:
-            logger.info(f"Document {file_path} not found, nothing to delete")
-        
-        return deleted
+        try:
+            # Begin transaction
+            conn = self.storage.begin_transaction()
+            
+            # Delete document (will cascade to chunks and embeddings)
+            deleted = self.storage.delete_document(file_path)
+            
+            if deleted:
+                # Reset embeddings cache
+                self._invalidate_cache()
+                logger.info(f"Deleted document {file_path}")
+                # Commit the transaction
+                self.storage.commit_transaction()
+            else:
+                # Nothing to delete, rollback the empty transaction
+                self.storage.rollback_transaction()
+                logger.info(f"Document {file_path} not found, nothing to delete")
+            
+            return deleted
+            
+        except Exception as e:
+            # Rollback the transaction on error
+            self.storage.rollback_transaction()
+            logger.error(f"Failed to delete document {file_path}: {str(e)}")
+            raise
     
     def update_document(
         self,
@@ -234,7 +278,7 @@ class VectorDB:
         **chunking_kwargs
     ) -> int:
         """
-        Update an existing document (delete and re-add).
+        Update an existing document using the two-phase commit pattern.
         
         Args:
             file_path: Path of the document to update
@@ -258,14 +302,13 @@ class VectorDB:
         if not exists and not create_if_missing:
             raise ValueError(f"Document {file_path} does not exist and create_if_missing is False")
         
-        # Delete the document if it exists
+        # Log appropriate message
         if exists:
             logger.info(f"Updating existing document {file_path}")
-            self.delete_document(file_path)
         else:
             logger.info(f"Document {file_path} does not exist, creating new")
         
-        # Add the document with new content
+        # Add the document with new content using the two-phase commit
         return self.add_document(
             file_path=file_path,
             content=content,
@@ -394,4 +437,22 @@ class VectorDB:
             f"documents={stats['document_count']}, "
             f"chunks={stats['chunk_count']}, "
             f"embeddings={sum(stats['embedding_counts'].values()) if 'embedding_counts' in stats else 0})"
-        ) 
+        )
+    
+    def __del__(self):
+        """Clean up resources when the object is deleted."""
+        try:
+            # Close the storage connection if it exists
+            if hasattr(self, 'storage') and self.storage is not None:
+                self.storage.close_connection()
+        except:
+            pass  # Silently ignore errors during cleanup
+    
+    def close(self):
+        """
+        Explicitly close connections and clean up resources.
+        Should be called when done using the VectorDB instance.
+        """
+        if hasattr(self, 'storage') and self.storage is not None:
+            self.storage.close_connection()
+            logger.info("Closed database connections") 

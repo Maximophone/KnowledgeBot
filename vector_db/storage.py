@@ -34,6 +34,7 @@ class VectorStorage:
         """
         self.db_path = db_path
         self._initialize_db()
+        self._connection = None
     
     def _initialize_db(self) -> None:
         """
@@ -94,6 +95,51 @@ class VectorStorage:
         conn.commit()
         conn.close()
     
+    def get_connection(self):
+        """
+        Get a connection to the SQLite database.
+        Creates a new connection if one doesn't exist.
+        
+        Returns:
+            SQLite connection object
+        """
+        if self._connection is None:
+            self._connection = sqlite3.connect(self.db_path)
+        return self._connection
+    
+    def close_connection(self):
+        """
+        Close the SQLite connection if it exists.
+        """
+        if self._connection is not None:
+            self._connection.close()
+            self._connection = None
+    
+    def begin_transaction(self):
+        """
+        Begin a new transaction.
+        
+        Returns:
+            SQLite connection object
+        """
+        conn = self.get_connection()
+        conn.execute("BEGIN TRANSACTION")
+        return conn
+    
+    def commit_transaction(self):
+        """
+        Commit the current transaction.
+        """
+        if self._connection is not None:
+            self._connection.commit()
+    
+    def rollback_transaction(self):
+        """
+        Rollback the current transaction.
+        """
+        if self._connection is not None:
+            self._connection.rollback()
+    
     def delete_document(self, file_path: str) -> bool:
         """
         Delete a document and all its associated chunks and embeddings.
@@ -104,7 +150,7 @@ class VectorStorage:
         Returns:
             True if document was found and deleted, False otherwise
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         # Find document id
@@ -112,7 +158,6 @@ class VectorStorage:
         result = cursor.fetchone()
         
         if result is None:
-            conn.close()
             return False
         
         document_id = result[0]
@@ -122,8 +167,9 @@ class VectorStorage:
         cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
         
         deleted = cursor.rowcount > 0
-        conn.commit()
-        conn.close()
+        
+        # Don't commit here if we're in a transaction
+        # The calling code should handle commits
         
         return deleted
     
@@ -137,13 +183,12 @@ class VectorStorage:
         Returns:
             True if document exists, False otherwise
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("SELECT id FROM documents WHERE file_path = ?", (file_path,))
         result = cursor.fetchone()
         
-        conn.close()
         return result is not None
     
     def get_document_timestamp(self, file_path: str) -> Optional[str]:
@@ -156,13 +201,12 @@ class VectorStorage:
         Returns:
             Timestamp string if document exists, None otherwise
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("SELECT timestamp FROM documents WHERE file_path = ?", (file_path,))
         result = cursor.fetchone()
         
-        conn.close()
         return result[0] if result else None
     
     def add_document(self, file_path: str, timestamp: str, metadata: Optional[Dict[str, Any]] = None) -> int:
@@ -177,7 +221,7 @@ class VectorStorage:
         Returns:
             ID of the newly created document
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         # Convert metadata to JSON string
@@ -192,8 +236,9 @@ class VectorStorage:
         )
         
         document_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        
+        # Don't commit here if we're in a transaction
+        # The calling code should handle commits
         
         return document_id
     
@@ -213,7 +258,7 @@ class VectorStorage:
         Returns:
             ID of the newly created chunk
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         # Convert metadata to JSON string
@@ -229,8 +274,9 @@ class VectorStorage:
         )
         
         chunk_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        
+        # Don't commit here if we're in a transaction
+        # The calling code should handle commits
         
         return chunk_id
     
@@ -246,7 +292,7 @@ class VectorStorage:
         Returns:
             ID of the newly created embedding
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         # Convert embedding to binary blob
@@ -262,8 +308,9 @@ class VectorStorage:
         )
         
         embedding_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        
+        # Don't commit here if we're in a transaction
+        # The calling code should handle commits
         
         return embedding_id
     
@@ -277,7 +324,7 @@ class VectorStorage:
         Returns:
             List of (chunk_id, embedding) tuples
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute(
@@ -286,7 +333,6 @@ class VectorStorage:
         )
         
         results = cursor.fetchall()
-        conn.close()
         
         # Deserialize embeddings
         return [(chunk_id, pickle.loads(embedding_blob)) for chunk_id, embedding_blob in results]
@@ -301,7 +347,7 @@ class VectorStorage:
         Returns:
             Chunk information dictionary or None if not found
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
@@ -315,7 +361,6 @@ class VectorStorage:
         row = cursor.fetchone()
         
         if not row:
-            conn.close()
             return None
         
         # Convert row to dict
@@ -327,7 +372,6 @@ class VectorStorage:
         else:
             chunk['metadata'] = {}
         
-        conn.close()
         return chunk
     
     def get_document_chunks(self, file_path: str) -> List[Dict[str, Any]]:
@@ -340,7 +384,7 @@ class VectorStorage:
         Returns:
             List of chunk information dictionaries
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
@@ -364,7 +408,6 @@ class VectorStorage:
                 chunk['metadata'] = {}
             chunks.append(chunk)
         
-        conn.close()
         return chunks
     
     def get_statistics(self) -> Dict[str, Any]:
@@ -374,7 +417,7 @@ class VectorStorage:
         Returns:
             Dictionary with statistics
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_connection()
         cursor = conn.cursor()
         
         # Get document count
@@ -392,8 +435,6 @@ class VectorStorage:
         GROUP BY model_name
         """)
         embedding_counts = {row[0]: row[1] for row in cursor.fetchall()}
-        
-        conn.close()
         
         return {
             "document_count": document_count,

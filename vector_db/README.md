@@ -7,8 +7,9 @@ A lightweight, customizable vector database for storing, managing, and searching
 - **Incremental Processing**: Documents are processed and saved as soon as they're added, allowing for gradual database building and resuming operations.
 - **Modular Design**: Swap out components such as chunking strategies, embedding models, and similarity metrics.
 - **SQLite Storage**: Efficient, reliable storage of documents, chunks, and vector embeddings.
-- **Document Management**: Easy addition, updating, and deletion of documents.
+- **Document Management**: Easy addition, updating, and deletion of documents with flexible update modes.
 - **Search Capabilities**: Fast vector similarity search with customizable metrics.
+- **Transactional Processing**: Two-phase commit approach ensures database consistency even if errors occur during processing.
 
 ## Components
 
@@ -37,6 +38,11 @@ Options:
 - `--recursive`: Search recursively in subfolders
 - `--max-chunk-size`: Maximum size of each chunk (default: 1000)
 - `--overlap`: Overlap between chunks (default: 50)
+- `--update-mode MODE`: How to handle existing documents (default: update_if_newer)
+  - `error`: Fail if document exists
+  - `skip`: Skip if document exists
+  - `update_if_newer`: Update only if timestamp is newer (default)
+  - `force`: Always replace existing document
 - `--model-name`: Name of the embedding model (default: text-embedding-3-small)
 - `--batch-size`: Batch size for embedding API calls (default: 8)
 
@@ -100,7 +106,19 @@ for result in results:
     print(f"Score: {result['similarity_score']}")
     print(f"Content: {result['content']}")
     print(f"Source: {result['file_path']}")
+
+# Close the database when done
+db.close()
 ```
+
+### Transaction Safety
+
+The vector database uses a two-phase commit approach for document operations:
+
+1. **Phase 1**: All chunks and embeddings are prepared in memory
+2. **Phase 2**: Everything is stored in the database in a single transaction
+
+This ensures that even if errors occur during processing, the database remains in a consistent state. Either all of a document's data is stored, or none of it is.
 
 ### Swapping Components
 

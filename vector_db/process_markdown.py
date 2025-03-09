@@ -98,89 +98,96 @@ def process_markdown_files(
     # Initialize vector database
     db = VectorDB(db_path, chunker, embedder)
     
-    # Find all markdown files
-    markdown_files = find_markdown_files(folder_path, recursive)
-    logger.info(f"Found {len(markdown_files)} markdown files")
-    
-    # Process each file
-    processed_count = 0
-    skipped_count = 0
-    error_count = 0
-    total_chunks = 0
-    start_time = time.time()
-    
-    for file_path in markdown_files:
-        try:
-            # Get file modification time as timestamp
-            mtime = os.path.getmtime(file_path)
-            timestamp = datetime.fromtimestamp(mtime).isoformat()
-            
-            # Read file content with error handling for encoding issues
+    try:
+        # Find all markdown files
+        markdown_files = find_markdown_files(folder_path, recursive)
+        logger.info(f"Found {len(markdown_files)} markdown files")
+        
+        # Process each file
+        processed_count = 0
+        skipped_count = 0
+        error_count = 0
+        total_chunks = 0
+        start_time = time.time()
+        
+        for file_path in markdown_files:
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except UnicodeDecodeError:
-                # Try again with error handling
-                logger.warning(f"Encoding issue with {file_path}, trying with errors='replace'")
-                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
-            
-            # Skip empty files
-            if not content.strip():
-                logger.warning(f"Skipping empty file: {file_path}")
-                skipped_count += 1
-                continue
-            
-            # Prepare metadata
-            rel_path = os.path.relpath(file_path, os.path.abspath(folder_path))
-            filename = os.path.basename(file_path)
-            metadata = {
-                "filename": filename,
-                "relative_path": rel_path,
-                "file_type": "markdown",
-                "file_size_bytes": os.path.getsize(file_path),
-                "processed_at": datetime.now().isoformat()
-            }
-            
-            # Add document to vector database with the specified update mode
-            try:
-                chunks_added = db.add_document(
-                    file_path=file_path,
-                    content=content,
-                    timestamp=timestamp,
-                    metadata=metadata,
-                    update_mode=update_mode,
-                    max_chunk_size=max_chunk_size,
-                    overlap=overlap
-                )
+                # Get file modification time as timestamp
+                mtime = os.path.getmtime(file_path)
+                timestamp = datetime.fromtimestamp(mtime).isoformat()
                 
-                if chunks_added > 0:
-                    total_chunks += chunks_added
-                    processed_count += 1
-                    logger.info(f"Processed {file_path} ({chunks_added} chunks)")
-                else:
-                    skipped_count += 1
-                    logger.info(f"Skipped {file_path} (already processed)")
-            except ValueError as e:
-                if "already exists" in str(e):
-                    logger.warning(f"Skipped {file_path}: {str(e)}")
-                    skipped_count += 1
-                else:
-                    raise
+                # Read file content with error handling for encoding issues
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except UnicodeDecodeError:
+                    # Try again with error handling
+                    logger.warning(f"Encoding issue with {file_path}, trying with errors='replace'")
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read()
                 
-        except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}")
-            error_count += 1
+                # Skip empty files
+                if not content.strip():
+                    logger.warning(f"Skipping empty file: {file_path}")
+                    skipped_count += 1
+                    continue
+                
+                # Prepare metadata
+                rel_path = os.path.relpath(file_path, os.path.abspath(folder_path))
+                filename = os.path.basename(file_path)
+                metadata = {
+                    "filename": filename,
+                    "relative_path": rel_path,
+                    "file_type": "markdown",
+                    "file_size_bytes": os.path.getsize(file_path),
+                    "processed_at": datetime.now().isoformat()
+                }
+                
+                # Add document to vector database with the specified update mode
+                try:
+                    chunks_added = db.add_document(
+                        file_path=file_path,
+                        content=content,
+                        timestamp=timestamp,
+                        metadata=metadata,
+                        update_mode=update_mode,
+                        max_chunk_size=max_chunk_size,
+                        overlap=overlap
+                    )
+                    
+                    if chunks_added > 0:
+                        total_chunks += chunks_added
+                        processed_count += 1
+                        logger.info(f"Processed {file_path} ({chunks_added} chunks)")
+                    else:
+                        skipped_count += 1
+                        logger.info(f"Skipped {file_path} (already processed)")
+                except ValueError as e:
+                    if "already exists" in str(e):
+                        logger.warning(f"Skipped {file_path}: {str(e)}")
+                        skipped_count += 1
+                    else:
+                        raise
+                    
+            except Exception as e:
+                logger.error(f"Error processing file {file_path}: {str(e)}")
+                error_count += 1
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"Finished processing {processed_count} files with {total_chunks} total chunks in {elapsed_time:.2f} seconds")
+        logger.info(f"Skipped: {skipped_count} files, Errors: {error_count} files")
+        
+        # Show database statistics
+        stats = db.get_statistics()
+        logger.info(f"Database statistics: {stats}")
+        
+        return processed_count
     
-    elapsed_time = time.time() - start_time
-    logger.info(f"Finished processing {processed_count} files with {total_chunks} total chunks in {elapsed_time:.2f} seconds")
-    logger.info(f"Skipped: {skipped_count} files, Errors: {error_count} files")
-    
-    # Show database statistics
-    stats = db.get_statistics()
-    logger.info(f"Database statistics: {stats}")
-    
-    return processed_count
+    finally:
+        # Ensure database connection is properly closed
+        if 'db' in locals():
+            db.close()
+            logger.info("Database connection closed")
 
 
 def main():
