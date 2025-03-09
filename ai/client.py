@@ -14,14 +14,30 @@ def get_prompt(prompt_name: str) -> str:
 
 class AI:
     def __init__(self, model_name: str, system_prompt: str = "", 
-                 tools: Optional[List[Tool]] = None, debug=False):
+                 tools: Optional[List[Tool]] = None, debug=False,
+                 rate_limiting=False, rate_limiter=None):
+        """
+        AI client for accessing various LLM APIs.
+        
+        Args:
+            model_name: The name of the model to use
+            system_prompt: Optional system prompt to use for all messages
+            tools: Optional list of tools to make available to the LLM
+            debug: Whether to enable debug mode
+            rate_limiting: Whether to enable rate limiting for API calls
+            rate_limiter: Optional custom rate limiter instance
+        """
         self.model_name = get_model(model_name)
-        self.client = get_client(model_name)
         self.system_prompt = system_prompt
         self.tools = tools or []
         self._history = []
         self._last_reasoning = None
         self.debug = debug
+        self.rate_limiting = rate_limiting
+        self.rate_limiter = rate_limiter
+        
+        # Get the appropriate client, passing rate limiting parameters to the get_client function
+        self.client = get_client(model_name, rate_limiting=rate_limiting, rate_limiter=rate_limiter)
 
     def _prepare_messages(self, message: Union[str, Message], image_paths: List[str] = None) -> List[Message]:
         if isinstance(message, Message):
