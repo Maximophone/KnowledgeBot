@@ -9,17 +9,16 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import from ai modules
+# Import directly from vector_db now that the circular import is fixed
+from vector_db import VectorDB
+from vector_db.similarity import CosineSimilarity, EuclideanDistance, DotProductSimilarity
 from ai.embeddings import OpenAIEmbedder
-
-# Import VectorDB using our dynamic import module
-from dynamic_import import VectorDB, CosineSimilarity, EuclideanDistance, DotProductSimilarity
 
 app = Flask(__name__)
 
 # Default path to vector database
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                              'data', 'vector_db.sqlite')
+                              'data', 'obsidian_vector_db.sqlite')
 
 def get_db_connection(db_path=None):
     """Connect to the vector database"""

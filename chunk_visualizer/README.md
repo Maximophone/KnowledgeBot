@@ -74,7 +74,6 @@ The application connects directly to the SQLite database used by the vector data
 
 - **Flask Backend**: Handles routing and database queries
 - **Bootstrap Frontend**: Provides responsive UI components
-- **Dynamic Import**: Special handling to properly import the vector_db module
 - **Vector Search**: Integrates with the vector_db module for semantic search
 
 ## Customization
