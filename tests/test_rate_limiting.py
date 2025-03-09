@@ -319,5 +319,86 @@ class TestRateLimiting(unittest.TestCase):
         # But capped at 1s by max_backoff_seconds
         self.assertLessEqual(status['current_backoff'], 1.0)
 
+    def test_gradual_backoff_reduction(self):
+        """Test that the backoff is gradually reduced after successful calls."""
+        # Create a rate limiter with known parameters for testing
+        rate_limiter = ReactiveRateLimiter(
+            name="test_recovery_limiter",
+            initial_backoff_seconds=0.1,  # Start with 0.1s
+            backoff_factor=2.0,          # Double on failure
+            recovery_factor=2.0,         # Halve on success
+            max_retries=5
+        )
+        
+        # Simulate rate limit errors to build up the backoff
+        rate_limiter.record_failure()  # Should set backoff to 0.1s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.1)
+        
+        rate_limiter.record_failure()  # Should increase to 0.2s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.2)
+        
+        # Now record successes and check backoff reduction
+        rate_limiter.record_success()  # Should reduce to 0.1s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.1)
+        
+        rate_limiter.record_success()  # Should reduce to 0.05s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.05)
+        
+        rate_limiter.record_success()  # Should reduce to 0.025s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.025)
+        
+        # After enough successes and zero backoff, has_had_failures should be reset
+        # We need a few more successful calls to reach zero
+        rate_limiter.record_success()  # 0.0125
+        rate_limiter.record_success()  # ~0.00625
+        rate_limiter.record_success()  # ~0.003125 (essentially 0 with float precision)
+        
+        # After 3 consecutive successes with backoff at 0, has_had_failures should reset
+        # Check that backoff is close to zero (not exactly zero due to floating point precision)
+        self.assertLess(rate_limiter.get_current_backoff(), 0.01)
+        self.assertEqual(rate_limiter.get_status_info()['consecutive_successes'], 6)
+        
+        # Add one more successful call to trigger the reset
+        rate_limiter.record_success()
+        
+        # Verify has_had_failures is now False and retry_count is reset
+        status = rate_limiter.get_status_info()
+        self.assertFalse(status['has_had_failures'])
+        self.assertEqual(status['retry_count'], 0)
+
+    def test_mixed_success_failure_pattern(self):
+        """Test a more realistic pattern of intermixed successes and failures."""
+        # Create a rate limiter
+        rate_limiter = ReactiveRateLimiter(
+            name="test_mixed_pattern_limiter",
+            initial_backoff_seconds=0.1,
+            backoff_factor=2.0,
+            recovery_factor=1.5,  # Slower recovery
+            max_retries=5
+        )
+        
+        # Simulate a series of intermixed failures and successes
+        rate_limiter.record_failure()  # 0.1s
+        self.assertEqual(rate_limiter.get_current_backoff(), 0.1)
+        
+        rate_limiter.record_success()  # Should reduce to ~0.067s
+        self.assertAlmostEqual(rate_limiter.get_current_backoff(), 0.1 / 1.5, places=3)
+        
+        rate_limiter.record_failure()  # Should increase to ~0.133s
+        self.assertAlmostEqual(rate_limiter.get_current_backoff(), (0.1 / 1.5) * 2.0, places=3)
+        
+        rate_limiter.record_success()  # Should reduce to ~0.089s
+        self.assertAlmostEqual(rate_limiter.get_current_backoff(), ((0.1 / 1.5) * 2.0) / 1.5, places=3)
+        
+        rate_limiter.record_success()  # Should reduce further
+        rate_limiter.record_success()  # Should reduce further
+        
+        # Consecutive successes should be tracked
+        self.assertEqual(rate_limiter.get_status_info()['consecutive_successes'], 3)
+        
+        # Another failure should reset consecutive successes
+        rate_limiter.record_failure()
+        self.assertEqual(rate_limiter.get_status_info()['consecutive_successes'], 0)
+
 if __name__ == '__main__':
     unittest.main() 

@@ -217,7 +217,9 @@ class ReactiveRateLimiter:
                  initial_backoff_seconds: float = 1.0,
                  backoff_factor: float = 2.0,
                  max_backoff_seconds: float = 600.0,
-                 max_retries: int = 10):
+                 max_retries: int = 10,
+                 recovery_factor: float = 2.0,
+                 min_backoff_threshold: float = 0.01):
         """
         Initialize a new ReactiveRateLimiter.
         
@@ -227,17 +229,22 @@ class ReactiveRateLimiter:
             backoff_factor: Multiplier for exponential backoff (how much to increase delay after each failure)
             max_backoff_seconds: Maximum delay in seconds
             max_retries: Maximum number of retry attempts before giving up
+            recovery_factor: Factor by which to decrease backoff after successful calls
+            min_backoff_threshold: Values below this are treated as zero
         """
         self.name = name
         self.initial_backoff_seconds = initial_backoff_seconds
         self.backoff_factor = backoff_factor
         self.max_backoff_seconds = max_backoff_seconds
         self.max_retries = max_retries
+        self.recovery_factor = recovery_factor
+        self.min_backoff_threshold = min_backoff_threshold
         
         # Runtime state
         self.current_backoff = 0
         self._retry_count = 0
         self._has_had_failures = False
+        self._consecutive_successes = 0
         
         self.logger = logging.getLogger(__name__)
         
@@ -262,12 +269,33 @@ class ReactiveRateLimiter:
         
     def record_success(self):
         """
-        Record a successful API call. This doesn't reset the backoff completely,
-        but could be extended to gradually reduce backoff on consecutive successes.
+        Record a successful API call. This gradually reduces the backoff
+        to allow recovery from rate limits over time.
         """
-        # Currently we don't modify the backoff on success
-        # This could be extended to gradually reduce backoff on consecutive successes
-        pass
+        self._consecutive_successes += 1
+        
+        # Only reduce backoff if we've had failures
+        if self._has_had_failures and self.current_backoff > 0:
+            # Reduce backoff by the recovery factor, but don't go below zero
+            self.current_backoff = max(0, self.current_backoff / self.recovery_factor)
+            
+            # Treat very small values as zero
+            if self.current_backoff < self.min_backoff_threshold:
+                self.current_backoff = 0
+            
+            # Log the backoff reduction
+            if self.current_backoff > 0:
+                self.logger.info(
+                    f"Successful call for {self.name}. "
+                    f"Reducing backoff delay to {self.current_backoff:.1f} seconds"
+                )
+            else:
+                self.logger.info(f"Backoff fully recovered for {self.name} after {self._consecutive_successes} successful calls")
+                
+                # If backoff is now zero, we can consider fully recovered
+                if self._consecutive_successes >= 3 and self.current_backoff == 0:
+                    self._has_had_failures = False
+                    self._retry_count = 0
         
     def record_failure(self):
         """
@@ -275,6 +303,7 @@ class ReactiveRateLimiter:
         """
         self._has_had_failures = True
         self._retry_count += 1
+        self._consecutive_successes = 0  # Reset consecutive successes counter
         
         # Calculate new backoff with exponential increase
         if self.current_backoff == 0:
@@ -327,5 +356,6 @@ class ReactiveRateLimiter:
             "retry_count": self._retry_count,
             "max_retries": self.max_retries,
             "current_backoff": self.current_backoff,
-            "has_had_failures": self._has_had_failures
+            "has_had_failures": self._has_had_failures,
+            "consecutive_successes": self._consecutive_successes
         }
