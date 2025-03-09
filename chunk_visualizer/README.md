@@ -1,0 +1,64 @@
+# Vector DB Chunk Visualizer
+
+A standalone web application to visualize document chunks stored in a vector database. This tool helps you understand how documents are chunked for embedding in the vector database.
+
+## Features
+
+- View a list of all documents in the vector database
+- Visualize chunks for any document with clear boundaries
+- See metadata for each chunk
+- Search within document chunks
+- Toggle visibility of chunk metadata
+- Toggle chunk highlighting
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.6+
+- Access to a vector database SQLite file
+
+### Installation
+
+1. Clone the repository or copy the `chunk_visualizer` directory
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Running the Application
+
+To start the web application:
+
+```bash
+python app.py
+```
+
+By default, the application will try to connect to a vector database at `../data/vector_db.sqlite`. You can modify the `DEFAULT_DB_PATH` in `app.py` if your database is located elsewhere.
+
+## Usage
+
+1. Open your web browser and navigate to `http://127.0.0.1:5000/`
+2. You'll see a list of all documents in the vector database
+3. Click "View Chunks" on any document to see its chunks
+4. In the document view:
+   - Use the search box to find specific content within chunks
+   - Toggle "Show Metadata" to show/hide chunk metadata
+   - Toggle "Highlight Chunks" to enable/disable visual chunk highlighting
+
+## How It Works
+
+The application connects directly to the SQLite database used by the vector database system. It queries:
+
+1. The `documents` table to show all available documents
+2. The `chunks` table to retrieve chunks for a selected document
+3. Metadata is parsed from JSON stored in the database
+
+## Customization
+
+You can customize the appearance by modifying the CSS styles in `templates/base.html` and `templates/document.html`.
+
+## License
+
+This project is open source and available under the MIT License. 
