@@ -5,7 +5,7 @@ import time
 import logging
 from datetime import datetime, date, time as dt_time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Union
 from config.paths import PATHS
 from config.logging_config import setup_logger
 import random
@@ -205,3 +205,157 @@ class RateLimiter:
             f"Consecutive failures: {self.consecutive_failures}. "
             f"Next backoff delay: {self.current_backoff:.1f} seconds"
         )
+
+class ReactiveRateLimiter:
+    """
+    A specialized rate limiter for handling API rate limits reactively.
+    Unlike the standard RateLimiter, this only introduces delays after encountering rate limit errors.
+    It implements exponential backoff and tracks retry attempts.
+    """
+    def __init__(self, 
+                 name: str,
+                 initial_backoff_seconds: float = 1.0,
+                 backoff_factor: float = 2.0,
+                 max_backoff_seconds: float = 600.0,
+                 max_retries: int = 10,
+                 recovery_factor: float = 2.0,
+                 min_backoff_threshold: float = 0.01):
+        """
+        Initialize a new ReactiveRateLimiter.
+        
+        Args:
+            name: Identifier for this rate limiter instance
+            initial_backoff_seconds: Initial delay in seconds after first rate limit
+            backoff_factor: Multiplier for exponential backoff (how much to increase delay after each failure)
+            max_backoff_seconds: Maximum delay in seconds
+            max_retries: Maximum number of retry attempts before giving up
+            recovery_factor: Factor by which to decrease backoff after successful calls
+            min_backoff_threshold: Values below this are treated as zero
+        """
+        self.name = name
+        self.initial_backoff_seconds = initial_backoff_seconds
+        self.backoff_factor = backoff_factor
+        self.max_backoff_seconds = max_backoff_seconds
+        self.max_retries = max_retries
+        self.recovery_factor = recovery_factor
+        self.min_backoff_threshold = min_backoff_threshold
+        
+        # Runtime state
+        self.current_backoff = 0
+        self._retry_count = 0
+        self._has_had_failures = False
+        self._consecutive_successes = 0
+        
+        self.logger = logging.getLogger(__name__)
+        
+    def wait(self) -> bool:
+        """
+        Wait based on current backoff status.
+        Returns immediately if no failures have occurred yet.
+        
+        Returns:
+            bool: True if operation should proceed, False if it should be aborted
+        """
+        # Skip initial waiting if no failures yet
+        if not self._has_had_failures:
+            return True
+        
+        # Apply the current backoff
+        if self.current_backoff > 0:
+            self.logger.info(f"Rate limiting for {self.name}: waiting {self.current_backoff:.1f} seconds")
+            time.sleep(self.current_backoff)
+        
+        return True
+        
+    def record_success(self):
+        """
+        Record a successful API call. This gradually reduces the backoff
+        to allow recovery from rate limits over time.
+        """
+        self._consecutive_successes += 1
+        
+        # Only reduce backoff if we've had failures
+        if self._has_had_failures and self.current_backoff > 0:
+            # Reduce backoff by the recovery factor, but don't go below zero
+            self.current_backoff = max(0, self.current_backoff / self.recovery_factor)
+            
+            # Treat very small values as zero
+            if self.current_backoff < self.min_backoff_threshold:
+                self.current_backoff = 0
+            
+            # Log the backoff reduction
+            if self.current_backoff > 0:
+                self.logger.info(
+                    f"Successful call for {self.name}. "
+                    f"Reducing backoff delay to {self.current_backoff:.1f} seconds"
+                )
+            else:
+                self.logger.info(f"Backoff fully recovered for {self.name} after {self._consecutive_successes} successful calls")
+                
+                # If backoff is now zero, we can consider fully recovered
+                if self._consecutive_successes >= 3 and self.current_backoff == 0:
+                    self._has_had_failures = False
+                    self._retry_count = 0
+        
+    def record_failure(self):
+        """
+        Record a rate limit failure and increase the backoff time.
+        """
+        self._has_had_failures = True
+        self._retry_count += 1
+        self._consecutive_successes = 0  # Reset consecutive successes counter
+        
+        # Calculate new backoff with exponential increase
+        if self.current_backoff == 0:
+            self.current_backoff = self.initial_backoff_seconds
+        else:
+            self.current_backoff = min(
+                self.current_backoff * self.backoff_factor,
+                self.max_backoff_seconds
+            )
+            
+        self.logger.warning(
+            f"Operation failed for {self.name}. "
+            f"Consecutive failures: {self._retry_count}. "
+            f"Next backoff delay: {self.current_backoff:.1f} seconds"
+        )
+        
+    def exceeded_max_retries(self) -> bool:
+        """
+        Check if maximum retry attempts have been exceeded.
+        
+        Returns:
+            bool: True if max retries exceeded, False otherwise
+        """
+        return self._retry_count >= self.max_retries
+
+    def reset_retries(self):
+        """
+        Reset retry count and failure status.
+        Useful when starting a new sequence of API calls.
+        """
+        self._retry_count = 0
+        self._has_had_failures = False
+        self.current_backoff = 0
+        
+    def get_retry_count(self) -> int:
+        """Get the current retry count."""
+        return self._retry_count
+        
+    def get_max_retries(self) -> int:
+        """Get the maximum number of retries allowed."""
+        return self.max_retries
+        
+    def get_current_backoff(self) -> float:
+        """Get the current backoff time in seconds."""
+        return self.current_backoff
+        
+    def get_status_info(self) -> dict:
+        """Get a dictionary with the current status information."""
+        return {
+            "retry_count": self._retry_count,
+            "max_retries": self.max_retries,
+            "current_backoff": self.current_backoff,
+            "has_had_failures": self._has_had_failures,
+            "consecutive_successes": self._consecutive_successes
+        }

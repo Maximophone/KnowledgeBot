@@ -41,6 +41,8 @@ class Paths:
     # data
     data: Path = runtime_path / "data"
 
+    obsidian_vector_db: Path = runtime_path / "data/obsidian_vector_db.sqlite"
+
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
         return iter([

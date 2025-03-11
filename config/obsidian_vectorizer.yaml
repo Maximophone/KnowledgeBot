@@ -1,0 +1,24 @@
+batch_size: 8
+blacklist_directories:
+- .obsidian
+- .git
+- .trash
+- templates
+- .templates
+- attachments
+- _resources
+- Archive
+- KnowledgeBot/Unsorted
+- KnowledgeBot/Meetings
+- Prompts
+- AI Chats
+- AI Memory
+db_path: data/obsidian_vector_db.sqlite
+llm_chunker_model_name: gemini2.0flash
+max_chunk_size: 2000
+max_direct_tokens: 2000
+model_name: text-embedding-3-small
+overlap: 50
+recursive: true
+update_mode: update_if_newer
+vault_path: G:\My Drive\Obsidian
