@@ -8,10 +8,14 @@ class MockWrapper(AIWrapper):
         pass
 
     def _messages(self, model_name: str, messages: List[Message],
-        system_prompt: str, max_tokens: int, temperature:float, tools: Optional[List[Tool]] = None) -> AIResponse:
+        system_prompt: str, max_tokens: int, temperature:float, tools: Optional[List[Tool]] = None,
+        thinking: bool = False, thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         response = "---PARAMETERS START---\n"
         response += f"max_tokens: {max_tokens}\n"
         response += f"temperature: {temperature}\n"
+        if thinking:
+            response += f"thinking: enabled\n"
+            response += f"thinking_budget_tokens: {thinking_budget_tokens or 'auto'}\n"
         response += "---PARAMETERS END---\n"
 
         response += "---SYSTEM PROMPT START---\n"
@@ -48,4 +52,15 @@ class MockWrapper(AIWrapper):
                     response += f"[tool_result: {content.tool_result}]\n"
         response += "---MESSAGES END---\n"
 
-        return AIResponse(content=response) 
+        mock_reasoning = None
+        if thinking:
+            mock_reasoning = "Mock reasoning: This is a simulated chain of thought from the mock wrapper.\n"
+            mock_reasoning += f"I would have used up to {thinking_budget_tokens or 'auto'} tokens for this reasoning.\n"
+            mock_reasoning += "Step 1: First, I analyze the problem...\n"
+            mock_reasoning += "Step 2: Then, I consider possible approaches...\n"
+            mock_reasoning += "Step 3: Finally, I select the best solution...\n"
+        
+        return AIResponse(
+            content=response,
+            reasoning=mock_reasoning
+        ) 

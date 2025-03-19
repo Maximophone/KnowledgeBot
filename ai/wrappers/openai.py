@@ -4,6 +4,9 @@ from .base import AIWrapper, AIResponse
 from ..types import Message, MessageContent
 from ..tools import Tool, ToolCall
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
@@ -11,7 +14,8 @@ class GPTWrapper(AIWrapper):
 
     def _messages(self, model_name: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
+                 tools: Optional[List[Tool]] = None,
+                 thinking: bool = False, thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         if system_prompt:
             messages = [Message(role="system", content=[MessageContent(type="text", text=system_prompt)])] + messages
             
@@ -90,7 +94,10 @@ class GPTWrapper(AIWrapper):
                 temperature=temperature,
                 tools=openai_tools
             )
-
+        
+        # Extract reasoning content if available
+        logger.debug(response.choices[0])
+        reasoning = getattr(response.choices[0].message, "reasoning_content", None)
         # Check if the model wants to use a tool
         if response.choices[0].message.tool_calls:
             tool_calls = [
@@ -103,7 +110,10 @@ class GPTWrapper(AIWrapper):
             ]
             return AIResponse(
                 content=response.choices[0].message.content or "",
-                tool_calls=tool_calls
+                tool_calls=tool_calls,
+                reasoning=reasoning
             )
-
-        return AIResponse(content=response.choices[0].message.content) 
+        return AIResponse(
+            content=response.choices[0].message.content,
+            reasoning=reasoning
+        ) 

@@ -103,6 +103,15 @@ response = ai_model.conversation("Tell me more")  # Maintains context
 ai_model = AI("claude-3-sonnet", tools=memory.TOOLS)
 ```
 
+- **Document Chunking**: Advanced LLM-based semantic document chunking for RAG systems
+```python
+from ai.chunking.strategies import LLMChunker
+
+chunker = LLMChunker(max_direct_tokens=2000, max_chunk_size=1000)
+chunks = chunker.chunk(text)
+```
+For detailed documentation on the chunking system, see [LLMChunker Technical Documentation](ai/chunking/TECHNICAL.md)
+
 - **Custom Tool Sets**: Pre-built tool collections for various integrations
   - Coda integration for document and table management
   - Memory management for persistent AI knowledge
@@ -146,6 +155,20 @@ Please analyze this technical document.
 </ai!>
 ```
 
+Include external content in your notes:
+
+```markdown
+<!-- Include a Twitter thread -->
+<tweet!https://twitter.com/username/status/123456789>
+
+<!-- Include and analyze a Twitter thread -->
+<ai!>
+<tweet!https://twitter.com/username/status/123456789>
+
+Please analyze the key points from this thread.
+</ai!>
+```
+
 ### Special Commands
 
 - `<model!model_name>`: Specify different AI models
@@ -167,6 +190,8 @@ Please analyze this technical document.
 - `<md!path>`: Reference downloaded markdown
 - `<file!path>`: Reference any file
 - `<prompt!path>`: Include system prompt from prompts directory
+- `<url!url>`: Include content from a URL
+- `<tweet!url>`: Convert a Twitter thread to markdown format
 
 ### File Processing
 
@@ -736,3 +761,6 @@ This project uses several third-party libraries and services, each with their ow
 - AssemblyAI - Commercial API service
 - PyQt5 - GPL v3
 - Other dependencies as listed in `requirements.txt`
+
+
+

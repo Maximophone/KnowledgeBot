@@ -15,7 +15,7 @@ class SpeakerIdentifier(NoteProcessor):
     
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
-        self.ai_model = AI("sonnet3.5")
+        self.ai_model = AI("sonnet3.7")
         self.tiny_model = AI("haiku")
         self.required_stage = "classified"
         self.stage_name = "speakers_identified"

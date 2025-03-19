@@ -13,14 +13,22 @@ Key things to know if you need to work with this file:
 from requests.cookies import RequestsCookieJar
 from config.secrets import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
 from linkedin_api import Linkedin
+from linkedin_api.linkedin import generate_trackingId_as_charString
 import browser_cookie3
 from config.secrets import LINKEDIN_LI_AT, LINKEDIN_JSESSIONID
 import sys
 from config.logging_config import setup_logger
+from typing import Optional, List
+import json
+import uuid
 
 logger = setup_logger(__name__)
 
 _INSTANCIATED = {}
+
+class LinkedInMessageError(Exception):
+    """Custom exception for LinkedIn messaging errors"""
+    pass
 
 def load_linkedin_cookies():
     """
@@ -86,6 +94,76 @@ def load_linkedin_cookies():
     logger.info("Loaded cookies from environment variables (li_at, JSESSIONID)")
     return cookie_jar
 
+def patched_send_message(
+        self,
+        message_body: str,
+        conversation_urn_id: Optional[str] = None,
+        recipients: Optional[List[str]] = None,
+    ):
+    """Send a message to a given conversation.
+
+    :param message_body: Message text to send
+    :type message_body: str
+    :param conversation_urn_id: LinkedIn URN ID for a conversation
+    :type conversation_urn_id: str, optional
+    :param recipients: List of profile urn id's
+    :type recipients: list, optional
+
+    :raises LinkedInMessageError: If the message fails to send, with LinkedIn's error message
+    :return: Response from LinkedIn API
+    """
+    params = {"action": "create"}
+
+    if not (conversation_urn_id or recipients):
+        raise LinkedInMessageError("Must provide [conversation_urn_id] or [recipients].")
+
+    message_event = {
+        "eventCreate": {
+            "originToken": str(uuid.uuid4()),
+            "value": {
+                "com.linkedin.voyager.messaging.create.MessageCreate": {
+                    "attributedBody": {
+                        "text": message_body,
+                        "attributes": [],
+                    },
+                    "attachments": [],
+                }
+            },
+            "trackingId": generate_trackingId_as_charString(),
+        },
+        "dedupeByClientGeneratedToken": False,
+    }
+
+    if conversation_urn_id and not recipients:
+        res = self._post(
+            f"/messaging/conversations/{conversation_urn_id}/events",
+            params=params,
+            data=json.dumps(message_event),
+        )
+    elif recipients and not conversation_urn_id:
+        message_event["recipients"] = recipients
+        message_event["subtype"] = "MEMBER_TO_MEMBER"
+        payload = {
+            "keyVersion": "LEGACY_INBOX",
+            "conversationCreate": message_event,
+        }
+        res = self._post(
+            f"/messaging/conversations",
+            params=params,
+            data=json.dumps(payload),
+        )
+
+    if res.status_code != 201:
+        error_message = f"LinkedIn API error (Status {res.status_code})"
+        try:
+            error_detail = res.json()
+            error_message += f": {error_detail}"
+        except:
+            error_message += f": {res.text}"
+        raise LinkedInMessageError(error_message)
+    
+    return res.status_code != 201
+
 def get_linkedin_client(user_email, user_password):
     """
     1) Tries to log in to LinkedIn with username/password (using linkedin_api).
@@ -104,6 +182,8 @@ def get_linkedin_client(user_email, user_password):
             user_password,
             refresh_cookies=True  # force re-login
         )
+        # Monkey patch the send_message method
+        linkedin_client.send_message = patched_send_message.__get__(linkedin_client)
         logger.info("Login successful with username/password")
         _INSTANCIATED["client"] = linkedin_client
         return linkedin_client
@@ -121,6 +201,8 @@ def get_linkedin_client(user_email, user_password):
             password="",
             cookies=cookie_jar
         )
+        # Monkey patch the send_message method
+        linkedin_client.send_message = patched_send_message.__get__(linkedin_client)
         _INSTANCIATED["client"] = linkedin_client
         return linkedin_client
 

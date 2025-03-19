@@ -41,12 +41,14 @@ Important guidelines:
 - Format each todo item as follows:
     - [ ] {{Task description}} 📅 {{Due date}}
 - Use the "Tasks" plugin formatting for Obsidian
-- The recording date for this transcript is {recording_date.strftime('%Y-%m-%d')} ({weekday})
+- IMPORTANT: All due dates MUST be in YYYY-MM-DD format
+- Convert all relative dates (like "tomorrow", "next week", "in 3 days") to absolute dates based on the recording date
+- **The recording date for this transcript is {recording_date_str} ({weekday})**
 Format your response as a list of todo items, nothing else.
 Example format:
 - [ ] Finish coding the todo processor 📅 2023-06-15
 - [ ] Test the todo processor
-- [ ] Deploy the todo processor to production 📅 2023-06-20
+- [ ] Deploy the todo processor to production 📅 2024-09-20
 Transcript:
         """
 
@@ -77,10 +79,11 @@ Transcript:
             recording_date = date_str
         else:
             recording_date = datetime.fromisoformat(date_str) if date_str else datetime.now()
+        recording_date_str = recording_date.strftime('%Y-%m-%d')
         weekday = calendar.day_name[recording_date.weekday()]
 
         # Extract todos using AI
-        todos_prompt = self.prompt_todos + "\n\nTranscript:\n" + transcript
+        todos_prompt = self.prompt_todos.format(recording_date_str=recording_date_str, weekday=weekday) + "\n\nTranscript:\n" + transcript
         message = Message(
             role="user",
             content=[MessageContent(

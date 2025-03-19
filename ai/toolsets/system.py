@@ -51,13 +51,17 @@ def run_command(command: str) -> str:
         return f"Error executing command: {str(e)}"
 
 @tool(
-    description="Read the contents of a file",
+    description="Read the contents of a file (limited to first 100,000 characters)",
     path="The file path",
     safe=True
 )
 def read_file(path: str) -> str:
+    CHAR_LIMIT = 20_000  # About the size of a small book
     with open(path, 'r', encoding='utf-8') as file:
-        return file.read()
+        content = file.read(CHAR_LIMIT)
+        if len(content) == CHAR_LIMIT:
+            content += "\n... (file truncated due to length)"
+    return content
 
 @tool(
     description="Lists the contents of a directory",

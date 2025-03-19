@@ -10,7 +10,8 @@ class ClaudeWrapper(AIWrapper):
 
     def _messages(self, model: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
-                 tools: Optional[List[Tool]] = None) -> AIResponse:
+                 tools: Optional[List[Tool]] = None,
+                 thinking: bool = False, thinking_budget_tokens: Optional[int] = None) -> AIResponse:
         # Convert tools to Claude's format if provided
         claude_tools = None
         if tools:
@@ -77,6 +78,18 @@ class ClaudeWrapper(AIWrapper):
             "system": system_prompt,
             "messages": claude_messages
         }
+        
+        # Add thinking parameter if enabled
+        if thinking:
+            # If thinking_budget_tokens is not specified, use half of max_tokens up to 16K
+            budget = thinking_budget_tokens or min(16000, max_tokens // 2)
+            arguments["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": budget
+            }
+            # Temperature can only be set to 1.0 when thinking is enabled
+            arguments["temperature"] = 1.0
+
         if claude_tools:
             arguments["tools"] = claude_tools
 
@@ -85,6 +98,7 @@ class ClaudeWrapper(AIWrapper):
         # Extract content and any tool calls
         content = ""
         tool_calls = []
+        reasoning = ""
         
         for block in response.content:
             if block.type == "text":
@@ -95,8 +109,14 @@ class ClaudeWrapper(AIWrapper):
                     name=block.name,
                     arguments=block.input
                 ))
+            elif block.type == "thinking":
+                reasoning += block.thinking
+            elif block.type == "redacted_thinking":
+                # For redacted thinking, we just note that some thinking was redacted
+                reasoning += "[Some reasoning was redacted for safety reasons]\n"
 
         return AIResponse(
             content=content,
-            tool_calls=tool_calls if tool_calls else None
+            tool_calls=tool_calls if tool_calls else None,
+            reasoning=reasoning if reasoning else None
         ) 

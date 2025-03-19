@@ -76,19 +76,31 @@ def needs_answer(file_path: str) -> bool:
     _, results = process_tags(content)
     all_tags = set([name for name, _, _ in results])
     for rep in REPLACEMENTS_OUTSIDE.keys():
-        if rep == "ai":
+        if rep == "ai" or rep == "rag":
             continue
         if rep in all_tags:
             return True
-    if "ai" not in all_tags:
-        return False
-    ai_results = [r for r in results if r[0] == "ai"]
-    for name, value, txt in ai_results:
-        if txt is None:
-            continue
-        _, results = process_tags(txt)
-        if "reply" in set(n for n,v,t in results):
-            return True
+    
+    # Check for AI blocks that need responses
+    if "ai" in all_tags:
+        ai_results = [r for r in results if r[0] == "ai"]
+        for name, value, txt in ai_results:
+            if txt is None:
+                continue
+            _, inner_results = process_tags(txt)
+            if "reply" in set(n for n,v,t in inner_results):
+                return True
+    
+    # Check for RAG blocks that need responses
+    if "rag" in all_tags:
+        rag_results = [r for r in results if r[0] == "rag"]
+        for name, value, txt in rag_results:
+            if txt is None:
+                continue
+            _, inner_results = process_tags(txt)
+            if "reply" in set(n for n,v,t in inner_results):
+                return True
+    
     return False
 
 if __name__ == "__main__":

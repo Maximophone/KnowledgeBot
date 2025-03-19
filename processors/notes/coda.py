@@ -52,7 +52,7 @@ class CodaProcessor(NoteProcessor):
                 await f.write(final_content)
             os.utime(self.input_dir / filename, None)
 
-            print(f"Processed coda page: {filename}", flush=True)
+            logger.info("Processed coda page: %s", filename)
             
         except Exception as e:
             logger.error("Error processing Coda page %s: %s", filename, str(e))

@@ -48,6 +48,8 @@ tags:
         logger.info("Processing ideas from: %s", filename)
         
         content = await self.read_file(filename)
+        
+        # Parse frontmatter and content
         frontmatter = parse_frontmatter(content)
         
         if not frontmatter:

@@ -7,10 +7,12 @@ _MODELS_DICT = {
     "sonnet": "claude-3-sonnet-20240229",
     "opus": "claude-3-opus-20240229",
     "sonnet3.5": "claude-3-5-sonnet-latest",
+    "sonnet3.7": "claude-3-7-sonnet-latest",
     "haiku3.5": "claude-3-5-haiku-latest",
     "gemini1.0": "gemini-1.0-pro-latest",
     "gemini1.5": "gemini-1.5-pro-latest",
-    "gemini2.0flash": "gemini-2.0-flash-exp",
+    "gemini2.0flash": "gemini-2.0-flash",
+    "gemini2.0flashlite": "gemini-2.0-flash-lite",
     "gemini2.0flashthinking": "gemini-2.0-flash-thinking-exp",
     "gemini2.0exp": "gemini-exp-1206",
     "gpt3.5": "gpt-3.5-turbo",
@@ -26,16 +28,34 @@ _MODELS_DICT = {
     "sonar-pro": "sonar-pro",
 }
 
+DEFAULT_MODEL = "sonnet3.7"
+
 def get_model(model_name: str) -> str:
     return _MODELS_DICT.get(model_name, model_name)
 
-def get_client(model_name: str) -> AIWrapper:
+def get_client(model_name: str, rate_limiting=False, rate_limiter=None) -> AIWrapper:
+    """
+    Get the appropriate AI client wrapper for the specified model.
+    
+    Args:
+        model_name: Name of the model to get client for
+        rate_limiting: Whether to enable rate limiting
+        rate_limiter: Optional custom rate limiter instance
+        
+    Returns:
+        AIWrapper instance for the specified model
+    """
     model_name = get_model(model_name)
     client_name, _ = model_name.split("-", 1) if "-" in model_name else (model_name, "")
     if client_name == "claude":
         return ClaudeWrapper(secrets.CLAUDE_API_KEY)
     elif client_name == "gemini":
-        return GeminiWrapper(secrets.GEMINI_API_KEY, get_model(model_name))
+        return GeminiWrapper(
+            secrets.GEMINI_API_KEY, 
+            get_model(model_name),
+            rate_limiting=rate_limiting,
+            rate_limiter=rate_limiter
+        )
     elif client_name == "gpt" or client_name == "o1":
         return GPTWrapper(secrets.OPENAI_API_KEY, secrets.OPENAI_ORG)
     elif client_name == "deepseek":

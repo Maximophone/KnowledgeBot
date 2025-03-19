@@ -1,7 +1,6 @@
 from datetime import datetime
 from pathlib import Path
 from mutagen import File
-import re
 from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -44,5 +43,5 @@ def get_recording_date(file_path: Path) -> datetime:
         return datetime.fromtimestamp(file_path.stat().st_mtime)
     
     except Exception as e:
-        print(f"Error extracting date from {file_path}: {e}")
+        logger.error("Error extracting date from %s: %s", file_path, e)
         return datetime.fromtimestamp(file_path.stat().st_mtime)

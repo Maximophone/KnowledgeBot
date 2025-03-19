@@ -58,18 +58,27 @@ def get_file_contents(fpath: str) -> str:
     except Exception as e:
         return f"Error reading file {fpath}: {str(e)}"
 
-def get_markdown_files(directory: str) -> List[str]:
+def get_markdown_files(directory: str, exclude_paths: List[str] = []) -> List[str]:
     """
-    Get all markdown files in a directory and its subdirectories.
+    Get all markdown files in a directory and its subdirectories, excluding specified paths.
 
     Args:
         directory (str): Directory to search
+        exclude_paths (List[str]): List of paths to exclude
 
     Returns:
         List[str]: List of markdown file paths
     """
     search_pattern = os.path.join(directory, '**', '*.md')
-    return glob.glob(search_pattern, recursive=True)
+    all_files = glob.glob(search_pattern, recursive=True)
+    
+    # Exclude specified paths
+    excluded_files = set()
+    for exclude_path in exclude_paths:
+        exclude_pattern = os.path.join(directory, exclude_path, '**', '*.md')
+        excluded_files.update(glob.glob(exclude_pattern, recursive=True))
+    
+    return [file for file in all_files if file not in excluded_files]
 
 def find_matching_path(file_list: List[str], end_path: str) -> str:
     """

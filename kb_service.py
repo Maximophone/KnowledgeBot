@@ -1,6 +1,8 @@
 import asyncio
+import argparse
 from config.paths import PATHS
 from config.secrets import ASSEMBLY_AI_KEY
+from config.logging_config import set_default_log_level
 
 # Import processors
 from processors.audio.transcriber import AudioTranscriber
@@ -145,4 +147,17 @@ async def main():
     await asyncio.gather(obsidian_ai_task, processor_task, keyboard_listener_task)
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Knowledge Bot Service')
+    parser.add_argument('--log-level', 
+                        type=str, 
+                        default='INFO',
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the default logging level (default: INFO)')
+    args = parser.parse_args()
+    
+    # Set the default logging level
+    set_default_log_level(args.log_level)
+    
+    # Run the main async function
     asyncio.run(main())

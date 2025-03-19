@@ -199,8 +199,11 @@ class GmailClient:
         :param token_path: Path to store the OAuth token (pickle).
         :param scopes: List of Gmail API scopes you need.
         """
-        # By default, we use full mail scope; replace with narrower scopes if desired
-        self.scopes = scopes or ['https://mail.google.com/']
+        # Add groups scope alongside mail scope
+        self.scopes = scopes or [
+            'https://mail.google.com/',
+            'https://www.googleapis.com/auth/apps.groups.migration'
+        ]
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.service = self._authenticate()
@@ -229,7 +232,7 @@ class GmailClient:
 
         return build('gmail', 'v1', credentials=creds)
 
-    def send_email(self, to, subject, body, cc=None, from_name=None):
+    def send_email(self, to, subject, body, cc=None, from_name=None, from_email=None):
         """
         Send a plain-text email.
         :param to: List of recipient email addresses or single address
@@ -237,6 +240,7 @@ class GmailClient:
         :param body: Plain-text message content
         :param cc: List of CC recipient email addresses or single address (optional)
         :param from_name: Display name for the sender (optional)
+        :param from_email: Sender email address (optional, must have permission)
         :return: API response dict containing message ID, etc.
         """
         # Create a simple message without any policy
@@ -258,9 +262,12 @@ class GmailClient:
         # Set the subject
         message['subject'] = subject
         
-        # Get the sender's email address
-        sender_info = self.service.users().getProfile(userId='me').execute()
-        sender_email = sender_info['emailAddress']
+        # Use provided from_email if available, otherwise get user's email
+        if from_email:
+            sender_email = from_email
+        else:
+            sender_info = self.service.users().getProfile(userId='me').execute()
+            sender_email = sender_info['emailAddress']
         
         # Set the From header with display name if provided
         if from_name:
