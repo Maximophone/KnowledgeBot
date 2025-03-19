@@ -13,7 +13,7 @@ import time
 import logging
 import inquirer
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import colorama
 from colorama import Fore, Style
@@ -100,6 +100,43 @@ def find_markdown_files(folder_path: str, recursive: bool = True, blacklist_dirs
     return markdown_files
 
 
+def find_markdown_files_with_size(folder_path: str, recursive: bool = True, blacklist_dirs: List[str] = None) -> List[Tuple[str, int]]:
+    """
+    Find all markdown files in the specified folder, excluding blacklisted directories.
+    Returns files with their sizes for sorting.
+    
+    Args:
+        folder_path: Path to the folder to search in
+        recursive: Whether to search recursively in subfolders
+        blacklist_dirs: List of directory names to exclude
+        
+    Returns:
+        List of tuples (file_path, file_size) for markdown files
+    """
+    markdown_files = []
+    folder_path = os.path.abspath(folder_path)
+    blacklist_dirs = blacklist_dirs or []
+    
+    if recursive:
+        for root, dirs, files in os.walk(folder_path):
+            # Filter out blacklisted directories
+            dirs[:] = [d for d in dirs if d not in blacklist_dirs]
+            
+            for file in files:
+                if file.lower().endswith(('.md', '.markdown')):
+                    file_path = os.path.join(root, file)
+                    file_size = os.path.getsize(file_path)
+                    markdown_files.append((file_path, file_size))
+    else:
+        for file in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, file)
+            if os.path.isfile(file_path) and file.lower().endswith(('.md', '.markdown')):
+                file_size = os.path.getsize(file_path)
+                markdown_files.append((file_path, file_size))
+    
+    return markdown_files
+
+
 def process_obsidian_vault(
     folder_path: str,
     db_path: str,
@@ -116,6 +153,7 @@ def process_obsidian_vault(
 ) -> Dict[str, Any]:
     """
     Process all markdown files in the Obsidian vault and add them to the vector database.
+    Files under the maximum chunk size will be processed first.
     
     Args:
         folder_path: Path to the Obsidian vault
@@ -140,10 +178,28 @@ def process_obsidian_vault(
     db = VectorDB(db_path, chunker, embedder)
     
     try:
-        # Find all markdown files, excluding blacklisted directories
-        markdown_files = find_markdown_files(folder_path, recursive, blacklist_dirs)
-        logger.info(f"Found {len(markdown_files)} markdown files")
-        console.print(f"[bold green]Found {len(markdown_files)} markdown files[/bold green]")
+        # Find all markdown files with their sizes, excluding blacklisted directories
+        markdown_files_with_size = find_markdown_files_with_size(folder_path, recursive, blacklist_dirs)
+        logger.info(f"Found {len(markdown_files_with_size)} markdown files")
+        console.print(f"[bold green]Found {len(markdown_files_with_size)} markdown files[/bold green]")
+        
+        # Sort files by size (smallest first)
+        markdown_files_with_size.sort(key=lambda x: x[1])
+        
+        # Extract just the file paths
+        markdown_files = [file_path for file_path, _ in markdown_files_with_size]
+        
+        # Group files into those likely under and over max_chunk_size
+        # We use a rough estimate: files smaller than max_chunk_size*10 characters are likely to be under max_chunk_size tokens
+        # since tokens are roughly 4 characters on average
+        estimated_char_limit = max_chunk_size * 10 if max_chunk_size else float('inf')
+        likely_small_files = [file_path for file_path, size in markdown_files_with_size if size < estimated_char_limit]
+        likely_large_files = [file_path for file_path, size in markdown_files_with_size if size >= estimated_char_limit]
+        
+        # Combine the lists with small files first
+        ordered_files = likely_small_files + likely_large_files
+        
+        console.print(f"[bold green]Processing {len(likely_small_files)} small files first, then {len(likely_large_files)} larger files[/bold green]")
         
         # Process each file
         processed_count = 0
@@ -159,10 +215,10 @@ def process_obsidian_vault(
         
         # Display the progress table
         with console.status("[bold green]Processing markdown files...") as status:
-            for i, file_path in enumerate(markdown_files, 1):
+            for i, file_path in enumerate(ordered_files, 1):
                 try:
                     # Update status message
-                    status.update(f"[bold green]Processing file {i}/{len(markdown_files)}: {os.path.basename(file_path)}[/bold green]")
+                    status.update(f"[bold green]Processing file {i}/{len(ordered_files)}: {os.path.basename(file_path)}[/bold green]")
                     
                     # Get file modification time as timestamp
                     mtime = os.path.getmtime(file_path)
@@ -530,34 +586,34 @@ class ObsidianVectorizer(BaseScript):
         console.print()
     
     def display_results(self, results: Dict[str, Any]) -> None:
-        """Display the processing results."""
-        console.print("\n[bold]Processing Results:[/bold]")
+        """Display the results of the vectorization process."""
+        console.print("\n[bold green]Vectorization Results:[/bold green]")
         
-        table = Table(show_header=True, header_style="bold green")
-        table.add_column("Metric")
-        table.add_column("Value")
+        table = Table(title="Processing Statistics")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
         
-        table.add_row("Files Processed", str(results['processed_count']))
-        table.add_row("Files Skipped", str(results['skipped_count']))
-        table.add_row("Errors", str(results['error_count']))
-        table.add_row("Total Chunks", str(results['total_chunks']))
+        table.add_row("Files Processed", str(results["processed_count"]))
+        table.add_row("Files Skipped", str(results["skipped_count"]))
+        table.add_row("Files with Errors", str(results["error_count"]))
+        table.add_row("Total Chunks", str(results["total_chunks"]))
         table.add_row("Processing Time", f"{results['elapsed_time']:.2f} seconds")
         
+        # Display database statistics
+        if "db_stats" in results:
+            stats = results["db_stats"]
+            table.add_row("Total Documents", str(stats.get("total_documents", "N/A")))
+            table.add_row("Total Chunks", str(stats.get("total_chunks", "N/A")))
+            table.add_row("Total Tokens", str(stats.get("total_tokens", "N/A")))
+        
         console.print(table)
-        
-        console.print("\n[bold]Database Statistics:[/bold]")
-        stats_table = Table(show_header=True, header_style="bold blue")
-        stats_table.add_column("Metric")
-        stats_table.add_column("Value")
-        
-        for key, value in results['db_stats'].items():
-            stats_table.add_row(key, str(value))
-        
-        console.print(stats_table)
-        console.print()
+        console.print("[yellow]Note: Files were processed in order of size, with smaller files first.[/yellow]")
     
     def run_vectorization(self, folder_path: str, config: Dict[str, Any]) -> None:
-        """Run the vectorization process."""
+        """
+        Run the vectorization process.
+        Files under the maximum chunk size will be prioritized.
+        """
         # Check for OPENAI_API_KEY
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -572,6 +628,7 @@ class ObsidianVectorizer(BaseScript):
             return
             
         console.print(f"[bold green]Starting vectorization of {folder_path}[/bold green]")
+        console.print(f"[bold cyan]Files under {config['max_chunk_size']*10} bytes will be processed first[/bold cyan]")
         
         try:
             # Create database directory if it doesn't exist

@@ -481,7 +481,8 @@ Try again and make sure the text appears word-for-word in the document."""
     
     def _recursive_chunk(self, text: str, max_chunk_size: Optional[int] = None,
                         position_offset: int = 0, chunk_id_offset: int = 0,
-                        depth: int = 0, **kwargs) -> Tuple[bool, List[Chunk], Optional[str]]:
+                        depth: int = 0, chunking_path: str = "recursive",
+                        **kwargs) -> Tuple[bool, List[Chunk], Optional[str]]:
         """
         Recursively chunk a document by splitting it into smaller parts.
         
@@ -491,6 +492,7 @@ Try again and make sure the text appears word-for-word in the document."""
             position_offset: Offset to add to positions (for recursive calls)
             chunk_id_offset: Offset to add to chunk IDs (for recursive calls)
             depth: Current recursion depth
+            chunking_path: String describing the chunking path so far
             **kwargs: Additional parameters passed to the LLM
             
         Returns:
@@ -515,6 +517,8 @@ Try again and make sure the text appears word-for-word in the document."""
                 max_chunk_size=max_chunk_size,
                 position_offset=position_offset,
                 chunk_id_offset=chunk_id_offset,
+                chunking_path=f"{chunking_path}->direct",
+                depth=depth,
                 **kwargs
             )
             
@@ -534,6 +538,8 @@ Try again and make sure the text appears word-for-word in the document."""
                 max_chunk_size=max_chunk_size,
                 position_offset=position_offset,
                 chunk_id_offset=chunk_id_offset,
+                chunking_path=f"{chunking_path}->direct_fallback",
+                depth=depth,
                 **kwargs
             )
         
@@ -555,6 +561,7 @@ Try again and make sure the text appears word-for-word in the document."""
             position_offset=position_offset,
             chunk_id_offset=chunk_id_offset,
             depth=depth + 1,
+            chunking_path=f"{chunking_path}->recursive",
             **kwargs
         )
         
@@ -568,6 +575,7 @@ Try again and make sure the text appears word-for-word in the document."""
             position_offset=position_offset + len(left_text),
             chunk_id_offset=chunk_id_offset + len(left_chunks),
             depth=depth + 1,
+            chunking_path=f"{chunking_path}->recursive",
             **kwargs
         )
         
@@ -582,6 +590,7 @@ Try again and make sure the text appears word-for-word in the document."""
     
     def _direct_chunk(self, text: str, max_chunk_size: Optional[int] = None,
                      position_offset: int = 0, chunk_id_offset: int = 0,
+                     chunking_path: str = "direct", depth: int = 0,
                      **kwargs) -> Tuple[bool, List[Chunk], Optional[str]]:
         """
         Directly chunk a document using the LLM (non-recursive approach).
@@ -591,6 +600,8 @@ Try again and make sure the text appears word-for-word in the document."""
             max_chunk_size: Maximum size of each chunk in tokens (overrides instance value if provided)
             position_offset: Offset to add to positions (for recursive calls)
             chunk_id_offset: Offset to add to chunk IDs (for recursive calls)
+            chunking_path: String describing the chunking path that led to this point (e.g., "direct", "recursive->direct")
+            depth: Current recursion depth (0 for direct calls, >0 for recursive calls)
             **kwargs: Additional parameters passed to the LLM
             
         Returns:
@@ -621,10 +632,12 @@ Try again and make sure the text appears word-for-word in the document."""
                     start_pos=0 + position_offset,
                     end_pos=len(text) - 1 + position_offset,  # End position is inclusive
                     metadata={
-                        "strategy": "llm_single",
+                        "strategy": "llm_direct_single" if chunking_path == "direct" else "llm_recursive_direct_single",
                         "type": "single-chunk",
                         "token_estimate": text_token_count,
-                        "reason": "Text smaller than max_chunk_size"
+                        "reason": "Text smaller than max_chunk_size",
+                        "chunking_path": chunking_path,
+                        "depth": depth
                     }
                 )
                 
@@ -768,7 +781,9 @@ Make sure to:
         for chunk_data in chunks_data:
             # Add token estimation to metadata
             chunk_data["metadata"]["token_estimate"] = n_tokens(chunk_data["content"])
-            chunk_data["metadata"]["strategy"] = "llm"
+            chunk_data["metadata"]["strategy"] = "llm_direct_multi" if chunking_path == "direct" else "llm_recursive_direct_multi"
+            chunk_data["metadata"]["chunking_path"] = chunking_path
+            chunk_data["metadata"]["depth"] = depth
             
             # Create Chunk object with adjusted positions and IDs
             chunk = Chunk(
@@ -978,11 +993,11 @@ All chunks must be valid and the entire document must be covered for the solutio
         if doc_token_count <= self.max_direct_tokens:
             # Use direct chunking for small documents
             logger.info(f"Using direct chunking approach (document size <= {self.max_direct_tokens} tokens)")
-            success, chunks, error = self._direct_chunk(text, max_chunk_size=max_chunk_size, **kwargs)
+            success, chunks, error = self._direct_chunk(text, max_chunk_size=max_chunk_size, chunking_path="direct", depth=0, **kwargs)
         else:
             # Use recursive chunking for large documents
             logger.info(f"Using recursive chunking approach (document size > {self.max_direct_tokens} tokens)")
-            success, chunks, error = self._recursive_chunk(text, max_chunk_size=max_chunk_size, **kwargs)
+            success, chunks, error = self._recursive_chunk(text, max_chunk_size=max_chunk_size, chunking_path="recursive", depth=0, **kwargs)
         
         # If chunking failed and fallback is enabled, use SimpleChunker
         if not success and self.fallback:
