@@ -5,8 +5,11 @@ import json
 from ai.types import Message, MessageContent, ToolCall, ToolResult
 from ai.image_utils import validate_image, encode_image
 import re
+import logging
 
 remove = lambda *_: ""
+
+logger = logging.getLogger(__name__)
 
 def process_conversation(txt: str) -> List[Message]:
     """
@@ -177,8 +180,14 @@ def process_conversation(txt: str) -> List[Message]:
                 messages.append(process_user_message(parts[1]))
     
     # Ensure conversation starts with user and ends with user
-    assert messages[0].role == "user"
-    assert messages[-1].role == "user"
+    if messages[0].role != "user":
+        logger.error(f"Conversation must start with user message, but got {messages[0].role}")
+        logger.debug(f"Conversation: {txt}")
+        raise ValueError("Conversation must start with user message")
+    if messages[-1].role != "user":
+        logger.error(f"Conversation must end with user message, but got {messages[-1].role}")
+        logger.debug(f"Conversation: {txt}")
+        raise ValueError("Conversation must end with user message")
     return messages
 
 
