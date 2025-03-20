@@ -23,7 +23,7 @@ class AIWrapper:
         log_token_use(model_name, count_tokens_input(messages, system_prompt))
         log_token_use(model_name, count_tokens_output(response.content), input=False)
         return response
-    
+        
     def _messages(self, model: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, 
                  temperature: float, tools: Optional[List[Tool]] = None,
