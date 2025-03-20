@@ -10,10 +10,13 @@ from googleapiclient.http import MediaIoBaseDownload
 from bs4 import BeautifulSoup
 import re
 from config.logging_config import setup_logger
+import traceback
 
 logger = setup_logger(__name__)
 
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+SCOPES = [
+    'https://www.googleapis.com/auth/drive.readonly',
+]
 
 class GoogleDocUtils:
     def __init__(self, credentials_path='credentials.json'):
@@ -67,13 +70,14 @@ class GoogleDocUtils:
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
-                print(f"Download {int(status.progress() * 100)}%.")
+                logger.info(f"Download {int(status.progress() * 100)}%.")
 
             content = fh.getvalue().decode('utf-8')
             return content
 
         except Exception as error:
-            print(f'An error occurred: {error}')
+            logger.error(f'An error occurred: {error}')
+            logger.error(traceback.format_exc())
             return None
 
     @staticmethod
