@@ -1,9 +1,17 @@
 import os
 import subprocess
+import threading
+import time
+import uuid
 from ..tools import tool
 import shutil
 import requests
 from integrations.html_to_markdown import HTMLToMarkdown
+
+# Global mapping of session IDs to shell processes
+_shell_sessions = {}
+_session_last_activity = {}
+_shell_lock = threading.Lock()
 
 @tool(
     description="Save a file to disk. Can optionally overwrite existing files, but this should be used with extreme caution.",
@@ -163,5 +171,180 @@ def fetch_webpage(url: str, raw_html: bool = False) -> str:
     except Exception as e:
         return f"Error fetching webpage: {str(e)}"
 
+@tool(
+    description="Run a command in a persistent shell session that maintains state between calls. Returns a session_id when first called. For subsequent commands, provide the same session_id to maintain shell state (directory, environment variables, etc.).",
+    command="The command to run",
+    session_id="Session ID for an existing shell (leave empty to create a new session)",
+    timeout="Timeout in seconds (default: 30)",
+    safe=False
+)
+def persistent_shell(command: str, session_id: str = "", timeout: int = 30) -> str:
+    """
+    Runs a command in a persistent shell session that maintains state between calls.
+    
+    If session_id is empty, creates a new shell session and returns the session ID.
+    For subsequent calls, provide the same session_id to maintain state.
+    """
+    global _shell_sessions, _session_last_activity
+    
+    with _shell_lock:
+        # Create a new session if no session ID provided
+        is_new_session = not session_id
+        if is_new_session:
+            session_id = str(uuid.uuid4())
+            
+            # For Windows
+            startup_info = None
+            if os.name == 'nt':
+                shell_command = ['cmd.exe', '/q']
+            else:  # Unix/Linux
+                shell_command = ['bash', '--login']
+                
+            process = subprocess.Popen(
+                shell_command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                startupinfo=startup_info
+            )
+            
+            _shell_sessions[session_id] = process
+            _session_last_activity[session_id] = time.time()
+            
+            # If no command was provided, just return the session info
+            if not command or command.strip() == "":
+                return f"Created new shell session with ID: {session_id}\n\nUse this ID for subsequent commands to maintain shell state."
+            
+            # Otherwise continue to execute the command
+        else:
+            # Check if the session exists
+            if session_id not in _shell_sessions:
+                return f"Error: Session {session_id} not found or has expired. Please create a new session."
+            
+            process = _shell_sessions[session_id]
+            
+            # Check if process is still alive
+            if process.poll() is not None:
+                del _shell_sessions[session_id]
+                return f"Error: Shell process has exited. Please create a new session."
+        
+        try:
+            # Update last activity time
+            _session_last_activity[session_id] = time.time()
+            
+            # Create a command file that outputs the result to a temporary file
+            # This avoids issues with reading from pipes
+            temp_dir = os.environ.get('TEMP', '/tmp') if os.name == 'nt' else '/tmp'
+            output_file = os.path.join(temp_dir, f"shell_output_{session_id}.txt")
+            done_file = os.path.join(temp_dir, f"shell_output_{session_id}.done")
+            
+            # Clear any previous output file
+            if os.path.exists(output_file):
+                try:
+                    os.remove(output_file)
+                except:
+                    pass
+            if os.path.exists(done_file):
+                try:
+                    os.remove(done_file)
+                except:
+                    pass
+            
+            if os.name == 'nt':  # Windows
+                full_command = f"{command} > \"{output_file}\" 2>&1 & echo Done > \"{done_file}\"\n"
+            else:  # Unix
+                full_command = f"{command} > \"{output_file}\" 2>&1; echo Done > \"{done_file}\"\n"
+            
+            # Send command to the shell
+            process.stdin.write(full_command)
+            process.stdin.flush()
+            
+            # Wait for command to complete with timeout
+            start_time = time.time()
+            output = ""
+            
+            while time.time() - start_time < timeout:
+                # Check for done file
+                if os.path.exists(done_file):
+                    break
+                
+                # Check if process died
+                if process.poll() is not None:
+                    if session_id in _shell_sessions:
+                        del _shell_sessions[session_id]
+                    return f"Error: Shell process exited unexpectedly. Please create a new session."
+                
+                time.sleep(0.1)
+            
+            # Read the output file
+            if os.path.exists(output_file):
+                try:
+                    with open(output_file, 'r', encoding='utf-8', errors='replace') as f:
+                        output = f.read()
+                except Exception as e:
+                    output = f"Error reading output file: {str(e)}"
+            
+            # Clean up temporary files
+            try:
+                if os.path.exists(output_file):
+                    os.remove(output_file)
+                if os.path.exists(done_file):
+                    os.remove(done_file)
+            except:
+                pass  # Ignore cleanup errors
+            
+            # If we've timed out
+            if time.time() - start_time >= timeout:
+                output += "\n[Command timed out after {} seconds]".format(timeout)
+            
+            # Update activity time again
+            _session_last_activity[session_id] = time.time()
+            
+            # Clean up old sessions
+            _cleanup_old_sessions()
+            
+            # For new sessions, include the session ID in the result
+            if is_new_session:
+                prefix = f"Created new shell session with ID: {session_id}\n\n"
+                return f"{prefix}{output.strip() if output else f'{prefix}Command completed with no output'}"
+            else:
+                return output.strip() if output else "Command completed with no output"
+            
+        except Exception as e:
+            # If process had an error, clean it up
+            if session_id in _shell_sessions:
+                try:
+                    _shell_sessions[session_id].terminate()
+                except:
+                    pass
+                del _shell_sessions[session_id]
+                if session_id in _session_last_activity:
+                    del _session_last_activity[session_id]
+            
+            return f"Error executing command: {str(e)}"
+
+def _read_until_prompt(process, timeout):
+    """
+    This function is no longer used in the file-based implementation.
+    Kept for backward compatibility.
+    """
+    return ""
+
+def _cleanup_old_sessions():
+    """Cleans up sessions that have been idle for more than 1 hour"""
+    current_time = time.time()
+    idle_limit = 3600  # 1 hour in seconds
+    
+    for session_id in list(_session_last_activity.keys()):
+        if current_time - _session_last_activity[session_id] > idle_limit:
+            if session_id in _shell_sessions:
+                try:
+                    _shell_sessions[session_id].terminate()
+                except:
+                    pass
+                del _shell_sessions[session_id]
+            del _session_last_activity[session_id]
+
 # Export the tools in this toolset
-TOOLS = [save_file, run_command, read_file, list_directory, execute_python, copy_file, fetch_webpage] 
+TOOLS = [save_file, run_command, read_file, list_directory, execute_python, copy_file, fetch_webpage, persistent_shell] 
