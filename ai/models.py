@@ -15,6 +15,7 @@ _MODELS_DICT = {
     "gemini2.0flashlite": "gemini-2.0-flash-lite",
     "gemini2.0flashthinking": "gemini-2.0-flash-thinking-exp",
     "gemini2.0exp": "gemini-exp-1206",
+    "gemini2.5pro": "gemini-2.5-pro-exp-03-25",
     "gpt3.5": "gpt-3.5-turbo",
     "gpt4": "gpt-4-turbo-preview",
     "gpt4o": "gpt-4o",
