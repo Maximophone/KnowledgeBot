@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 import aiofiles
 import aiohttp
 import json
 import os
+import re
 
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
@@ -20,8 +21,13 @@ class SpeakerIdentificationError(Exception):
     """Exception raised when speaker identification processing encounters an error."""
     pass
 
+class ResultsNotReadyError(Exception):
+    """Exception raised when the speaker matching results are not yet available.
+    This is expected behavior and will cause the processor to retry later."""
+    pass
+
 class SpeakerIdentifier(NoteProcessor):
-    """Identifies speakers in transcripts using AI and initiates matching UI."""
+    """Identifies speakers in transcripts using AI, initiates matching UI, and processes results."""
     
     def __init__(self, input_dir: Path, discord_io: DiscordIOCore):
         super().__init__(input_dir)
@@ -77,49 +83,71 @@ class SpeakerIdentifier(NoteProcessor):
         return self.tiny_model.message(message).content.strip()
         
     async def process_file(self, filename: str) -> None:
-        """Process a transcript file to identify speakers and initiate matching UI."""
+        """Process a transcript file through all substages: identify speakers, initiate matching, and process results."""
         logger.info("Processing file for speaker identification: %s", filename)
         
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter(content)
         transcript = content.split('---', 2)[2].strip()
         
-        # --- Step 1: Speaker Identification (if not already done) ---
-        speaker_mapping = frontmatter.get('identified_speakers', {})
-        
-        if not speaker_mapping:
-            logger.info("Identifying speakers in: %s", filename)
-            speaker_lines = [line for line in transcript.split('\n') if line.startswith('Speaker ')]
-            unique_speakers = set(line.split(':')[0].strip() for line in speaker_lines)
-            
-            for speaker in unique_speakers:
-                logger.info("Identifying %s...", speaker)
-                label = speaker.replace('Speaker ', '')
-                identified_name_verbose = await self.identify_speaker(transcript, label)
-                identified_name = self.consolidate_answer(identified_name_verbose)
-
-                logger.info("Result: %s", identified_name_verbose)
-                # Store both name and reason
-                speaker_mapping[speaker] = {
-                    "name": identified_name,
-                    "reason": identified_name_verbose.strip()
-                }
-            
-            # Save the identified speakers to frontmatter immediately
-            frontmatter['identified_speakers'] = speaker_mapping
-            temp_content = frontmatter_to_text(frontmatter) + "\n" + transcript
-            async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
-                await f.write(temp_content)
-            os.utime(self.input_dir / filename, None)
-            logger.info("Saved identified speakers to frontmatter for: %s", filename)
+        # --- Substage 1: Speaker Identification (if not already done) ---
+        if 'identified_speakers' not in frontmatter:
+            await self._substage1_identify_speakers(filename, frontmatter, transcript)
+            # Reload frontmatter and transcript after modifications
+            content = await self.read_file(filename)
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
         else:
             logger.info("Speakers already identified for: %s", filename)
         
-        # --- Step 2: If task_id doesn't exist, contact UI service and send Discord notification ---
-        if 'speaker_matcher_task_id' in frontmatter:
+        # --- Substage 2: Initiate Matching UI & Send Discord Notification (if needed) ---
+        if 'speaker_matcher_task_id' not in frontmatter:
+            await self._substage2_initiate_matching(filename, frontmatter, transcript)
+            # Reload frontmatter and transcript after modifications
+            content = await self.read_file(filename)
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
+        else:
             logger.info("Speaker matching UI already initiated for: %s", filename)
-            return
+        
+        # --- Substage 3: Poll for Results & Process Them (if needed) ---
+        if 'final_speaker_mapping' not in frontmatter:
+            await self._substage3_process_results(filename, frontmatter, transcript)
+        else:
+            logger.info("Speaker matching results already processed for: %s", filename)
             
+    async def _substage1_identify_speakers(self, filename: str, frontmatter: Dict, transcript: str) -> None:
+        """Substage 1: Identify speakers using AI and save to frontmatter."""
+        logger.info("Identifying speakers in: %s", filename)
+        speaker_lines = [line for line in transcript.split('\n') if line.startswith('Speaker ')]
+        unique_speakers = set(line.split(':')[0].strip() for line in speaker_lines)
+        
+        speaker_mapping = {}
+        for speaker in unique_speakers:
+            logger.info("Identifying %s...", speaker)
+            label = speaker.replace('Speaker ', '')
+            identified_name_verbose = await self.identify_speaker(transcript, label)
+            identified_name = self.consolidate_answer(identified_name_verbose)
+
+            logger.info("Result: %s", identified_name_verbose)
+            # Store both name and reason
+            speaker_mapping[speaker] = {
+                "name": identified_name,
+                "reason": identified_name_verbose.strip()
+            }
+        
+        # Save the identified speakers to frontmatter immediately
+        frontmatter['identified_speakers'] = speaker_mapping
+        temp_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+        async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
+            await f.write(temp_content)
+        os.utime(self.input_dir / filename, None)
+        logger.info("Saved identified speakers to frontmatter for: %s", filename)
+    
+    async def _substage2_initiate_matching(self, filename: str, frontmatter: Dict, transcript: str) -> None:
+        """Substage 2: Initiate matching UI service and send Discord notification."""
+        speaker_mapping = frontmatter.get('identified_speakers', {})
+        
         # Prepare payload for UI service
         speakers_payload = []
         for speaker_id, data in speaker_mapping.items():
@@ -191,8 +219,82 @@ class SpeakerIdentifier(NoteProcessor):
         async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
+        logger.info("Completed speaker matching UI initiation for: %s", filename)
+    
+    async def _substage3_process_results(self, filename: str, frontmatter: Dict, transcript: str) -> None:
+        """Substage 3: Poll for matching results and process when ready."""
+        # Get the results URL from the frontmatter
+        results_url = frontmatter.get('speaker_matcher_results_url')
+        if not results_url:
+            error_msg = f"Missing results URL in frontmatter for: {filename}"
+            logger.error(error_msg)
+            raise SpeakerIdentificationError(error_msg)
+        
+        # Poll the results endpoint
+        logger.info("Polling for speaker matching results for: %s", filename)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(results_url) as response:
+                    response.raise_for_status()
+                    response_data = await response.json()
+                    
+                    # Check if results are ready
+                    status = response_data.get("status")
+                    
+                    if status == "PENDING":
+                        logger.info("Results not ready yet for: %s. Will retry later.", filename)
+                        # This is expected behavior that will result in retry
+                        raise ResultsNotReadyError(f"Results not ready for task: {response_data.get('task_id')}")
+                    
+                    if status != "COMPLETE":
+                        error_msg = f"Unexpected status from results endpoint: {status}"
+                        logger.error(error_msg)
+                        raise SpeakerIdentificationError(error_msg)
+                    
+                    # Extract the final speaker mapping
+                    results = response_data.get("results", {})
+                    if not results:
+                        error_msg = f"Empty results received for: {filename}"
+                        logger.error(error_msg)
+                        raise SpeakerIdentificationError(error_msg)
+                    
+                    logger.info("Successfully received matching results for: %s", filename)
+                    logger.info("Speaker mapping from UI: %s", results)
+        except ResultsNotReadyError:
+            # Re-raise this exception to trigger retry
+            raise
+        except (aiohttp.ClientError, json.JSONDecodeError) as e:
+            error_msg = f"Error polling results endpoint: {str(e)}"
+            logger.error(error_msg)
+            raise SpeakerIdentificationError(error_msg) from e
+        
+        # Process the results: update frontmatter and transcript
+        frontmatter['final_speaker_mapping'] = results
+        
+        # Replace speaker labels in the transcript with the identified names
+        new_transcript = transcript
+        for speaker_id, speaker_data in results.items():
+            # Get the person's name and organization
+            name = speaker_data.get("name", "Unknown")
+            organization = speaker_data.get("organisation", "")
+            
+            # Create a replacement string
+            if organization:
+                replacement = f"{name} ({organization}):"
+            else:
+                replacement = f"{name}:"
+            
+            # Replace all occurrences of the speaker ID with the name
+            pattern = re.escape(f"{speaker_id}:") # Escape special characters in the speaker ID
+            new_transcript = re.sub(pattern, replacement, new_transcript)
+        
+        # Save the updated file
+        full_content = frontmatter_to_text(frontmatter) + "\n" + new_transcript
+        async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
+            await f.write(full_content)
+        os.utime(self.input_dir / filename, None)
         logger.info("Completed speaker identification workflow for: %s", filename)
-
+    
     def identify_speakers(self, text: str) -> str:
         prompt = self.prompt_identify + text
         return self.ai_model.message(prompt).content.strip()
