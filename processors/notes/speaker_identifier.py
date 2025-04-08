@@ -268,10 +268,26 @@ class SpeakerIdentifier(NoteProcessor):
             logger.error(error_msg)
             raise SpeakerIdentificationError(error_msg) from e
         
-        # Process the results: update frontmatter and transcript
-        frontmatter['final_speaker_mapping'] = results
+        # Process the results: create a modified copy for frontmatter with Obsidian links
+        frontmatter_results = {}
+        for speaker_id, speaker_data in results.items():
+            # Create a deep copy of the speaker data
+            frontmatter_speaker_data = dict(speaker_data)
+            
+            # Wrap person_id and organisation with [[ ]] for Obsidian links in frontmatter
+            if 'person_id' in frontmatter_speaker_data:
+                frontmatter_speaker_data['person_id'] = f"[[{frontmatter_speaker_data['person_id']}]]"
+            
+            if 'organisation' in frontmatter_speaker_data:
+                frontmatter_speaker_data['organisation'] = f"[[{frontmatter_speaker_data['organisation']}]]"
+            
+            frontmatter_results[speaker_id] = frontmatter_speaker_data
+        
+        # Update frontmatter with the modified results (containing Obsidian links)
+        frontmatter['final_speaker_mapping'] = frontmatter_results
         
         # Replace speaker labels in the transcript with the identified names
+        # (using the original results without [[ ]] for replacements)
         new_transcript = transcript
         for speaker_id, speaker_data in results.items():
             # Get the person's name and organization
