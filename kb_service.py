@@ -1,7 +1,7 @@
 import asyncio
 import argparse
 from config.paths import PATHS
-from config.secrets import ASSEMBLY_AI_KEY
+from config.secrets import ASSEMBLY_AI_KEY, DISCORD_BOT_TOKEN
 from config.logging_config import set_default_log_level
 
 # Import processors
@@ -21,6 +21,8 @@ from processors.notes.idea_cleanup import IdeaCleanupProcessor
 from processors.notes.todo import TodoProcessor
 from processors.audio.video_to_audio import VideoToAudioProcessor
 
+from integrations.discord import DiscordIOCore
+
 from services.keyboard_listener import main as keyboard_listener_main
 
 # Import existing services
@@ -33,6 +35,12 @@ async def run_obsidian_ai():
 
 async def setup_processors():
     """Initialize and register all processors."""
+    
+    # Initialize Discord I/O Core
+    discord_io = DiscordIOCore(token=DISCORD_BOT_TOKEN)
+    
+    # Start Discord bot in a non-blocking way
+    discord_task = asyncio.create_task(discord_io.start_bot())
     
     # Initialize audio transcriber
     transcriber = AudioTranscriber(
@@ -73,7 +81,8 @@ async def setup_processors():
     )
 
     speaker_identifier_processor = SpeakerIdentifier(
-        input_dir=PATHS.transcriptions
+        input_dir=PATHS.transcriptions,
+        discord_io=discord_io
     )
 
     meeting_processor = MeetingProcessor(
@@ -127,11 +136,16 @@ async def setup_processors():
     slow_repeater.register(conversation_processor.process_all, name="conversation_processor")
     slow_repeater.register(diary_processor.process_all, name="diary_processor")
     slow_repeater.register(idea_cleanup_processor.process_all, name="idea_cleanup_processor")
+    
+    # Return the discord_task to ensure it stays alive
+    return discord_task
 
 async def run_processor_services():
     """Setup and start all processor services."""
-    await setup_processors()
+    discord_task = await setup_processors()
     await start_repeaters()
+    # Keep the Discord task alive
+    await discord_task
 
 async def main():
     # Create all required directories
