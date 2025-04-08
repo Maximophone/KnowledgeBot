@@ -80,21 +80,21 @@ class GeminiWrapper(AIWrapper):
         # Single API call pattern with conditional rate limiting
         while True:
             # Wait if rate limiting is enabled
-            if self.rate_limiter:
+            if self.rate_limiting:
                 self.rate_limiter.wait()
                 
             try:
                 response = model.generate_content(gemini_messages)
                 
                 # Record success if rate limiting is enabled
-                if self.rate_limiter:
+                if self.rate_limiting:
                     self.rate_limiter.record_success()
                     
                 return AIResponse(content=response.text)
                 
             except Exception as e:
                 # Handle rate limit errors if rate limiting is enabled
-                if self.rate_limiter and self._is_rate_limit_error(e):
+                if self.rate_limiting and self._is_rate_limit_error(e):
                     self.rate_limiter.record_failure()
                     
                     if self.rate_limiter.exceeded_max_retries():
