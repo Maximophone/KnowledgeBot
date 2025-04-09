@@ -11,7 +11,7 @@ from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatt
 from ai import AI
 from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
-from config.user_config import TARGET_DISCORD_USER_ID
+from config.user_config import TARGET_DISCORD_USER_ID, USER_NAME, USER_ORGANIZATION
 from config.services_config import SPEAKER_MATCHER_UI_URL
 from integrations.discord import DiscordIOCore
 
@@ -44,6 +44,11 @@ class SpeakerIdentifier(NoteProcessor):
         We provide additional criteria here.
         """
         return True
+
+    def _extract_unique_speakers(self, transcript: str) -> set:
+        """Extract all unique speaker labels from the transcript."""
+        speaker_lines = [line for line in transcript.split('\n') if line.startswith('Speaker ')]
+        return set(line.split(':')[0].strip() for line in speaker_lines)
                  
     async def identify_speaker(self, transcript: str, speaker_label: str) -> str:
         """Use AI to identify a specific speaker from the transcript."""
@@ -90,6 +95,12 @@ class SpeakerIdentifier(NoteProcessor):
         frontmatter = parse_frontmatter(content)
         transcript = content.split('---', 2)[2].strip()
         
+        # --- Special case: Check for single speaker transcripts ---
+        unique_speakers = self._extract_unique_speakers(transcript)
+        if len(unique_speakers) == 1:
+            await self._handle_single_speaker(filename, frontmatter, transcript, list(unique_speakers)[0])
+            return
+        
         # --- Substage 1: Speaker Identification (if not already done) ---
         if 'identified_speakers' not in frontmatter:
             await self._substage1_identify_speakers(filename, frontmatter, transcript)
@@ -115,12 +126,40 @@ class SpeakerIdentifier(NoteProcessor):
             await self._substage3_process_results(filename, frontmatter, transcript)
         else:
             logger.info("Speaker matching results already processed for: %s", filename)
+
+    async def _handle_single_speaker(self, filename: str, frontmatter: Dict, transcript: str, speaker_label: str) -> None:
+        """Handle transcripts with a single speaker by automatically assigning user's info."""
+        logger.info("Detected single speaker transcript in %s. Automatically assigning to user: %s", filename, USER_NAME)
+        
+        # Create a final speaker mapping for a single speaker
+        final_mapping = {
+            speaker_label: {
+                "name": USER_NAME,
+                "organisation": f"[[{USER_ORGANIZATION}]]",
+                "person_id": f"[[{USER_NAME}]]"
+            }
+        }
+        
+        # Add to frontmatter
+        frontmatter['final_speaker_mapping'] = final_mapping
+        
+        # Replace speaker labels in the transcript
+        new_transcript = transcript
+        pattern = re.escape(f"{speaker_label}:") 
+        new_transcript = re.sub(pattern, f"{USER_NAME} ([[{USER_ORGANIZATION}]]):", new_transcript)
+        
+        # Save the updated file
+        full_content = frontmatter_to_text(frontmatter) + "\n" + new_transcript
+        async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
+            await f.write(full_content)
+        os.utime(self.input_dir / filename, None)
+        
+        logger.info("Completed automatic speaker identification for single-speaker file: %s", filename)
             
     async def _substage1_identify_speakers(self, filename: str, frontmatter: Dict, transcript: str) -> None:
         """Substage 1: Identify speakers using AI and save to frontmatter."""
         logger.info("Identifying speakers in: %s", filename)
-        speaker_lines = [line for line in transcript.split('\n') if line.startswith('Speaker ')]
-        unique_speakers = set(line.split(':')[0].strip() for line in speaker_lines)
+        unique_speakers = self._extract_unique_speakers(transcript)
         
         speaker_mapping = {}
         for speaker in unique_speakers:
