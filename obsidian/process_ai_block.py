@@ -17,6 +17,7 @@ from ai.tools import Tool
 from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
 from vector_db import VectorDB
+import subprocess
 
 logger = setup_logger(__name__)
 
@@ -143,6 +144,7 @@ What can you see in this image?
 """,
     "ai": lambda value, text, context: process_ai_block(text, context, value),
     "rag": lambda value, text, context: process_rag_block(text, context, value),
+    "script": lambda value, text, context: run_python_script(value, text, context),
 }
 
 REPLACEMENTS_INSIDE = {
@@ -566,3 +568,74 @@ def process_rag_block(block: str, context: Dict, option: str) -> str:
         error_msg = f"Error processing RAG request: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         return f"<rag!{option_txt}>{block}\n<reply!>\n_Error: {escape_response(str(e))}_\n</reply!></rag!>"
+
+def run_python_script(script_name: str, text: str, context: Dict) -> str:
+    """
+    Run a Python script and return its output.
+    
+    If script_name has .md extension or no extension, it's treated as a markdown file,
+    and the first Python code block is executed.
+    
+    Args:
+        script_name (str): Name of the script file to run
+        text (str): Content of the script block (not used)
+        context (Dict): Context information
+        
+    Returns:
+        str: Output from the script execution
+    """
+    try:
+        # Check if script name is a markdown file (has .md extension or no extension)
+        is_markdown = script_name.endswith('.md') or '.' not in script_name
+        
+        # Add .md extension if not present but is markdown
+        if is_markdown and not script_name.endswith('.md'):
+            script_name = f"{script_name}.md"
+        
+        # Find script in the scripts folder
+        script_path = os.path.join(PATHS.scripts_folder, script_name)
+        
+        if not os.path.exists(script_path):
+            return f"Error: Script '{script_name}' not found in scripts folder"
+        
+        if is_markdown:
+            # Extract Python code from markdown file
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Find the first Python code block
+            import re
+            pattern = r'```python\s*\n(.*?)```'
+            matches = re.findall(pattern, content, re.DOTALL)
+            
+            if not matches:
+                return f"Error: No Python code block found in '{script_name}'"
+            
+            # Extract the first Python code block
+            code = matches[0]
+            
+            # Execute the python code directly using subprocess with -c
+            result = subprocess.run(
+                ["python", "-c", code],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            return result.stdout
+        else:
+            # Direct execution of Python script
+            result = subprocess.run(
+                ["python", script_path], 
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Return the stdout output
+            return result.stdout
+        
+    except subprocess.CalledProcessError as e:
+        return f"Error executing script '{script_name}':\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {str(e)}\n{traceback.format_exc()}"

@@ -29,6 +29,8 @@ class Paths:
     conversations: Path = vault_path / "Conversations"
     diary: Path = vault_path / "Diary"
 
+    scripts_folder: Path = vault_path / "scripts"
+
     # prompts
     prompts_library: Path = vault_path / "Prompts"
 
