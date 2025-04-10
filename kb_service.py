@@ -19,6 +19,7 @@ from processors.notes.conversation import ConversationProcessor
 from processors.notes.diary import DiaryProcessor
 from processors.notes.idea_cleanup import IdeaCleanupProcessor
 from processors.notes.todo import TodoProcessor
+from processors.notes.interaction_logger import InteractionLogger
 from processors.audio.video_to_audio import VideoToAudioProcessor
 
 from integrations.discord import DiscordIOCore
@@ -114,6 +115,10 @@ async def setup_processors():
     output_dir=PATHS.ideas
     )
 
+    interaction_logger_processor = InteractionLogger(
+        input_dir=PATHS.transcriptions
+    )
+
     video_to_audio_processor = VideoToAudioProcessor(
         input_dir=PATHS.audio_input,
         output_dir=PATHS.audio_input,
@@ -136,6 +141,7 @@ async def setup_processors():
     slow_repeater.register(conversation_processor.process_all, name="conversation_processor")
     slow_repeater.register(diary_processor.process_all, name="diary_processor")
     slow_repeater.register(idea_cleanup_processor.process_all, name="idea_cleanup_processor")
+    slow_repeater.register(interaction_logger_processor.process_all, name="interaction_logger_processor")
     
     # Return the discord_task to ensure it stays alive
     return discord_task

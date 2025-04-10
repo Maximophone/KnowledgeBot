@@ -28,7 +28,8 @@ class Paths:
     meeting_template: Path = vault_path / "Templates" / "meeting.md"
     conversations: Path = vault_path / "Conversations"
     diary: Path = vault_path / "Diary"
-
+    people_path: Path = vault_path / "People" # People directory path
+    
     scripts_folder: Path = vault_path / "scripts"
 
     # prompts
@@ -44,6 +45,7 @@ class Paths:
     data: Path = runtime_path / "data"
 
     obsidian_vector_db: Path = runtime_path / "data/obsidian_vector_db.sqlite"
+    
 
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
@@ -62,7 +64,8 @@ class Paths:
             self.conversations,
             self.diary,
             self.ai_memory,
-            self.linkedin_messages
+            self.linkedin_messages,
+            self.people_path
         ])
     
 PATHS = Paths()
