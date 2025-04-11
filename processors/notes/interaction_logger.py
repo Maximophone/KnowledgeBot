@@ -32,9 +32,20 @@ class InteractionLogger(NoteProcessor):
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         """
         Determine if a file should be processed.
-        Only process files that have the final_speaker_mapping field in frontmatter.
+        Only process files that:
+        1. Have the final_speaker_mapping field in frontmatter
+        2. Are categorized as "meeting" in their frontmatter
         """
-        return 'final_speaker_mapping' in frontmatter
+        # Check if the file has the required speaker mapping
+        if 'final_speaker_mapping' not in frontmatter:
+            return False
+            
+        # Check if the file is categorized as a meeting
+        category = frontmatter.get('category', '').lower()
+        if category != 'meeting':
+            return False
+            
+        return True
 
     async def _find_ai_logs_section(self, content: str) -> Tuple[bool, int, str]:
         """
@@ -141,6 +152,123 @@ Write ONLY the log content in plain text with bullet points. No headings of any 
         
         return self.ai_model.message(message).content.strip()
 
+    async def process_file(self, filename: str) -> None:
+        """Process identified speakers in a transcript and add logs to their notes."""
+        logger.info(f"Processing interactions from transcript: {filename}")
+        
+        # Read the transcript file
+        content = await self.read_file(filename)
+        frontmatter = parse_frontmatter(content)
+        transcript = content.split('---', 2)[2].strip()
+        
+        # Extract required information
+        meeting_date = frontmatter.get('date')
+        meeting_title = frontmatter.get('title', filename)
+        source_link = f"[[{filename.replace('.md', '')}]]"
+        
+        if not meeting_date:
+            logger.error(f"Missing date in frontmatter for {filename}")
+            raise ValueError(f"Meeting date is required in frontmatter for {filename}")
+        
+        # Get the speaker mapping
+        speaker_mapping = frontmatter.get('final_speaker_mapping', {})
+        
+        if not speaker_mapping:
+            logger.warning(f"Empty speaker mapping in {filename}")
+            return
+        
+        # Get list of speakers that have already been processed
+        logged_interactions = frontmatter.get('logged_interactions', [])
+        
+        # Collect all speakers that need to be processed
+        all_speakers = set(speaker_data.get('person_id') for speaker_data in speaker_mapping.values() 
+                         if speaker_data.get('person_id'))
+        
+        # Filter out speakers that have already been processed
+        pending_speakers = [speaker for speaker in all_speakers if speaker not in logged_interactions]
+        
+        if not pending_speakers:
+            logger.info(f"All speakers in {filename} have already been processed")
+            return
+            
+        logger.info(f"Processing {len(pending_speakers)} remaining speakers in {filename}")
+        
+        # Process each pending person
+        for person_id in pending_speakers:
+            # Get the person's name (for use in the prompt)
+            person_name = person_id.replace('[[', '').replace(']]', '')
+            
+            # Read the person's note for context
+            person_file_path = self.people_dir / f"{person_name}.md"
+            
+            if not person_file_path.exists():
+                logger.warning(f"Person note not found: {person_file_path}")
+                continue
+            
+            try:
+                # Read the person's note
+                async with aiofiles.open(person_file_path, 'r', encoding='utf-8') as f:
+                    person_content = await f.read()
+                
+                # Generate the log entry
+                log_content = await self._generate_log(
+                    transcript_content=transcript,
+                    person_content=person_content,
+                    person_name=person_name,
+                    meeting_date=meeting_date,
+                    meeting_title=meeting_title
+                )
+                
+                # Update the person's note
+                success = await self._update_person_note(
+                    person_id=person_id,
+                    meeting_date=meeting_date,
+                    source_link=source_link,
+                    log_content=log_content
+                )
+                
+                if success:
+                    # Add to logged_interactions in frontmatter
+                    if 'logged_interactions' not in frontmatter:
+                        frontmatter['logged_interactions'] = []
+                    
+                    frontmatter['logged_interactions'].append(person_id)
+                    
+                    # Update the transcript's frontmatter
+                    file_path = self.input_dir / filename
+                    updated_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+                    
+                    # Write back to the file
+                    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                        await f.write(updated_content)
+                    
+                    # Update file modification time
+                    os.utime(file_path, None)
+                    
+                    logger.info(f"Updated transcript {filename} - logged interaction for {person_name}")
+                else:
+                    logger.error(f"Failed to update note for {person_id}")
+                
+            except Exception as e:
+                logger.error(f"Error generating log for {person_name}: {str(e)}")
+                # Continue with next person rather than failing the whole file
+                continue
+        
+        # Check if all speakers have been processed now
+        logged_interactions = frontmatter.get('logged_interactions', [])
+        all_processed = all(speaker in logged_interactions for speaker in all_speakers)
+        
+        # Only mark the file as completely processed if all speakers have been logged
+        if all_processed:
+            logger.info(f"All speakers in {filename} have been processed. Marking stage as complete.")
+            # The NoteProcessor._process_file will update the processing_stages in frontmatter
+            # since we'll return normally
+        else:
+            # If not all speakers processed, raise exception to prevent stage completion
+            remaining = len(all_speakers) - len(logged_interactions)
+            logger.info(f"{remaining} speakers still pending in {filename}. Stage not marked complete yet.")
+            raise Exception(f"Not all speakers processed in {filename}. Will retry later.")
+    
     async def _update_person_note(self, person_id: str, 
                                  meeting_date: str, 
                                  source_link: str, 
@@ -193,10 +321,6 @@ Write ONLY the log content in plain text with bullet points. No headings of any 
             # Reconstruct the AI Logs section content
             new_section = "# AI Logs\n>[!warning] Do not Modify\n\n"
             
-            # Add the warning callout if we're creating the section for the first time
-            if not section_exists:
-                new_section += ">[!warning] Do not Modify\n\n"
-            
             # Sort dates in descending order (newest first)
             for date in sorted(logs_by_date.keys(), reverse=True):
                 new_section += f"## {date}\n"
@@ -224,85 +348,3 @@ Write ONLY the log content in plain text with bullet points. No headings of any 
         except Exception as e:
             logger.error(f"Error updating person note {person_name}: {str(e)}")
             return False
-    
-    async def process_file(self, filename: str) -> None:
-        """Process identified speakers in a transcript and add logs to their notes."""
-        logger.info(f"Processing interactions from transcript: {filename}")
-        
-        # Read the transcript file
-        content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
-        transcript = content.split('---', 2)[2].strip()
-        
-        # Extract required information
-        meeting_date = frontmatter.get('date')
-        meeting_title = frontmatter.get('title', filename)
-        source_link = f"[[{filename.replace('.md', '')}]]"
-        
-        if not meeting_date:
-            logger.error(f"Missing date in frontmatter for {filename}")
-            raise ValueError(f"Meeting date is required in frontmatter for {filename}")
-        
-        # Get the speaker mapping
-        speaker_mapping = frontmatter.get('final_speaker_mapping', {})
-        
-        if not speaker_mapping:
-            logger.warning(f"Empty speaker mapping in {filename}")
-            return
-        
-        # Track updates to apply atomically
-        person_updates = []
-        
-        # Process each identified person
-        for speaker_id, speaker_data in speaker_mapping.items():
-            # Get the person ID (with Obsidian link format)
-            person_id = speaker_data.get('person_id')
-            
-            if not person_id:
-                logger.warning(f"Missing person_id for speaker {speaker_id} in {filename}")
-                continue
-            
-            # Get the person's name (for use in the prompt)
-            person_name = person_id.replace('[[', '').replace(']]', '')
-            
-            # Read the person's note for context
-            person_file_path = self.people_dir / f"{person_name}.md"
-            
-            if not person_file_path.exists():
-                logger.warning(f"Person note not found: {person_file_path}")
-                continue
-            
-            try:
-                # Read the person's note
-                async with aiofiles.open(person_file_path, 'r', encoding='utf-8') as f:
-                    person_content = await f.read()
-                
-                # Generate the log entry
-                log_content = await self._generate_log(
-                    transcript_content=transcript,
-                    person_content=person_content,
-                    person_name=person_name,
-                    meeting_date=meeting_date,
-                    meeting_title=meeting_title
-                )
-                
-                # Store the update to apply later
-                person_updates.append((person_id, meeting_date, source_link, log_content))
-                
-            except Exception as e:
-                logger.error(f"Error generating log for {person_name}: {str(e)}")
-                raise
-        
-        # Apply all updates atomically (all or nothing)
-        for person_id, meeting_date, source_link, log_content in person_updates:
-            success = await self._update_person_note(
-                person_id=person_id,
-                meeting_date=meeting_date,
-                source_link=source_link,
-                log_content=log_content
-            )
-            
-            if not success:
-                raise Exception(f"Failed to update note for {person_id}")
-        
-        logger.info(f"Successfully processed interactions for {filename}")
