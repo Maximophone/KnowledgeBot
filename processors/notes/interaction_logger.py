@@ -114,33 +114,48 @@ class InteractionLogger(NoteProcessor):
     async def _generate_log(self, transcript_content: str, person_content: str, 
                            person_name: str, meeting_date: str, meeting_title: str) -> str:
         """Generate a log entry for a person using AI."""
-        prompt = f"""You are analyzing a meeting transcript to create a concise log entry that will be saved in the personal note for {person_name}.
+        prompt = f"""
+You will be given a transcript of a meeting, the name of a participant in this meeting, and some background notes on this person. Your task is to extract specific information about this person to be appended to a markdown log. Follow these instructions carefully:
 
-MEETING INFORMATION:
-Date: {meeting_date}
-Title: {meeting_title}
+First, review the following information:
 
-YOUR TASK:
-Review the meeting transcript and create a brief summary specifically for {person_name}'s records.
-Focus on:
-1. Key updates or information this person shared during the meeting
-2. Any action items or next steps assigned to or mentioned by this person
-3. Any important information that was directed to this person
-
-FORMATTING REQUIREMENTS:
-- DO NOT use any Markdown headings (# or ## or ### etc)
-- Use bullet points (- or *) or plain paragraphs only
-- DO NOT include any introductions, explanations, or metadata
-- Keep it concise but informative, aim for 2-4 bullet points unless extensive content exists
-
-PERSON'S CURRENT NOTE:
-{person_content}
-
-MEETING TRANSCRIPT:
+<transcript>
 {transcript_content}
+</transcript>
 
-Write ONLY the log content in plain text with bullet points. No headings of any kind.
-"""
+<participant_name>
+{person_name}
+</participant_name>
+
+<background_notes>
+{person_content}
+</background_notes>
+
+<meeting_date>
+{meeting_date}
+</meeting_date>
+
+<meeting_title>
+{meeting_title}
+</meeting_title>
+
+Now, analyze the transcript and extract the following information about {{PARTICIPANT_NAME}}:
+
+1. New information: Identify any new information learned about this person that is not already present in the background notes. Focus on significant details that add to our understanding of the person's role, expertise, or personal characteristics.
+
+2. Updates: Summarize the key updates or contributions this person made during the meeting. This could include project progress, challenges faced, or any other relevant information they shared.
+
+3. Next steps: Determine the next steps or action items specifically assigned to or mentioned by this person during the meeting.
+
+When crafting your response:
+- Do not use any section headers.
+- Present the information in bullet point format.
+- Be concise and informative, focusing on the most relevant and important details.
+- Ensure that each bullet point provides clear and specific information.
+- Avoid repetition of information already present in the background notes.
+
+Your final output should be a series of bullet points that can be directly appended to a markdown log. Include only the bullet points in your response, without any additional explanation or commentary.
+        """
         
         message = Message(
             role="user",
