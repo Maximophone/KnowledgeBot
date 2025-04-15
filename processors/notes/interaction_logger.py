@@ -14,6 +14,8 @@ from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
 from config.paths import PATHS
 
+import traceback
+
 logger = setup_logger(__name__)
 
 class InteractionLogger(NoteProcessor):
@@ -139,7 +141,7 @@ First, review the following information:
 {meeting_title}
 </meeting_title>
 
-Now, analyze the transcript and extract the following information about {{PARTICIPANT_NAME}}:
+Now, analyze the transcript and extract the following information about {person_name}:
 
 1. New information: Identify any new information learned about this person that is not already present in the background notes. Focus on significant details that add to our understanding of the person's role, expertise, or personal characteristics.
 
@@ -155,7 +157,7 @@ When crafting your response:
 - Avoid repetition of information already present in the background notes.
 
 Your final output should be a series of bullet points that can be directly appended to a markdown log. Include only the bullet points in your response, without any additional explanation or commentary.
-        """
+        """.format(transcript_content=transcript_content, person_name=person_name, person_content=person_content, meeting_date=meeting_date, meeting_title=meeting_title)
         
         message = Message(
             role="user",
@@ -266,6 +268,7 @@ Your final output should be a series of bullet points that can be directly appen
                 
             except Exception as e:
                 logger.error(f"Error generating log for {person_name}: {str(e)}")
+                logger.error(traceback.format_exc())
                 # Continue with next person rather than failing the whole file
                 continue
         
@@ -319,18 +322,22 @@ Your final output should be a series of bullet points that can be directly appen
                 'notes': log_content
             }
             
-            # Add to the logs by date structure
+            # Add/Update the log entry in the structure
+            found_and_updated = False
             if meeting_date in logs_by_date:
-                # Check if we already have a log for this source
+                # Check if we already have a log for this source and update it
                 for existing_log in logs_by_date[meeting_date]:
                     if existing_log['source'] == source_link:
-                        logger.info(f"Log for {source_link} already exists in {person_name}'s note")
-                        return True
+                        logger.info(f"Overwriting existing log for {source_link} on {meeting_date} in {person_name}'s note")
+                        existing_log['notes'] = log_content
+                        found_and_updated = True
+                        break
                 
-                # Add the new log to the existing date
-                logs_by_date[meeting_date].append(new_log)
+                # If not found after checking, add the new log to the existing date
+                if not found_and_updated:
+                    logs_by_date[meeting_date].append(new_log)
             else:
-                # Create a new date entry
+                # Create a new date entry if the date doesn't exist
                 logs_by_date[meeting_date] = [new_log]
             
             # Reconstruct the AI Logs section content
