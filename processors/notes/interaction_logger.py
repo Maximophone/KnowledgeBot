@@ -23,12 +23,12 @@ class InteractionLogger(NoteProcessor):
     Processes transcripts with identified speakers and adds AI-generated logs 
     to each person's note about the meeting.
     """
-    
+    stage_name = "interactions_logged"
+    required_stage = "speakers_identified"
+
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
         self.ai_model = AI("sonnet3.7")
-        self.required_stage = "speakers_identified"
-        self.stage_name = "interactions_logged"
         self.people_dir = PATHS.people_path
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:

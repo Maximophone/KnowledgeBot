@@ -11,11 +11,11 @@ logger = setup_logger(__name__)
 
 class DiaryProcessor(NoteProcessor):
     """Processes diary transcripts into clean, well-formatted entries."""
-    
+    stage_name = "diary_processed"
+    required_stage = "classified"
+
     def __init__(self, input_dir: Path, output_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "diary_processed"
-        self.required_stage = "classified"
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.prompt_format = get_prompt("diary_format")

@@ -12,10 +12,13 @@ logger = setup_logger(__name__)
 class MeetingSummaryProcessor(NoteProcessor):
     """Adds AI-generated summaries to meeting notes based on transcripts."""
     
+    stage_name = "meeting_summary_generated"
+    required_stage = "meeting_note_created"
+
     def __init__(self, input_dir: Path, transcript_dir: Path):
         super().__init__(input_dir)
         self.transcript_dir = transcript_dir
-        self.stage_name = "meeting_summarized"
+        self.prompt_summarize = get_prompt("meeting_summary")
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:            
         # Check if transcript exists and get its frontmatter            

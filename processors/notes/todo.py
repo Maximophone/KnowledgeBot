@@ -12,11 +12,11 @@ logger = setup_logger(__name__)
 
 class TodoProcessor(NoteProcessor):
     """Processes todo transcripts and adds them to a todo directory."""
+    stage_name = "todos_extracted"
+    required_stage = "speakers_identified"
 
     def __init__(self, input_dir: Path, directory_file: Path):
         super().__init__(input_dir)
-        self.stage_name = "todos_extracted"
-        self.required_stage = "speakers_identified"
 
         self.directory_file = directory_file
         self.directory_file.parent.mkdir(parents=True, exist_ok=True)

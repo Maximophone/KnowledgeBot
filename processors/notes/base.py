@@ -13,19 +13,19 @@ logger = setup_logger(__name__)
 
 class NoteProcessor(ABC):
     """Base class for all note processors in Obsidian vault."""
-    
+    stage_name: Optional[str] = None
+    required_stage: Optional[str] = None
+
     def __init__(self, input_dir: Path):
         self.input_dir = input_dir
         self.files_in_process = set()
         self.ai_model = AI("sonnet3.7")
-        self.stage_name = None
-        self.required_stage = None
     
     def _should_process(self, filename: str) -> bool:
         """Base implementation of should_process with pipeline logic."""
         # Ensure stage_name is defined in subclasses
-        if not self.stage_name:
-            raise NotImplementedError("Processors must define stage_name")
+        if not self.__class__.stage_name:
+            raise NotImplementedError("Processors must define stage_name as a class attribute")
         
         if not filename.endswith('.md'):
             return False
@@ -36,11 +36,11 @@ class NoteProcessor(ABC):
         stages = frontmatter.get('processing_stages', [])
         
         # Skip if already processed
-        if self.stage_name in stages:
+        if self.__class__.stage_name in stages:
             return False
             
         # Check required stage if specified
-        if self.required_stage and self.required_stage not in stages:
+        if self.__class__.required_stage and self.__class__.required_stage not in stages:
             return False
 
         # Additional validation specific to the processor
@@ -65,7 +65,8 @@ class NoteProcessor(ABC):
             frontmatter = read_front_matter(file_path)
             if 'processing_stages' not in frontmatter:
                 frontmatter['processing_stages'] = []
-            frontmatter['processing_stages'].append(self.stage_name)
+            if self.__class__.stage_name not in frontmatter['processing_stages']:
+                frontmatter['processing_stages'].append(self.__class__.stage_name)
             update_front_matter(file_path, frontmatter)
             os.utime(file_path, None)
             

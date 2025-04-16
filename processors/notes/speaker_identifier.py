@@ -28,13 +28,13 @@ class ResultsNotReadyError(Exception):
 
 class SpeakerIdentifier(NoteProcessor):
     """Identifies speakers in transcripts using AI, initiates matching UI, and processes results."""
-    
+    stage_name = "speakers_identified"
+    required_stage = "classified"
+
     def __init__(self, input_dir: Path, discord_io: DiscordIOCore):
         super().__init__(input_dir)
         self.ai_model = AI("sonnet3.7")
         self.tiny_model = AI("haiku")
-        self.required_stage = "classified"
-        self.stage_name = "speakers_identified"
         self.discord_io = discord_io
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:

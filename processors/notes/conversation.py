@@ -11,10 +11,13 @@ logger = setup_logger(__name__)
 
 class ConversationProcessor(NoteProcessor):
     """Processes conversation notes and reformats them with AI-generated summaries."""
-    
+    stage_name = "conversation_processed"
+    # No required_stage specified
+
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "conversation_processed"
+        # Removed stage_name assignment (it wasn't explicitly here before, but defined in base class)
+        # self.stage_name = "conversation_processed"
         self.prompt_format = get_prompt("conversation_format")
         self.prompt_summary = get_prompt("conversation_summary")
         

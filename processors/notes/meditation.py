@@ -12,11 +12,15 @@ logger = setup_logger(__name__)
 
 class MeditationProcessor(NoteProcessor):
     """Processes meditation transcripts into structured notes."""
-    
+    stage_name = "meditation_processed"
+    required_stage = "speakers_identified" # Assuming classified is required before speakers? Check base class.
+    # Let's assume speakers identified is correct for now.
+
     def __init__(self, input_dir: Path, output_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "meditation_processed"
-        self.required_stage = "speakers_identified"
+        # Removed stage_name/required_stage assignment
+        # self.stage_name = "meditation_processed"
+        # self.required_stage = "speakers_identified"
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.meditation_prompt = get_prompt("process_meditation")

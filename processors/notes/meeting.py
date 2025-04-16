@@ -11,10 +11,11 @@ logger = setup_logger(__name__)
 class MeetingProcessor(NoteProcessor):
     """Creates structured meeting notes from meeting transcripts."""
     
+    stage_name = "meeting_note_created"
+    required_stage = "speakers_identified"
+
     def __init__(self, input_dir: Path, output_dir: Path, template_path: Path):
         super().__init__(input_dir)
-        self.stage_name = "meeting_note_created"
-        self.required_stage = "speakers_identified"
         
         self.output_dir = output_dir
         self.template_path = template_path
