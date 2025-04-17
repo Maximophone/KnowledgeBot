@@ -13,10 +13,10 @@ logger = setup_logger(__name__)
 
 class GDocProcessor(NoteProcessor):
     """Processes Google Docs by pulling their content and converting to markdown."""
-    
+    stage_name = "gdoc_synced"
+
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "gdoc_synced"
         self.gdu = GoogleDocUtils()
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:        
