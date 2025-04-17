@@ -5,6 +5,7 @@ import aiohttp
 import json
 import os
 import re
+import traceback
 
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
@@ -228,6 +229,7 @@ class SpeakerIdentifier(NoteProcessor):
         except (aiohttp.ClientError, json.JSONDecodeError) as e:
             error_msg = f"Error calling UI service: {str(e)}"
             logger.error(error_msg)
+            logger.info(f"Payload: {payload}")
             raise SpeakerIdentificationError(error_msg) from e
         
         # Send Discord notification
@@ -357,3 +359,110 @@ class SpeakerIdentifier(NoteProcessor):
     def identify_speakers_tiny(self, text: str) -> str:
         prompt = self.prompt_identify_tiny + text
         return self.tiny_model.message(prompt).content.strip()
+
+    async def reset(self, filename: str) -> None:
+        """
+        Resets the speaker identification stage for a file.
+        Handles both old (list-based identified_speakers) and new (dict-based final_mapping)
+        formats for reverting transcript text.
+        Removes relevant frontmatter fields regardless of format.
+        """
+        logger.info(f"Attempting to reset stage '{self.stage_name}' for: {filename}")
+        file_path = self.input_dir / filename
+        if not file_path.exists():
+            logger.error(f"File not found during reset: {filename}")
+            return
+
+        try:
+            content = await self.read_file(filename)
+            frontmatter = parse_frontmatter(content)
+
+            if not frontmatter:
+                logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")
+                return
+
+            processing_stages = frontmatter.get('processing_stages', [])
+            if self.stage_name not in processing_stages:
+                logger.info(f"Stage '{self.stage_name}' not found in processing stages for {filename}. No reset needed.")
+                return
+
+            # --- Attempt to revert transcript text ---            
+            current_transcript = content.split('---', 2)[2].strip()
+            transcript_to_save = current_transcript # Default: keep current transcript if revert fails
+            reverted = False
+
+            # Check for old format first (identified_speakers is a list)
+            old_identified_speakers = frontmatter.get('identified_speakers')
+            if isinstance(old_identified_speakers, list):
+                logger.info(f"Detected old speaker format (list) for {filename}. Reverting names.")
+                identified_names = old_identified_speakers
+                modified_transcript = current_transcript
+                for i, name in enumerate(identified_names):
+                    if i >= 26: # Safety break for Speaker Z
+                        logger.warning(f"More than 26 speakers detected in old format list for {filename}, stopping revert.")
+                        break
+                    original_label = f"Speaker {chr(ord('A') + i)}:"
+                    replaced_string = f"{name}:"
+                    # Important: Ensure we only replace at the start of a line potentially?
+                    # For simplicity, direct replace first. If issues arise, use regex.
+                    # modified_transcript = re.sub(f"^{re.escape(replaced_string)}", original_label, modified_transcript, flags=re.MULTILINE)
+                    modified_transcript = modified_transcript.replace(replaced_string, original_label)
+                transcript_to_save = modified_transcript
+                reverted = True
+            else:
+                # If not old format, check for new format (final_speaker_mapping)
+                final_mapping = frontmatter.get('final_speaker_mapping')
+                if final_mapping:
+                    logger.info(f"Detected new speaker format (dict) for {filename}. Reverting names.")
+                    modified_transcript = current_transcript
+                    logger.debug(f"Reverting transcript text based on mapping: {final_mapping}")
+                    for speaker_id, speaker_data in final_mapping.items():
+                        name = speaker_data.get("name", "Unknown")
+                        organization = speaker_data.get("organisation", "").replace('[[', '').replace(']]', '')
+                        original_label = f"{speaker_id}:" # e.g., "Speaker A:"
+                        if organization:
+                            replaced_string = f"{name} ({organization}):"
+                        else:
+                            replaced_string = f"{name}:"
+                        modified_transcript = modified_transcript.replace(replaced_string, original_label)
+                    transcript_to_save = modified_transcript
+                    reverted = True
+                else:
+                    # Neither format found that allows reverting text
+                    logger.warning(f"Cannot revert transcript text for {filename}: Missing 'final_speaker_mapping' (new format) or 'identified_speakers' list (old format). Frontmatter will be cleaned, but transcript remains unchanged.")
+
+            # --- Clean Frontmatter (Common Logic) ---
+            keys_to_remove = [
+                'identified_speakers', # Remove this key regardless of its type
+                'speaker_matcher_ui_url',
+                'speaker_matcher_results_url',
+                'speaker_matcher_task_id',
+                'final_speaker_mapping'
+            ]
+            cleaned_frontmatter = {k: v for k, v in frontmatter.items() if k not in keys_to_remove}
+            
+            # Remove the stage itself from processing_stages
+            if 'processing_stages' in cleaned_frontmatter:
+                 if self.stage_name in cleaned_frontmatter['processing_stages']:
+                     cleaned_frontmatter['processing_stages'].remove(self.stage_name)
+                 # Remove empty list if no stages left? Optional.
+                 # if not cleaned_frontmatter['processing_stages']:
+                 #     del cleaned_frontmatter['processing_stages']
+
+            # --- Combine and Save ---            
+            new_content = frontmatter_to_text(cleaned_frontmatter) + "\n" + transcript_to_save
+
+            # Write back to file
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(new_content)
+
+            # Update modification time
+            os.utime(file_path, None)
+            if reverted:
+                logger.info(f"Successfully reset stage '{self.stage_name}' and reverted transcript names for: {filename}")
+            else:
+                 logger.info(f"Successfully reset stage '{self.stage_name}' (frontmatter only) for: {filename}")
+
+        except Exception as e:
+            logger.error(f"Error resetting stage '{self.stage_name}' for {filename}: {e}", exc_info=True)
+            # Re-raise or handle as needed; for now, just log
