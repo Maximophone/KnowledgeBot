@@ -5,6 +5,7 @@ from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter
 from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
+from ai import get_prompt
 
 logger = setup_logger(__name__)
 
@@ -18,7 +19,6 @@ class MeetingSummaryProcessor(NoteProcessor):
     def __init__(self, input_dir: Path, transcript_dir: Path):
         super().__init__(input_dir)
         self.transcript_dir = transcript_dir
-        self.prompt_summarize = get_prompt("meeting_summary")
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:            
         # Check if transcript exists and get its frontmatter            

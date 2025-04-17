@@ -18,7 +18,6 @@ class TranscriptClassifier(NoteProcessor):
         super().__init__(input_dir)
         self.ai_model = AI("haiku3.5")  # Using smaller model for classification
         self.prompt_classify = get_prompt("classify_transcript")
-        self.prompt = get_prompt("transcript_classifier")
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         # Process if it's a transcription and hasn't been classified
