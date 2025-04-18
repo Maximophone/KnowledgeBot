@@ -24,6 +24,9 @@ _MODELS_DICT = {
     "o1-preview": "o1-preview",
     "o1-mini": "o1-mini",
     "o1": "o1-2024-12-17",
+    "o3": "o3",
+    "o4-mini": "o4-mini",
+    "gpt4.1": "gpt-4.1",
     "deepseek-chat": "deepseek-chat",
     "deepseek-reasoner": "deepseek-reasoner",
     "sonar": "sonar",
@@ -58,7 +61,7 @@ def get_client(model_name: str, rate_limiting=False, rate_limiter=None) -> AIWra
             rate_limiting=rate_limiting,
             rate_limiter=rate_limiter
         )
-    elif client_name == "gpt" or client_name == "o1":
+    elif client_name == "gpt" or client_name == "o1" or client_name == "o3" or client_name == "o4-mini":
         return GPTWrapper(secrets.OPENAI_API_KEY, secrets.OPENAI_ORG)
     elif client_name == "deepseek":
         return DeepSeekWrapper(secrets.DEEPSEEK_API_KEY)
