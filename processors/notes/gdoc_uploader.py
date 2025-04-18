@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 import os
+import traceback
 
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, update_front_matter
@@ -82,3 +83,84 @@ class GDocUploadProcessor(NoteProcessor):
             # Consider how to handle this - the GDoc exists but the link isn't saved.
             # For now, re-raise to signal an issue.
             raise 
+
+    async def reset(self, filename: str) -> None:
+        """
+        Resets the GDoc upload stage for a transcript file.
+        1. Deletes the uploaded Google Doc.
+        2. Removes the gdoc_transcript_link from the transcript's frontmatter.
+        3. Removes the stage from processing_stages.
+        """
+        logger.info(f"Attempting to reset stage '{self.stage_name}' for: {filename}")
+        file_path = self.input_dir / filename
+        if not file_path.exists():
+            logger.error(f"File not found during reset: {filename}")
+            return
+
+        try:
+            # Read and parse the transcript
+            content = await self.read_file(filename)
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
+
+            if not frontmatter:
+                logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")
+                return
+
+            processing_stages = frontmatter.get('processing_stages', [])
+            gdoc_link = frontmatter.get('gdoc_transcript_link')
+
+            if self.stage_name not in processing_stages:
+                logger.info(f"Stage '{self.stage_name}' not found in processing stages for {filename}. No reset needed.")
+                # Also clean up the link if stage is missing but link exists
+                if gdoc_link:
+                    logger.warning(f"Stage '{self.stage_name}' missing but gdoc_link exists. Attempting cleanup.")
+                else:
+                    return # Nothing to do
+
+            if not gdoc_link:
+                logger.warning(f"Missing 'gdoc_transcript_link' in frontmatter for {filename}. Cannot delete GDoc.")
+                # Still remove the stage if it exists
+                if self.stage_name in processing_stages:
+                    logger.info(f"Removing stage '{self.stage_name}' even though link is missing.")
+                    frontmatter['processing_stages'].remove(self.stage_name)
+                    # Save the cleaned frontmatter
+                    updated_content = update_front_matter(file_path, frontmatter, return_content=True)
+                    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                        await f.write(updated_content)
+                    os.utime(file_path, None)
+                return
+
+            # Attempt to delete the Google Doc
+            try:
+                doc_id = self.gdu.extract_doc_id_from_url(gdoc_link)
+                delete_success = self.gdu.delete_document(doc_id)
+                if not delete_success:
+                    logger.error(f"Failed to delete Google Doc (ID: {doc_id}) for {filename}. Manual cleanup may be required.")
+                    # Decide if we should proceed with frontmatter cleanup or stop? 
+                    # For now, proceed to clean frontmatter even if delete fails.
+                    
+            except ValueError as e:
+                logger.error(f"Could not extract Google Doc ID from link '{gdoc_link}': {e}. Skipping deletion.")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during Google Doc deletion: {e}")
+                # Proceed with frontmatter cleanup despite the error
+
+            # Clean the frontmatter
+            del frontmatter['gdoc_transcript_link']
+            if self.stage_name in processing_stages:
+                processing_stages.remove(self.stage_name)
+                frontmatter['processing_stages'] = processing_stages
+
+            # Write the updated transcript
+            updated_content = update_front_matter(file_path, frontmatter, return_content=True)
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(updated_content)
+            
+            # Update modification time
+            os.utime(file_path, None)
+            logger.info(f"Successfully reset stage '{self.stage_name}' for: {filename}")
+
+        except Exception as e:
+            logger.error(f"Error resetting stage '{self.stage_name}' for {filename}: {e}")
+            logger.error(traceback.format_exc())

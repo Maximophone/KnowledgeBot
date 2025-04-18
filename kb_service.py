@@ -160,7 +160,7 @@ async def setup_processors():
             slow_repeater.register(processor.process_all, name=registration_name)
         else:
             print(f"Warning: Processor with key '{name}' has no process_all method.")
-
+    
     # Return the discord_task to ensure it stays alive
     return discord_task
 
@@ -178,7 +178,7 @@ async def main():
     for path in PATHS:
         if hasattr(path, 'parent') and path.suffix: # Check if it's likely a file path
              path.parent.mkdir(parents=True, exist_ok=True)
-
+    
     # Start both service groups
     obsidian_ai_task = asyncio.create_task(run_obsidian_ai())
     processor_task = asyncio.create_task(run_processor_services())
@@ -191,15 +191,15 @@ async def main():
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Knowledge Bot Service')
-    parser.add_argument('--log-level',
-                        type=str,
+    parser.add_argument('--log-level', 
+                        type=str, 
                         default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the default logging level (default: INFO)')
     args = parser.parse_args()
-
+    
     # Set the default logging level
     set_default_log_level(args.log_level)
-
+    
     # Run the main async function
     asyncio.run(main())

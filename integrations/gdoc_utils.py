@@ -141,6 +141,20 @@ class GoogleDocUtils:
             logger.error(traceback.format_exc())
             return None
 
+    def delete_document(self, file_id: str) -> bool:
+        """Deletes a file from Google Drive using its ID."""
+        creds = self.get_credentials()
+        service = build('drive', 'v3', credentials=creds)
+
+        try:
+            service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+            logger.info(f"Successfully deleted Google Drive file with ID: {file_id}")
+            return True
+        except Exception as error:
+            logger.error(f'An error occurred while deleting file {file_id}: {error}')
+            logger.error(traceback.format_exc())
+            return False
+
 def main():
     """Example usage of GoogleDocUtils."""
     gdoc_utils = GoogleDocUtils()
