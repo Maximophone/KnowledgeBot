@@ -15,6 +15,7 @@ from config.logging_config import setup_logger
 from config.user_config import TARGET_DISCORD_USER_ID, USER_NAME, USER_ORGANIZATION
 from config.services_config import SPEAKER_MATCHER_UI_URL
 from integrations.discord import DiscordIOCore
+from .transcript_classifier import TranscriptClassifier
 
 logger = setup_logger(__name__)
 
@@ -30,7 +31,7 @@ class ResultsNotReadyError(Exception):
 class SpeakerIdentifier(NoteProcessor):
     """Identifies speakers in transcripts using AI, initiates matching UI, and processes results."""
     stage_name = "speakers_identified"
-    required_stage = "classified"
+    required_stage = TranscriptClassifier.stage_name
 
     def __init__(self, input_dir: Path, discord_io: DiscordIOCore):
         super().__init__(input_dir)

@@ -13,6 +13,7 @@ from ai import AI
 from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
 from config.paths import PATHS
+from .speaker_identifier import SpeakerIdentifier
 
 import traceback
 
@@ -24,7 +25,7 @@ class InteractionLogger(NoteProcessor):
     to each person's note about the meeting.
     """
     stage_name = "interactions_logged"
-    required_stage = "speakers_identified"
+    required_stage = SpeakerIdentifier.stage_name
 
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)

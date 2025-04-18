@@ -7,6 +7,7 @@ from ..common.markdown import create_wikilink
 from ai.types import Message, MessageContent
 from ai import get_prompt
 from config.logging_config import setup_logger
+from .speaker_identifier import SpeakerIdentifier
 
 logger = setup_logger(__name__)
 
@@ -15,7 +16,7 @@ class IdeaProcessor(NoteProcessor):
     """Processes idea transcripts and adds them to an idea directory."""
     
     stage_name = "ideas_extracted"
-    required_stage = "speakers_identified"
+    required_stage = SpeakerIdentifier.stage_name
 
     def __init__(self, input_dir: Path, directory_file: Path):
         super().__init__(input_dir)

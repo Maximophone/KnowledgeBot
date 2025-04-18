@@ -6,6 +6,7 @@ from ..common.frontmatter import read_front_matter
 from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
 from ai import get_prompt
+from .meeting import MeetingProcessor
 
 logger = setup_logger(__name__)
 
@@ -14,7 +15,7 @@ class MeetingSummaryProcessor(NoteProcessor):
     """Adds AI-generated summaries to meeting notes based on transcripts."""
     
     stage_name = "meeting_summary_generated"
-    required_stage = "meeting_note_created"
+    required_stage = MeetingProcessor.stage_name
 
     def __init__(self, input_dir: Path, transcript_dir: Path):
         super().__init__(input_dir)

@@ -4,6 +4,7 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
 from config.logging_config import setup_logger
+from .speaker_identifier import SpeakerIdentifier
 
 logger = setup_logger(__name__)
 
@@ -12,7 +13,7 @@ class MeetingProcessor(NoteProcessor):
     """Creates structured meeting notes from meeting transcripts."""
     
     stage_name = "meeting_note_created"
-    required_stage = "speakers_identified"
+    required_stage = SpeakerIdentifier.stage_name
 
     def __init__(self, input_dir: Path, output_dir: Path, template_path: Path):
         super().__init__(input_dir)

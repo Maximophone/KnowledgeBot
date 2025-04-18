@@ -7,13 +7,14 @@ from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ai.types import Message, MessageContent
 from config.logging_config import setup_logger
+from .speaker_identifier import SpeakerIdentifier
 
 logger = setup_logger(__name__)
 
 class TodoProcessor(NoteProcessor):
     """Processes todo transcripts and adds them to a todo directory."""
     stage_name = "todos_extracted"
-    required_stage = "speakers_identified"
+    required_stage = SpeakerIdentifier.stage_name
 
     def __init__(self, input_dir: Path, directory_file: Path):
         super().__init__(input_dir)
