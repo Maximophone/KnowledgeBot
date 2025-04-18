@@ -125,9 +125,7 @@ class GDocUploadProcessor(NoteProcessor):
                     logger.info(f"Removing stage '{self.stage_name}' even though link is missing.")
                     frontmatter['processing_stages'].remove(self.stage_name)
                     # Save the cleaned frontmatter
-                    updated_content = update_front_matter(file_path, frontmatter, return_content=True)
-                    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                        await f.write(updated_content)
+                    updated_content = update_front_matter(file_path, frontmatter)
                     os.utime(file_path, None)
                 return
 
@@ -153,9 +151,7 @@ class GDocUploadProcessor(NoteProcessor):
                 frontmatter['processing_stages'] = processing_stages
 
             # Write the updated transcript
-            updated_content = update_front_matter(file_path, frontmatter, return_content=True)
-            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                await f.write(updated_content)
+            updated_content = update_front_matter(file_path, frontmatter)
             
             # Update modification time
             os.utime(file_path, None)

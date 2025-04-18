@@ -25,6 +25,7 @@ try:
     # Import specific classes needed for hasattr checks
     from processors.notes.speaker_identifier import SpeakerIdentifier
     from processors.notes.interaction_logger import InteractionLogger
+    from processors.notes.gdoc_uploader import GDocUploadProcessor
     # Add other processor classes here as they get reset methods
     # from processors.notes.todo import TodoProcessor
 
@@ -39,6 +40,7 @@ except ImportError as e:
 PROCESSOR_CLASSES = {
     SpeakerIdentifier.stage_name: SpeakerIdentifier,
     InteractionLogger.stage_name: InteractionLogger,
+    GDocUploadProcessor.stage_name: GDocUploadProcessor,
     # Add other processors here as they get reset methods
     # TodoProcessor.stage_name: TodoProcessor,
 }
