@@ -371,3 +371,140 @@ Your final output should be a series of bullet points that can be directly appen
         except Exception as e:
             logger.error(f"Error updating person note {person_name}: {str(e)}")
             return False
+
+    async def reset(self, filename: str) -> None:
+        """
+        Resets the interaction logging stage for a transcript file.
+        1. Removes the logged_interactions from the transcript's frontmatter
+        2. Removes the stage from processing_stages
+        3. For each person in logged_interactions, removes the log entry from their person note
+        """
+        logger.info(f"Attempting to reset stage '{self.stage_name}' for: {filename}")
+        file_path = self.input_dir / filename
+        if not file_path.exists():
+            logger.error(f"File not found during reset: {filename}")
+            return
+
+        try:
+            # Read and parse the transcript
+            content = await self.read_file(filename)
+            frontmatter = parse_frontmatter(content)
+            transcript = content.split('---', 2)[2].strip()
+
+            if not frontmatter:
+                logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")
+                return
+
+            processing_stages = frontmatter.get('processing_stages', [])
+            if self.stage_name not in processing_stages:
+                logger.info(f"Stage '{self.stage_name}' not found in processing stages for {filename}. No reset needed.")
+                return
+
+            # Get the logged interactions and meeting date
+            logged_interactions = frontmatter.get('logged_interactions', [])
+            meeting_date = frontmatter.get('date')
+            source_link = f"[[{filename.replace('.md', '')}]]"
+            
+            if not meeting_date:
+                logger.warning(f"Missing date in frontmatter for {filename}. Cannot identify logs to remove.")
+
+            # For each person in logged_interactions, remove the log entry
+            for person_id in logged_interactions:
+                await self._remove_log_entry(person_id, meeting_date, source_link)
+
+            # Clean the frontmatter
+            if 'logged_interactions' in frontmatter:
+                del frontmatter['logged_interactions']
+            
+            if self.stage_name in processing_stages:
+                processing_stages.remove(self.stage_name)
+                frontmatter['processing_stages'] = processing_stages
+
+            # Write the updated transcript
+            updated_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(updated_content)
+            
+            # Update modification time
+            os.utime(file_path, None)
+            logger.info(f"Successfully reset stage '{self.stage_name}' for: {filename}")
+
+        except Exception as e:
+            logger.error(f"Error resetting stage '{self.stage_name}' for {filename}: {e}")
+            logger.error(traceback.format_exc())
+
+    async def _remove_log_entry(self, person_id: str, meeting_date: str, source_link: str) -> None:
+        """
+        Removes a specific log entry from a person's note.
+        Uses the existing _parse_existing_logs method to parse and manipulate logs.
+        """
+        # Remove [[ and ]] from person_id to get the filename
+        person_name = person_id.replace('[[', '').replace(']]', '')
+        person_file_path = self.people_dir / f"{person_name}.md"
+        
+        # Check if the person note exists
+        if not person_file_path.exists():
+            logger.warning(f"Person note not found during reset: {person_file_path}")
+            return
+        
+        try:
+            # Read the person's note
+            async with aiofiles.open(person_file_path, 'r', encoding='utf-8') as f:
+                person_content = await f.read()
+            
+            # Find the AI Logs section
+            section_exists, section_pos, content_before_section = await self._find_ai_logs_section(person_content)
+            
+            if not section_exists:
+                logger.warning(f"No AI Logs section found in {person_name}'s note. Nothing to reset.")
+                return
+                
+            # Parse existing logs using the existing method
+            logs_by_date = await self._parse_existing_logs(person_content)
+            
+            # Look for and remove the specific log entry
+            entry_removed = False
+            if meeting_date in logs_by_date:
+                # Find and remove logs matching the source link
+                logs_by_date[meeting_date] = [
+                    log for log in logs_by_date[meeting_date] 
+                    if log['source'] != source_link
+                ]
+                
+                # If the date has no more logs, remove the date entry
+                if not logs_by_date[meeting_date]:
+                    del logs_by_date[meeting_date]
+                    
+                entry_removed = True
+            
+            # If no entry was found/removed, log and return
+            if not entry_removed:
+                logger.warning(f"No log entry found for {source_link} on {meeting_date} in {person_name}'s note.")
+                return
+                
+            # Reconstruct the AI Logs section content
+            new_section = "# AI Logs\n>[!warning] Do not Modify\n\n"
+            
+            # Sort dates in descending order (newest first)
+            for date in sorted(logs_by_date.keys(), reverse=True):
+                new_section += f"## {date}\n"
+                for log in logs_by_date[date]:
+                    new_section += f"*category*: {log['category']}\n"
+                    new_section += f"*source:* {log['source']}\n"
+                    new_section += f"*notes*: \n{log['notes']}\n\n"
+            
+            # Combine the content
+            new_content = content_before_section + new_section
+            
+            # Write back the updated content
+            async with aiofiles.open(person_file_path, 'w', encoding='utf-8') as f:
+                await f.write(new_content)
+            
+            # Update file modification time
+            os.utime(person_file_path, None)
+            
+            logger.info(f"Removed log entry for {meeting_date} from {person_name}'s note")
+                
+        except Exception as e:
+            logger.error(f"Error removing log entry from {person_name}'s note: {e}")
+            logger.error(traceback.format_exc())

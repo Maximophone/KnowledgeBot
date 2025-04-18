@@ -24,6 +24,7 @@ try:
     from kb_service import instantiate_all_processors
     # Import specific classes needed for hasattr checks
     from processors.notes.speaker_identifier import SpeakerIdentifier
+    from processors.notes.interaction_logger import InteractionLogger
     # Add other processor classes here as they get reset methods
     # from processors.notes.todo import TodoProcessor
 
@@ -37,6 +38,7 @@ except ImportError as e:
 # This is used to check if a reset method exists for the UI.
 PROCESSOR_CLASSES = {
     SpeakerIdentifier.stage_name: SpeakerIdentifier,
+    InteractionLogger.stage_name: InteractionLogger,
     # Add other processors here as they get reset methods
     # TodoProcessor.stage_name: TodoProcessor,
 }
