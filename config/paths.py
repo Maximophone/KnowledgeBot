@@ -46,6 +46,8 @@ class Paths:
 
     obsidian_vector_db: Path = runtime_path / "data/obsidian_vector_db.sqlite"
     
+    # Google Drive paths
+    meetings_gdrive_folder_id: str = "13tFGdok5I-UTlE-3_We7W1Yym_iV7SK7"
 
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""

@@ -24,6 +24,8 @@ from processors.notes.interaction_logger import InteractionLogger
 from processors.audio.video_to_audio import VideoToAudioProcessor
 # Import base class for type checking
 from processors.notes.base import NoteProcessor
+# Import the new processor
+from processors.notes.gdoc_uploader import GDocUploadProcessor
 
 from integrations.discord import DiscordIOCore
 
@@ -75,7 +77,8 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
         DiaryProcessor,
         IdeaCleanupProcessor,
         TodoProcessor,
-        InteractionLogger
+        InteractionLogger,
+        GDocUploadProcessor
     ]
 
     for cls in note_processor_classes:
@@ -117,10 +120,8 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
                 instance = cls(input_dir=PATHS.transcriptions, directory_file=PATHS.todo_directory)
             elif cls is InteractionLogger:
                 instance = cls(input_dir=PATHS.transcriptions)
-            else:
-                # Default assumption if only input_dir needed (adjust if necessary)
-                # This case might not be hit with the specific checks above
-                instance = cls(input_dir=PATHS.transcriptions) # Check PATHS needed here
+            elif cls is GDocUploadProcessor:
+                instance = cls(input_dir=PATHS.transcriptions, gdrive_folder_id=PATHS.meetings_gdrive_folder_id)
 
             processors[cls.stage_name] = instance
 
@@ -177,8 +178,6 @@ async def main():
     for path in PATHS:
         if hasattr(path, 'parent') and path.suffix: # Check if it's likely a file path
              path.parent.mkdir(parents=True, exist_ok=True)
-        elif hasattr(path, 'mkdir'): # Check if it's likely a directory path
-             path.mkdir(parents=True, exist_ok=True)
 
     # Start both service groups
     obsidian_ai_task = asyncio.create_task(run_obsidian_ai())
