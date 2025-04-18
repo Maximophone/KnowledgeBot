@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class GPTWrapper(AIWrapper):
     def __init__(self, api_key: str, org: str):
-        self.client = OpenAI(api_key=api_key, organization=org)
+        self.client = OpenAI(api_key=api_key)#, organization=org)
 
     def _messages(self, model_name: str, messages: List[Message], 
                  system_prompt: str, max_tokens: int, temperature: float,
@@ -79,7 +79,7 @@ class GPTWrapper(AIWrapper):
                     "content": content_list[0]["text"] if len(content_list) == 1 and content_list[0]["type"] == "text" else content_list
                 })
 
-        if model_name.startswith("o1"):
+        if model_name.startswith("o1") or model_name.startswith("o3") or model_name.startswith("o4"):
             response = self.client.chat.completions.create(
                 model=model_name,
                 messages=openai_messages,
