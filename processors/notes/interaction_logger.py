@@ -114,9 +114,59 @@ class InteractionLogger(NoteProcessor):
         
         return logs_by_date
     
+    async def _filter_future_logs(self, person_content: str, meeting_date_str: str) -> str:
+        """
+        Filters the AI Logs section in person_content, removing entries dated after meeting_date_str.
+        Uses _parse_existing_logs to avoid duplicating parsing logic.
+        """
+        logger.debug(f"Filtering future logs for meeting date: {meeting_date_str}")
+        
+        # Find the AI Logs section to get the content before it
+        section_exists, section_pos, content_before_section = await self._find_ai_logs_section(person_content)
+        
+        if not section_exists:
+            logger.debug("No AI Logs section found. Returning original content.")
+            return person_content
+            
+        # Parse the entire AI Logs section using the existing method
+        all_logs_by_date = await self._parse_existing_logs(person_content)
+        
+        # Filter the parsed logs based on the meeting date
+        filtered_logs_by_date = defaultdict(list)
+        for log_date, logs in all_logs_by_date.items():
+            # Compare dates as strings (YYYY-MM-DD format allows direct comparison)
+            if log_date <= meeting_date_str:
+                filtered_logs_by_date[log_date] = logs
+            else:
+                logger.debug(f"Filtering out log date {log_date} (future relative to {meeting_date_str})")
+
+        # Reconstruct the filtered AI Logs section content
+        # Need the original header structure from the content itself if possible
+        ai_logs_section_content = person_content[section_pos:] # Get original section content
+        header_match = re.match(r'^# AI Logs\s*(\n>\[!warning\] Do not Modify\s*\n)?\n*', ai_logs_section_content, re.IGNORECASE)
+        filtered_section = header_match.group(0) if header_match else "# AI Logs\n\n" # Fallback header
+
+        # Sort dates in descending order (newest first)
+        for date in sorted(filtered_logs_by_date.keys(), reverse=True):
+            filtered_section += f"## {date}\n"
+            for log in filtered_logs_by_date[date]:
+                filtered_section += f"*category*: {log['category']}\n"
+                filtered_section += f"*source:* {log['source']}\n"
+                filtered_section += f"*notes*: \n{log['notes']}\n\n"
+        
+        # Combine the content before the section with the filtered section
+        # Ensure there's appropriate spacing
+        filtered_content = content_before_section.rstrip() + "\n\n" + filtered_section.strip()
+        logger.debug("Finished filtering future logs using _parse_existing_logs.")
+        return filtered_content
+
     async def _generate_log(self, transcript_content: str, person_content: str, 
                            person_name: str, meeting_date: str, meeting_title: str) -> str:
         """Generate a log entry for a person using AI."""
+        
+        # Filter out future logs from the person's notes before sending to AI
+        filtered_person_content = await self._filter_future_logs(person_content, meeting_date)
+        
         prompt = f"""
 You will be given a transcript of a meeting, the name of a participant in this meeting, and some background notes on this person. Your task is to extract specific information about this person to be appended to a markdown log. Follow these instructions carefully:
 
@@ -131,7 +181,7 @@ First, review the following information:
 </participant_name>
 
 <background_notes>
-{person_content}
+{filtered_person_content} 
 </background_notes>
 
 <meeting_date>
@@ -158,7 +208,7 @@ When crafting your response:
 - Avoid repetition of information already present in the background notes.
 
 Your final output should be a series of bullet points that can be directly appended to a markdown log. Include only the bullet points in your response, without any additional explanation or commentary.
-        """.format(transcript_content=transcript_content, person_name=person_name, person_content=person_content, meeting_date=meeting_date, meeting_title=meeting_title)
+        """.format(transcript_content=transcript_content, person_name=person_name, person_content=filtered_person_content, meeting_date=meeting_date, meeting_title=meeting_title)
         
         message = Message(
             role="user",
