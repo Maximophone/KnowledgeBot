@@ -12,6 +12,7 @@ import base64
 import quopri
 
 from config.logging_config import setup_logger
+from config.services_config import GOOGLE_SCOPES
 
 logger = setup_logger(__name__)
 
@@ -200,10 +201,7 @@ class GmailClient:
         :param scopes: List of Gmail API scopes you need.
         """
         # Add groups scope alongside mail scope
-        self.scopes = scopes or [
-            'https://mail.google.com/',
-            'https://www.googleapis.com/auth/apps.groups.migration'
-        ]
+        self.scopes = scopes or GOOGLE_SCOPES
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.service = self._authenticate()
