@@ -10,8 +10,8 @@ import argparse
 # Add parent directory to path to allow importing from the chunking module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from ai.chunking import Chunker, SimpleChunker, LLMChunker
-from ai.chunking.utils import load_text_file, display_chunks, save_chunks_to_file
+from rag.chunking import Chunker, SimpleChunker, LLMChunker
+from rag.chunking.utils import load_text_file, display_chunks, save_chunks_to_file
 
 
 def main():

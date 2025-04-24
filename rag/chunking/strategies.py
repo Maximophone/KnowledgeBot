@@ -140,8 +140,8 @@ class LLMChunker(ChunkingStrategy):
         logger.info("Initializing LLMChunker")
         
         self.ai_client = ai_client
-        self.prompt_path = "ai/chunking/chunking_prompt.md"
-        self.model_name = model_name or "gemini2.0flash"
+        self.prompt_path = "rag/chunking/chunking_prompt.md"
+        self.model_name = model_name or "gemini2.5flash"
         self.max_retries = max_retries
         self.fallback = fallback
         self.conversation_history = []

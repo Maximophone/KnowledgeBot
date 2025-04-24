@@ -1,5 +1,5 @@
 from ..tools import tool
-from vector_db.vector_db import VectorDB
+from rag.vector_db import VectorDB
 from pathlib import Path
 import json
 import os

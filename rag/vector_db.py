@@ -11,9 +11,9 @@ from pathlib import Path
 # Use relative imports for modules in the same package
 from .storage import VectorStorage
 from .similarity import VectorSearcher, SimilarityMetric, CosineSimilarity
-from ai.chunking.chunker import Chunker
-from ai.chunking.strategies import SimpleChunker
-from ai.embeddings import BaseEmbedder, OpenAIEmbedder
+from rag.chunking.chunker import Chunker
+from rag.chunking.strategies import SimpleChunker
+from rag.embeddings import BaseEmbedder, OpenAIEmbedder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

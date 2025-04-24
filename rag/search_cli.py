@@ -19,7 +19,7 @@ sys.path.insert(0, parent_dir)
 # Now import modules using relative imports
 from .vector_db import VectorDB  # Using relative import
 from .similarity import CosineSimilarity, EuclideanDistance, DotProductSimilarity
-from ai.embeddings import OpenAIEmbedder
+from rag.embeddings import OpenAIEmbedder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 

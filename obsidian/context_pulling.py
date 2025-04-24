@@ -1,5 +1,5 @@
 from integrations.html_to_markdown import HTMLToMarkdown
-from ai.file_packager import get_committed_files, format_for_llm
+from obsidian.file_packager import get_committed_files, format_for_llm
 from obsidian.beacons import beacon_me, beacon_ai, beacon_error
 from obsidian.file_utils import resolve_file_path, get_file_contents, get_markdown_files, remove_frontmatter, VAULT_PATH
 import os

@@ -33,8 +33,8 @@ except Exception as e:
 
 # Now import modules
 try:
-    from ai.chunking import Chunker, LLMChunker, SimpleChunker
-    from ai.chunking.utils import load_text_file, display_chunks, save_chunks_to_file
+    from rag.chunking import Chunker, LLMChunker, SimpleChunker
+    from rag.chunking.utils import load_text_file, display_chunks, save_chunks_to_file
     logger.info("Successfully imported chunking modules")
 except Exception as e:
     logger.error(f"Error importing modules: {e}")

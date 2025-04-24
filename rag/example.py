@@ -12,12 +12,12 @@ from datetime import datetime
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import VectorDB using the proper path
-from vector_db import VectorDB
-from vector_db.similarity import CosineSimilarity, EuclideanDistance
+from rag import VectorDB
+from rag.similarity import CosineSimilarity, EuclideanDistance
 
-from ai.chunking.chunker import Chunker
-from ai.chunking.strategies import SimpleChunker
-from ai.embeddings import OpenAIEmbedder
+from rag.chunking.chunker import Chunker
+from rag.chunking.strategies import SimpleChunker
+from rag.embeddings import OpenAIEmbedder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 

@@ -21,9 +21,9 @@ sys.path.insert(0, parent_dir)
 from .vector_db import VectorDB
 from .storage import VectorStorage
 from .similarity import CosineSimilarity
-from ai.chunking.chunker import Chunker
-from ai.chunking.strategies import SimpleChunker, LLMChunker
-from ai.embeddings import OpenAIEmbedder
+from rag.chunking.chunker import Chunker
+from rag.chunking.strategies import SimpleChunker, LLMChunker
+from rag.embeddings import OpenAIEmbedder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 

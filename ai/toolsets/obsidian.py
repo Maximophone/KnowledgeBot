@@ -1,7 +1,7 @@
 from ..tools import tool
 from pathlib import Path
 from config.paths import PATHS
-from ..file_utils import validate_filepath, ensure_md_extension, should_exclude
+from .file_utils import validate_filepath, ensure_md_extension, should_exclude
 import os
 
 # Directories to exclude from AI access

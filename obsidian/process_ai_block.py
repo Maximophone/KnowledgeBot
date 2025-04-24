@@ -16,7 +16,7 @@ from ai.toolsets import TOOL_SETS
 from ai.tools import Tool
 from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
-from vector_db import VectorDB
+from rag import VectorDB
 import subprocess
 
 logger = setup_logger(__name__)

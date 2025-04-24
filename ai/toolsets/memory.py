@@ -3,7 +3,7 @@ from pathlib import Path
 from config.paths import PATHS
 from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text, update_frontmatter
 from datetime import datetime
-from ..file_utils import validate_filepath, ensure_md_extension
+from .file_utils import validate_filepath, ensure_md_extension
 import json
 import os
 from patch_ng import fromstring

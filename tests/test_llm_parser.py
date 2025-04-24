@@ -10,7 +10,7 @@ import json
 # Add parent directory to path to allow importing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai.chunking.llm_parser import (
+from rag.chunking.llm_parser import (
     extract_json_from_response,
     parse_json_response,
     validate_chunk_schema,
