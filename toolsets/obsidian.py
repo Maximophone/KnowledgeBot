@@ -1,4 +1,4 @@
-from ..tools import tool
+from ai.tools import tool
 from pathlib import Path
 from config.paths import PATHS
 from .file_utils import validate_filepath, ensure_md_extension, should_exclude

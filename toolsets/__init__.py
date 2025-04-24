@@ -1,4 +1,5 @@
-from . import test, system, coda, memory, linkedin, obsidian, gmail, subagents, vector_db
+from . import gmail, linkedin, memory, obsidian, subagents, system, test, vector_db
+from . import coda
 
 # Define available tool sets
 TOOL_SETS = {

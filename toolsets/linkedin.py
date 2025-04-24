@@ -1,4 +1,4 @@
-from ..tools import tool
+from ai.tools import tool
 from config.secrets import LINKEDIN_EMAIL, LINKEDIN_PASSWORD
 from integrations.linkedin_client import get_linkedin_client
 from typing import List, Dict, Optional, Literal

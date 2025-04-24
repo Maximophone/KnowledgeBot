@@ -1,4 +1,4 @@
-from ..tools import tool
+from ai.tools import tool
 from config.secrets import CODA_API_KEY
 from integrations.coda_integration import CodaClient
 from integrations.coda_tables import CodaTablesClient

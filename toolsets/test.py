@@ -1,5 +1,5 @@
 from typing import Literal
-from ..tools import tool
+from ai.tools import tool
 
 @tool(
     description="Test method - Fetch weather data for a location",

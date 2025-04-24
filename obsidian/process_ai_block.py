@@ -12,7 +12,7 @@ import json
 import traceback
 from config.logging_config import setup_logger
 from obsidian.beacons import beacon_tool_start, beacon_tool_end
-from ai.toolsets import TOOL_SETS
+from toolsets import TOOL_SETS
 from ai.tools import Tool
 from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
