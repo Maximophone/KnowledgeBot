@@ -1,9 +1,11 @@
 import asyncio
 import argparse
+from config import SLOW_REPEAT_INTERVAL # Added for scheduler interval
 from config.paths import PATHS
 from config.secrets import ASSEMBLY_AI_KEY, DISCORD_BOT_TOKEN
-from config.logging_config import set_default_log_level
+from config.logging_config import set_default_log_level, setup_logger # Added setup_logger
 from typing import Dict, Any
+from apscheduler.schedulers.asyncio import AsyncIOScheduler # Added APScheduler
 
 # Import processor classes
 from processors.audio.transcriber import AudioTranscriber
@@ -29,20 +31,17 @@ from processors.notes.gdoc_uploader import GDocUploadProcessor
 
 from integrations.discord import DiscordIOCore
 
-from services.keyboard_listener import main as keyboard_listener_main
+# Initialize logger for this module
+logger = setup_logger(__name__)
 
-# Import existing services
-from obsidian.obsidian_ai import process_file, needs_answer, VAULT_PATH
-from services.file_watcher import start_file_watcher
-from services.repeater import slow_repeater, start_repeaters
+# Initialize the scheduler
+scheduler = AsyncIOScheduler()
 
-
-async def run_obsidian_ai():
-    await start_file_watcher(VAULT_PATH, process_file, needs_answer, use_polling=True)
 
 def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
     """Instantiates all processor classes and returns a dictionary mapping stage_name to instance."""
     processors = {}
+    logger.info("Instantiating processors...") # Added logging
 
     # Instantiate audio processors (They don't have stage_name class attribute directly)
     transcriber = AudioTranscriber(
@@ -126,51 +125,16 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
             processors[cls.stage_name] = instance
 
         except Exception as e:
-            print(f"Error instantiating {cls.__name__}: {e}")
+            # Use logger instead of print
+            logger.error(f"Error instantiating {cls.__name__}: {e}", exc_info=True)
             # Decide if we should continue or raise
 
     # Add the non-NoteProcessor types manually if needed for registration
-    # These won't be in the stage_name map used by the dashboard reset
     processors["_transcriber"] = transcriber
     processors["_video_to_audio"] = video_to_audio_processor
 
+    logger.info(f"Instantiated {len(processors)} processors.") # Added logging
     return processors
-
-
-async def setup_processors():
-    """Initialize and register all processors."""
-
-    # Initialize Discord I/O Core - needed for some processor instantiations
-    discord_io = DiscordIOCore(token=DISCORD_BOT_TOKEN)
-    discord_task = asyncio.create_task(discord_io.start_bot())
-
-    # Instantiate all processors using the new function
-    all_processors = instantiate_all_processors(discord_io)
-
-    # Register all processors with the repeater using a loop
-    for name, processor in all_processors.items():
-        if hasattr(processor, 'process_all') and callable(processor.process_all):
-            # Use the instance's actual stage_name if it's a NoteProcessor, otherwise use the dict key
-            if isinstance(processor, NoteProcessor) and processor.stage_name:
-                registration_name = processor.stage_name
-            else:
-                registration_name = name # Use the key for _transcriber, _video_to_audio
-
-            print(f"Registering processor: {registration_name}")
-            slow_repeater.register(processor.process_all, name=registration_name)
-        else:
-            print(f"Warning: Processor with key '{name}' has no process_all method.")
-    
-    # Return the discord_task to ensure it stays alive
-    return discord_task
-
-
-async def run_processor_services():
-    """Setup and start all processor services."""
-    discord_task = await setup_processors()
-    await start_repeaters()
-    # Keep the Discord task alive
-    await discord_task
 
 
 async def main():
@@ -178,28 +142,94 @@ async def main():
     for path in PATHS:
         if hasattr(path, 'parent') and path.suffix: # Check if it's likely a file path
              path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Start both service groups
-    obsidian_ai_task = asyncio.create_task(run_obsidian_ai())
-    processor_task = asyncio.create_task(run_processor_services())
+        elif not path.suffix and not path.exists(): # Check if it's likely a directory path and doesn't exist
+             path.mkdir(parents=True, exist_ok=True)
+    logger.info("Ensured all necessary directories exist.") # Added logging
 
-    keyboard_listener_task = asyncio.create_task(keyboard_listener_main())
+    # Initialize Discord I/O Core
+    logger.info("Initializing Discord...")
+    discord_io = DiscordIOCore(token=DISCORD_BOT_TOKEN)
+    discord_task = asyncio.create_task(discord_io.start_bot())
+    logger.info("Discord task created.")
 
-    await asyncio.gather(obsidian_ai_task, processor_task, keyboard_listener_task)
+    # Instantiate all processors
+    all_processors = instantiate_all_processors(discord_io)
+
+    # Schedule processors
+    logger.info("Scheduling processor jobs...")
+    interval = SLOW_REPEAT_INTERVAL # Get interval from config, default 60s
+    logger.info(f"Using scheduler interval: {interval} seconds")
+    scheduled_count = 0
+    for name, processor in all_processors.items():
+         if hasattr(processor, 'process_all') and callable(processor.process_all):
+            if isinstance(processor, NoteProcessor) and processor.stage_name:
+                job_id = processor.stage_name
+            else:
+                job_id = name # Use the key like '_transcriber'
+
+            logger.debug(f"Scheduling job: {job_id} with interval {interval}s")
+            try:
+                # Add jitter to potentially spread out initial runs slightly (e.g., up to 5 seconds)
+                scheduler.add_job(processor.process_all, 'interval', seconds=interval, id=job_id, name=job_id, jitter=5)
+                scheduled_count += 1
+            except Exception as e:
+                 logger.error(f"Error scheduling job {job_id}: {e}", exc_info=True) # Use logger
+         else:
+             logger.warning(f"Processor with key '{name}' has no process_all method, skipping scheduling.") # Use logger
+    logger.info(f"Scheduled {scheduled_count} processor jobs.")
+
+
+    try:
+        # Start the scheduler
+        logger.info("Starting scheduler...")
+        scheduler.start()
+        logger.info("Scheduler started.")
+
+        logger.info("Gathering main tasks (Discord Bot)...") # Updated log message
+        await asyncio.gather(
+            discord_task, # Ensure Discord bot runs
+            # No explicit task for the scheduler itself needed here,
+            # gather just needs to keep the event loop alive.
+            # Keep the scheduler running indefinitely
+            asyncio.Event().wait() # Keep the main loop alive until interrupted
+       )
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Shutdown signal received.")
+    except Exception as e:
+        logger.error(f"An error occurred in the main gather loop: {e}", exc_info=True)
+    finally:
+        logger.info("Shutting down scheduler...")
+        if scheduler.running:
+            scheduler.shutdown()
+            logger.info("Scheduler shut down.")
+        else:
+            logger.info("Scheduler was not running.")
+        # asyncio.gather usually handles cancellation of its awaited tasks on exit/exception.
+        # If specific cleanup is needed for obsidian_ai_task or keyboard_listener_task,
+        # they might need explicit cancellation here. -> Removed as tasks are moved
 
 
 if __name__ == "__main__":
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Knowledge Bot Service')
-    parser.add_argument('--log-level', 
-                        type=str, 
+    parser = argparse.ArgumentParser(description='Knowledge Bot Processor Service') # Updated description
+    parser.add_argument('--log-level',
+                        type=str,
                         default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the default logging level (default: INFO)')
     args = parser.parse_args()
-    
+
     # Set the default logging level
     set_default_log_level(args.log_level)
-    
+    logger.info(f"Logging level set to {args.log_level}") # Log level confirmation
+
     # Run the main async function
-    asyncio.run(main())
+    try:
+        logger.info("Starting Knowledge Bot Processor Service...") # Updated log message
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Processor Service Application interrupted by user (KeyboardInterrupt).") # Updated log message
+    except Exception as e:
+        logger.critical(f"Processor Service Application exited unexpectedly: {e}", exc_info=True) # Updated log message
+    finally:
+        logger.info("Knowledge Bot Processor Service stopped.") # Updated log message
