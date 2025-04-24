@@ -22,9 +22,9 @@ import time
 
 # Add parent directory to path to allow importing from ai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ai.tokens import n_tokens
-from ai.client import AI, DEFAULT_TEMPERATURE
-from ai.types import Message, MessageContent
+from ai_core.tokens import n_tokens
+from ai_core.client import AI, DEFAULT_TEMPERATURE
+from ai_core.types import Message, MessageContent
 
 
 # Configure logging

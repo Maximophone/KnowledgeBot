@@ -1,4 +1,4 @@
-from ai.tools import tool
+from ai_core.tools import tool
 from integrations.gmail_client import GmailClient, filter_email_data, process_gmail_message
 import json
 

@@ -1,6 +1,6 @@
 # In here I try to create a thought arborescence with AI
 
-from ai import AI
+from ai_core import AI
 from lxml import etree
 from typing import List
 

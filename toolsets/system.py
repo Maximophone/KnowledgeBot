@@ -3,7 +3,7 @@ import subprocess
 import threading
 import time
 import uuid
-from ai.tools import tool
+from ai_core.tools import tool
 import shutil
 import requests
 from integrations.html_to_markdown import HTMLToMarkdown

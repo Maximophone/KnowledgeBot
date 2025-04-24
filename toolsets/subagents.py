@@ -1,6 +1,6 @@
-from ai.tools import tool, Tool, ToolCall, ToolResult
-from ai.client import AI
-from ai.types import Message, MessageContent
+from ai_core.tools import tool, Tool, ToolCall, ToolResult
+from ai_core.client import AI
+from ai_core.types import Message, MessageContent
 import json
 import traceback
 from typing import List, Optional, Dict, Tuple

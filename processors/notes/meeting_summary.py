@@ -3,9 +3,10 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter
-from ai.types import Message, MessageContent
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
-from ai import get_prompt
+from prompts.prompts import get_prompt
+
 from .meeting import MeetingProcessor
 
 logger = setup_logger(__name__)

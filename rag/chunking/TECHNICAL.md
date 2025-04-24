@@ -162,8 +162,8 @@ The system maintains detailed records for debugging:
 ## Usage Example
 
 ```python
-from ai.chunking.strategies import LLMChunker
-from ai.client import AI
+from ai_core.chunking.strategies import LLMChunker
+from ai_core.client import AI
 
 # Create an AI client
 ai_client = AI(model_name="gemini2.0flash")

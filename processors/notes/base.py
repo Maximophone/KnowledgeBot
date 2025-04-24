@@ -4,7 +4,7 @@ from typing import Optional, Dict
 import aiofiles
 from ..common.frontmatter import read_front_matter, update_front_matter, parse_frontmatter
 import traceback
-from ai import AI
+from ai_core import AI
 import os
 import asyncio
 from config.logging_config import setup_logger

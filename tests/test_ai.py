@@ -5,13 +5,13 @@ import tempfile
 import base64
 
 # Import the functions and classes you want to test
-from ai import (
+from ai_core import (
     encode_image, validate_image, extract_text_from_pdf, n_tokens,
     count_tokens_input, count_tokens_output, log_token_use,
     AIWrapper, ClaudeWrapper, GeminiWrapper, GPTWrapper, MockWrapper,
     get_client, get_model, AI, AIResponse
 )
-from ai.types import Message, MessageContent
+from ai_core.types import Message, MessageContent
 
 IMG1_PATH = "G:\\My Drive\\Obsidian\\Images\\cube.png"
 IMG2_PATH = "G:\\My Drive\\Obsidian\\Images\\cube.png"

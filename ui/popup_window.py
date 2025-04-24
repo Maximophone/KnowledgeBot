@@ -30,8 +30,10 @@ from PyQt5.QtGui import QKeySequence, QFont, QColor, QPalette
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 import os
 import pyperclip
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from ai_core import AI
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.paths import PATHS
 import sys
 

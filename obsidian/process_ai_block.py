@@ -1,5 +1,8 @@
-from ai import AI, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
-from ai.types import Message, MessageContent, ToolCall, ToolResult
+from ai_core import AI, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from ai_core.types import Message, MessageContent, ToolCall, ToolResult
+from ai_core.tools import Tool
+from ai_core.models import DEFAULT_MODEL
+
 from typing import Dict, List
 from obsidian.beacons import beacon_me, beacon_ai, beacon_error
 from obsidian.process_conversation import process_conversation
@@ -13,8 +16,6 @@ import traceback
 from config.logging_config import setup_logger
 from obsidian.beacons import beacon_tool_start, beacon_tool_end
 from toolsets import TOOL_SETS
-from ai.tools import Tool
-from ai.models import DEFAULT_MODEL
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
 from rag import VectorDB
 import subprocess

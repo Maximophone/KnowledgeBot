@@ -1,7 +1,7 @@
 from googlesearch import search
 from linkedin_api import Linkedin
 import yaml
-from ai import AI
+from ai_core import AI
 from config import secrets
 
 ai = AI("gpt4o")

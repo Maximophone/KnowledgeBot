@@ -9,8 +9,8 @@ import traceback
 
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
-from ai import AI
-from ai.types import Message, MessageContent
+from ai_core import AI
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from config.user_config import TARGET_DISCORD_USER_ID, USER_NAME, USER_ORGANIZATION
 from config.services_config import SPEAKER_MATCHER_UI_URL

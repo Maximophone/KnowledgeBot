@@ -4,10 +4,10 @@ import time
 from unittest.mock import patch, MagicMock
 import google.generativeai as genai
 
-from ai.client import AI
+from ai_core.client import AI
 from utils.rate_limiter import ReactiveRateLimiter
-from ai.wrappers.google import GeminiWrapper
-from ai.types import Message, MessageContent
+from ai_core.wrappers.google import GeminiWrapper
+from ai_core.types import Message, MessageContent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 

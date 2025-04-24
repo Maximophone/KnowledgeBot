@@ -4,8 +4,9 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ..common.markdown import sanitize_filename
-from ai import get_prompt
-from ai.types import Message, MessageContent
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
 

@@ -1,4 +1,4 @@
-from ai.tools import tool
+from ai_core.tools import tool
 from pathlib import Path
 from config.paths import PATHS
 from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text, update_frontmatter

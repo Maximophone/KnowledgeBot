@@ -4,7 +4,7 @@ from news.news_utils import get_article_text
 import nltk
 nltk.download('punkt')
 import os
-from ai import AI
+from ai_core import AI
 from lxml import etree
 from typing import List
 import json

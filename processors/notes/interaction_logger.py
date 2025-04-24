@@ -9,8 +9,8 @@ from collections import defaultdict
 
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
-from ai import AI
-from ai.types import Message, MessageContent
+from ai_core import AI
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from config.paths import PATHS
 from .speaker_identifier import SpeakerIdentifier

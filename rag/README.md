@@ -79,9 +79,9 @@ python vector_db/search_cli.py "vector similarity search" --top-k 10 --show-meta
 
 ```python
 from vector_db import VectorDB
-from ai.chunking.chunker import Chunker
-from ai.chunking.strategies import SimpleChunker
-from ai.embeddings import OpenAIEmbedder
+from ai_core.chunking.chunker import Chunker
+from ai_core.chunking.strategies import SimpleChunker
+from ai_core.embeddings import OpenAIEmbedder
 
 # Initialize components
 chunker = Chunker(SimpleChunker())
@@ -124,7 +124,7 @@ This ensures that even if errors occur during processing, the database remains i
 
 ```python
 from vector_db.similarity import EuclideanDistance
-from ai.chunking.strategies import LLMChunker
+from ai_core.chunking.strategies import LLMChunker
 
 # Change similarity metric
 db.set_similarity_metric(EuclideanDistance())

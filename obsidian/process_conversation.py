@@ -2,8 +2,8 @@ from typing import List, Tuple
 from obsidian.beacons import beacon_me, beacon_ai, beacon_tool_start, beacon_tool_end
 from obsidian.parser.tag_parser import process_tags
 import json
-from ai.types import Message, MessageContent, ToolCall, ToolResult
-from ai.image_utils import validate_image, encode_image
+from ai_core.types import Message, MessageContent, ToolCall, ToolResult
+from ai_core.image_utils import validate_image, encode_image
 import re
 import logging
 

@@ -9,12 +9,14 @@ from datetime import datetime
 from .utils import get_recording_date
 from ..common.frontmatter import frontmatter_to_text
 
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from ai_core import AI
+from ai_core.types import Message, MessageContent
 import re
 import os
 import asyncio
 from config.logging_config import setup_logger
+
+from prompts.prompts import get_prompt
 
 logger = setup_logger(__name__)
 

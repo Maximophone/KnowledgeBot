@@ -1,5 +1,5 @@
 """Asking questions about news articles"""
-from ai import AI
+from ai_core import AI
 from lxml import etree
 from dataclasses import dataclass, field
 from typing import List

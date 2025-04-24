@@ -9,7 +9,7 @@ from watchdog.events import FileSystemEventHandler
 import time
 import traceback
 from beacons import *
-from ai.types import Message, MessageContent
+from ai_core.types import Message, MessageContent
 
 DEFAULT_LLM = "sonnet3.5"
 

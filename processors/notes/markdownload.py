@@ -3,8 +3,10 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from ai_core import AI
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)

@@ -1,4 +1,4 @@
-from ai.tools import tool
+from ai_core.tools import tool
 from rag.vector_db import VectorDB
 from pathlib import Path
 import json
