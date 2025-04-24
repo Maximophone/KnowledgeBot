@@ -235,9 +235,9 @@ def main():
         logger.info(f"Current directory: {os.getcwd()}")
         logger.info(f"Script location: {os.path.abspath(__file__)}")
         try:
-            import ai
-            logger.info(f"AI module version: {getattr(ai, '__version__', 'unknown')}")
-            logger.info(f"Available models: {getattr(ai, 'available_models', 'unknown')}")
+            import ai_core
+            logger.info(f"AI module version: {getattr(ai_core, '__version__', 'unknown')}")
+            logger.info(f"Available models: {getattr(ai_core, 'available_models', 'unknown')}")
         except (ImportError, AttributeError):
             logger.error("AI module information not available")
     
