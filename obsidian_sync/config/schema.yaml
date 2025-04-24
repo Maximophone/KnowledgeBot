@@ -1,0 +1,22 @@
+# Define the expected frontmatter fields and their types here
+fields:
+  id: string           # Unique ID managed by the sync script (UUID)
+  created: string      # Date string (e.g., "YYYY-MM-DD")
+  name: string         # Person's name (often from the filename)
+  email: list[string]  # List of email addresses
+  website: string      # Personal or company website
+  company: list[string]# List of associated companies
+  role: string         # Job title or role
+  tags: list[string]   # List of tags
+  linkedin: string     # LinkedIn profile URL
+  contacted: boolean   # Whether you've contacted them
+  calendar: string     # Link to calendar/scheduling
+  phone: string        # Phone number
+  discord_id: string   # Discord user ID
+  filepath: string     # Store the relative path to the obsidian note
+# Example:
+# fields:
+#   name: string
+#   email: string
+#   tags: list[string]
+#   birthday: date 
