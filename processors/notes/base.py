@@ -33,6 +33,11 @@ class NoteProcessor(ABC):
         # Check pipeline stage requirements
         file_path = self.input_dir.joinpath(filename)
         frontmatter = read_front_matter(file_path)
+
+        # Skip if "abandoned" flag is set in frontmatter
+        if frontmatter.get('abandoned', False):
+            return False
+
         stages = frontmatter.get('processing_stages', [])
         
         # Skip if already processed
