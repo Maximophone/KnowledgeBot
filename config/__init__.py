@@ -1,6 +1,6 @@
 from typing import Any
 
-SLOW_REPEAT_INTERVAL = 20
+SLOW_REPEAT_INTERVAL = 30
 
 class Config:
     def __init__(self):
