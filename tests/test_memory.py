@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, Mock, mock_open
 from pathlib import Path
 import json
-from ai.toolsets.memory import patch_memory_content, validate_filepath, apply_content_patch
+from toolsets.memory import patch_memory_content, validate_filepath, apply_content_patch
 from config.paths import PATHS
 import os
 

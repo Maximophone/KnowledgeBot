@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Any, Union, Tuple, Set
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-from ai import AI
+from ai_core import AI
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

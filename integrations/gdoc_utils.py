@@ -6,14 +6,14 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import io
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from bs4 import BeautifulSoup
 import re
 from config.logging_config import setup_logger
+import traceback
+from config.services_config import GOOGLE_SCOPES
 
 logger = setup_logger(__name__)
-
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
 class GoogleDocUtils:
     def __init__(self, credentials_path='credentials.json'):
@@ -29,7 +29,7 @@ class GoogleDocUtils:
                 self.creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_path, SCOPES)
+                    self.credentials_path, GOOGLE_SCOPES)
                 self.creds = flow.run_local_server(port=0)
             with open('token.pickle', 'wb') as token:
                 pickle.dump(self.creds, token)
@@ -67,13 +67,14 @@ class GoogleDocUtils:
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
-                print(f"Download {int(status.progress() * 100)}%.")
+                logger.info(f"Download {int(status.progress() * 100)}%.")
 
             content = fh.getvalue().decode('utf-8')
             return content
 
         except Exception as error:
-            print(f'An error occurred: {error}')
+            logger.error(f'An error occurred: {error}')
+            logger.error(traceback.format_exc())
             return None
 
     @staticmethod
@@ -101,6 +102,58 @@ class GoogleDocUtils:
         if html_content:
             return self.remove_styles(html_content)
         return None
+
+    def create_document_from_text(self, title: str, text_content: str, folder_id: str) -> str | None:
+        """Creates a new Google Doc with the given title and text content in the specified folder."""
+        creds = self.get_credentials()
+        service = build('drive', 'v3', credentials=creds)
+
+        try:
+            # Prepare file metadata
+            file_metadata = {
+                'name': title,
+                'mimeType': 'application/vnd.google-apps.document',
+                'parents': [folder_id] # Specify the folder
+            }
+
+            # Prepare media content (convert text to bytes)
+            media = MediaIoBaseUpload(
+                io.BytesIO(text_content.encode('utf-8')),
+                mimetype='text/plain', # Upload as plain text, Google converts it
+                resumable=True
+            )
+
+            # Create the file
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webViewLink', # Fields to return
+                supportsAllDrives=True  # <-- Explicitly add this for Shared Drive compatibility
+            ).execute()
+
+            doc_id = file.get('id')
+            doc_link = file.get('webViewLink')
+            logger.info(f"Successfully created Google Doc: ID='{doc_id}', Link='{doc_link}'")
+            return doc_link
+
+        except Exception as error:
+            logger.error(f'An error occurred while creating the document: {error}')
+            logger.error(traceback.format_exc())
+            return None
+
+    def delete_document(self, file_id: str) -> bool:
+        """Deletes a file from Google Drive using its ID."""
+        creds = self.get_credentials()
+        service = build('drive', 'v3', credentials=creds)
+
+        try:
+            service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+            logger.info(f"Successfully deleted Google Drive file with ID: {file_id}")
+            return True
+        except Exception as error:
+            logger.error(f'An error occurred while deleting file {file_id}: {error}')
+            logger.error(traceback.format_exc())
+            return False
 
 def main():
     """Example usage of GoogleDocUtils."""

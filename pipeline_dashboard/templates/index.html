@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Pipeline Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .stages-list { list-style: none; padding: 0; margin: 0; }
+        .stages-list li { display: inline-block; margin-right: 5px; padding: 2px 5px; background-color: #e7e7e7; border-radius: 3px; font-size: 0.9em; }
+        .reset-button { margin-left: 5px; cursor: pointer; color: red; font-size: 0.8em; }
+        .controls { margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        #status-message { margin-top: 10px; font-style: italic; }
+        #loading-indicator { display: none; }
+        #filter-input { padding: 5px; }
+        .hidden { display: none; }
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 500px;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        #stage-select label { margin-right: 10px; }
+        #actions-area { margin-left: auto; /* Pushes actions to the right */}
+        #actions-area button { padding: 8px 12px; }
+        /* Center checkbox in header */
+        th.checkbox-col, td.checkbox-col { text-align: center; width: 40px; }
+        /* Style for hard reset button */
+        #hard-reset-button { background-color: #dc3545; color: white; border: none; }
+        #hard-reset-button:hover { background-color: #c82333; }
+
+    </style>
+</head>
+<body>
+    <h1>Processing Pipeline Status</h1>
+
+    <div class="controls">
+        <button id="refresh-button">Refresh Status</button>
+        <button id="hard-reset-button" title="Deletes the status index file (processing_status.json)">Hard Reset Index</button>
+        <label for="filter-input">Filter by name:</label>
+        <input type="text" id="filter-input" placeholder="Enter filename part...">
+        <span id="loading-indicator">Loading...</span>
+        <div id="actions-area" class="hidden">
+             <span id="selection-count">0 selected</span>
+             <button id="bulk-reset-button">Reset Stage for Selected...</button>
+             <!-- Add other bulk actions here later -->
+        </div>
+    </div>
+
+    <div id="status-message"></div>
+
+    <table id="status-table">
+        <thead>
+            <tr>
+                <th class="checkbox-col"><input type="checkbox" id="select-all-checkbox" title="Select/Deselect All Visible"></th>
+                <th>Filename</th>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Date</th>
+                <th>Processing Stages</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be loaded here by JavaScript -->
+        </tbody>
+    </table>
+
+    <!-- Stage Selection Modal -->
+    <div id="stage-select-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-button" onclick="closeModal()">&times;</span>
+        <h2>Select Stage to Reset</h2>
+        <p>Choose the processing stage you want to reset for the selected files:</p>
+        <div id="stage-select-options">
+            <!-- Radio buttons will be populated here -->
+        </div>
+        <button onclick="confirmBulkReset()">Reset Selected Stage</button>
+        <button onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+
+
+    <script>
+        const tableBody = document.querySelector('#status-table tbody');
+        const refreshButton = document.getElementById('refresh-button');
+        const hardResetButton = document.getElementById('hard-reset-button');
+        const statusMessage = document.getElementById('status-message');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const filterInput = document.getElementById('filter-input');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const actionsArea = document.getElementById('actions-area');
+        const selectionCountSpan = document.getElementById('selection-count');
+        const bulkResetButton = document.getElementById('bulk-reset-button');
+        const stageSelectModal = document.getElementById('stage-select-modal');
+        const stageSelectOptionsDiv = document.getElementById('stage-select-options');
+
+        let fullStatusData = {}; // Store the full dataset for filtering
+        let selectedFiles = new Set(); // Keep track of selected filenames
+
+        function updateActionsArea() {
+            const count = selectedFiles.size;
+            selectionCountSpan.textContent = `${count} selected`;
+            if (count > 0) {
+                actionsArea.classList.remove('hidden');
+            } else {
+                actionsArea.classList.add('hidden');
+            }
+            // Enable/disable buttons based on count
+            bulkResetButton.disabled = count === 0;
+        }
+
+        function handleRowCheckboxChange(checkbox, filename) {
+            if (checkbox.checked) {
+                selectedFiles.add(filename);
+            } else {
+                selectedFiles.delete(filename);
+            }
+            updateActionsArea();
+            // Update select-all checkbox state based on VISIBLE rows
+            const visibleCheckboxes = Array.from(tableBody.querySelectorAll('input[type="checkbox"].row-checkbox'));
+            selectAllCheckbox.checked = visibleCheckboxes.length > 0 && visibleCheckboxes.every(cb => cb.checked);
+        }
+
+        function handleSelectAllChange() {
+            const isChecked = selectAllCheckbox.checked;
+            const visibleCheckboxes = tableBody.querySelectorAll('input[type="checkbox"].row-checkbox');
+
+            visibleCheckboxes.forEach(checkbox => {
+                const filename = checkbox.dataset.filename;
+                checkbox.checked = isChecked;
+                if (isChecked) {
+                    selectedFiles.add(filename);
+                } else {
+                    selectedFiles.delete(filename);
+                }
+            });
+            updateActionsArea();
+        }
+
+
+        function renderTable(data) {
+            tableBody.innerHTML = ''; // Clear existing rows
+            const filterText = filterInput.value.toLowerCase();
+            selectedFiles.clear(); // Clear selection on re-render/filter
+            selectAllCheckbox.checked = false; // Uncheck select-all
+            updateActionsArea(); // Hide actions area
+
+            // Convert data to array and sort by date descending
+            const sortedFiles = Object.entries(data)
+                .sort(([, fileA], [, fileB]) => {
+                    const dateA = fileA.date ? new Date(fileA.date) : null;
+                    const dateB = fileB.date ? new Date(fileB.date) : null;
+
+                    if (dateA && dateB) {
+                        return dateB - dateA; // Descending order
+                    }
+                    if (dateA) return -1; // Files with dates come first
+                    if (dateB) return 1;  // Files with dates come first
+                    return 0; // Keep original relative order for files without dates
+                });
+
+            let visibleRowCount = 0;
+            sortedFiles.forEach(([filename, fileData]) => {
+                // Apply filter only if filterText is present
+                if (filterText && !filename.toLowerCase().includes(filterText)) {
+                    return; // Skip if filter doesn't match
+                }
+                visibleRowCount++;
+
+                const row = tableBody.insertRow();
+
+                // Checkbox cell
+                const checkboxCell = row.insertCell();
+                checkboxCell.classList.add('checkbox-col');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.classList.add('row-checkbox');
+                checkbox.dataset.filename = filename; // Store filename
+                checkbox.onchange = () => handleRowCheckboxChange(checkbox, filename);
+                checkboxCell.appendChild(checkbox);
+
+                row.insertCell().textContent = filename;
+                row.insertCell().textContent = fileData.title || '';
+                row.insertCell().textContent = fileData.category || 'unknown';
+                row.insertCell().textContent = fileData.date || '';
+
+                // Processing Stages
+                const stagesCell = row.insertCell();
+                const stagesList = document.createElement('ul');
+                stagesList.className = 'stages-list';
+                (fileData.processing_stages || []).forEach(stageInfo => {
+                    const stageItem = document.createElement('li');
+                    stageItem.textContent = stageInfo.name;
+                    // Add reset button per stage ONLY if resettable
+                    if (stageInfo.resettable) {
+                        const resetButton = document.createElement('span');
+                        resetButton.textContent = '❌'; // Use text or an icon
+                        resetButton.className = 'reset-button';
+                        resetButton.title = `Reset stage '${stageInfo.name}'`;
+                        resetButton.onclick = () => resetStage(filename, stageInfo.name);
+                        stageItem.appendChild(resetButton);
+                    }
+
+                    stagesList.appendChild(stageItem);
+                });
+                stagesCell.appendChild(stagesList);
+
+                 // Actions Cell (e.g., for overall reset or other actions)
+                 const actionsCell = row.insertCell();
+                 // Example: Add a button to reset ALL stages for this file
+                 // const resetAllButton = document.createElement('button');
+                 // resetAllButton.textContent = 'Reset All';
+                 // resetAllButton.onclick = () => { /* Add logic if needed */ };
+                 // actionsCell.appendChild(resetAllButton);
+            });
+             // Re-evaluate select-all checkbox state after rendering filtered rows
+            // const visibleCheckboxes = tableBody.querySelectorAll('input[type="checkbox"]');
+            selectAllCheckbox.disabled = visibleRowCount === 0; // Disable if no rows visible
+
+            // Ensure Select All reflects checked state if all visible rows are checked
+            // Note: this logic moved to handleRowCheckboxChange for better accuracy
+        }
+
+        async function fetchStatus() {
+            loadingIndicator.style.display = 'inline';
+            statusMessage.textContent = 'Fetching status...';
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                fullStatusData = await response.json();
+                renderTable(fullStatusData); // Render sorted data
+                statusMessage.textContent = `Status loaded. ${Object.keys(fullStatusData).length} files indexed.`;
+            } catch (error) {
+                console.error('Error fetching status:', error);
+                statusMessage.textContent = `Error fetching status: ${error.message}`;
+                 fullStatusData = {}; // Clear data on error
+                 renderTable(fullStatusData); // Render empty table
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        async function triggerRefresh() {
+            loadingIndicator.style.display = 'inline';
+            refreshButton.disabled = true;
+            hardResetButton.disabled = true;
+            statusMessage.textContent = 'Refreshing index (this may take a while)...';
+            try {
+                const response = await fetch('/api/refresh-status', { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
+                statusMessage.textContent = result.message || 'Refresh initiated.';
+                // Fetch the updated status after refresh
+                await fetchStatus();
+            } catch (error) {
+                console.error('Error triggering refresh:', error);
+                statusMessage.textContent = `Error refreshing status: ${error.message}`;
+            } finally {
+                loadingIndicator.style.display = 'none';
+                refreshButton.disabled = false;
+                hardResetButton.disabled = false;
+            }
+        }
+
+        // --- Hard Reset Index ---
+        async function triggerHardReset() {
+            if (!confirm("Are you sure you want to delete the status index file? This cannot be undone and requires a full re-scan.")) {
+                statusMessage.textContent = "Hard reset cancelled.";
+                return;
+            }
+
+            loadingIndicator.style.display = 'inline';
+            refreshButton.disabled = true;
+            hardResetButton.disabled = true;
+            statusMessage.textContent = 'Deleting status index file...';
+
+            try {
+                const response = await fetch('/api/delete-index', { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
+                statusMessage.textContent = result.message || 'Index file deleted successfully. Refresh or restart the server to rebuild.';
+                await fetchStatus(); // Fetch status again (should be empty or error)
+            } catch (error) {
+                console.error('Error triggering hard reset:', error);
+                statusMessage.textContent = `Error deleting index file: ${error.message}`;
+            } finally {
+                loadingIndicator.style.display = 'none';
+                refreshButton.disabled = false;
+                hardResetButton.disabled = false;
+            }
+        }
+
+        // --- Single Stage Reset ---
+        async function resetStage(filename, stageName) {
+            if (!confirm(`Are you sure you want to reset stage '${stageName}' for file '${filename}'?`)) {
+                return;
+            }
+            loadingIndicator.style.display = 'inline';
+            statusMessage.textContent = `Resetting stage '${stageName}' for ${filename}...`;
+            try {
+                const response = await fetch('/api/reset-stage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename, stage_name: stageName })
+                });
+                const result = await response.json();
+                 if (!response.ok) {
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
+                statusMessage.textContent = result.message || `Stage '${stageName}' reset for ${filename}. Refreshing...`;
+                await fetchStatus(); // Refetch to show updated status
+            } catch (error) {
+                console.error('Error resetting stage:', error);
+                statusMessage.textContent = `Error resetting stage: ${error.message}`;
+                await fetchStatus(); // Refetch status on error to ensure consistency
+            } finally {
+                 loadingIndicator.style.display = 'none';
+            }
+        }
+
+        // --- Bulk Stage Reset ---
+        function openBulkResetModal() {
+            if (selectedFiles.size === 0) {
+                alert("Please select at least one file.");
+                return;
+            }
+
+            // Find unique resettable stages from selected files
+            const resettableStages = new Set();
+            selectedFiles.forEach(filename => {
+                const fileData = fullStatusData[filename];
+                if (fileData && fileData.processing_stages) {
+                    fileData.processing_stages.forEach(stageInfo => {
+                        if (stageInfo.resettable) {
+                            resettableStages.add(stageInfo.name);
+                        }
+                    });
+                }
+            });
+
+            if (resettableStages.size === 0) {
+                alert("None of the selected files have resettable stages.");
+                return;
+            }
+
+            // Populate modal options
+            stageSelectOptionsDiv.innerHTML = ''; // Clear previous options
+            // Sort stages alphabetically for the modal
+            Array.from(resettableStages).sort().forEach(stageName => {
+                const label = document.createElement('label');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'stage_to_reset';
+                radio.value = stageName;
+                radio.required = true; // Ensure one is selected
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode(` ${stageName}`));
+                stageSelectOptionsDiv.appendChild(label);
+                stageSelectOptionsDiv.appendChild(document.createElement('br'));
+            });
+
+            // Show modal
+            stageSelectModal.style.display = "block";
+        }
+
+        function closeModal() {
+            stageSelectModal.style.display = "none";
+        }
+
+        async function confirmBulkReset() {
+            const selectedStageRadio = stageSelectOptionsDiv.querySelector('input[name="stage_to_reset"]:checked');
+            if (!selectedStageRadio) {
+                alert("Please select a stage to reset.");
+                return;
+            }
+            const stageName = selectedStageRadio.value;
+            const filenames = Array.from(selectedFiles);
+
+            if (!confirm(`Are you sure you want to reset stage '${stageName}' for the ${filenames.length} selected files? This cannot be undone.`)) {
+                return;
+            }
+
+            closeModal();
+            loadingIndicator.style.display = 'inline';
+            statusMessage.textContent = `Resetting stage '${stageName}' for ${filenames.length} files...`;
+            bulkResetButton.disabled = true; // Disable button during operation
+
+            try {
+                const response = await fetch('/api/bulk-reset-stage', { // New endpoint
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filenames: filenames, stage_name: stageName })
+                });
+                const result = await response.json();
+                 if (!response.ok) {
+                     // Display specific failed files if available
+                     let errorMsg = result.error || `HTTP error! status: ${response.status}`;
+                     if (result.failed_files && result.failed_files.length > 0) {
+                         errorMsg += ` Failed files: ${result.failed_files.join(', ')}`;
+                     }
+                    throw new Error(errorMsg);
+                }
+                statusMessage.textContent = result.message || `Bulk reset complete for stage '${stageName}'. Refreshing...`;
+                await fetchStatus(); // Refetch to show updates
+            } catch (error) {
+                console.error('Error during bulk reset:', error);
+                statusMessage.textContent = `Error during bulk reset: ${error.message}`;
+                await fetchStatus(); // Refetch anyway to ensure consistency
+            } finally {
+                 loadingIndicator.style.display = 'none';
+                 // Re-enable based on potentially changed selection after refresh
+                 updateActionsArea();
+            }
+        }
+
+
+        // Event Listeners
+        refreshButton.addEventListener('click', triggerRefresh);
+        hardResetButton.addEventListener('click', triggerHardReset);
+        filterInput.addEventListener('input', () => renderTable(fullStatusData));
+        selectAllCheckbox.addEventListener('change', handleSelectAllChange);
+        bulkResetButton.addEventListener('click', openBulkResetModal);
+
+        // Close modal if clicked outside content
+        window.onclick = function(event) {
+          if (event.target == stageSelectModal) {
+            closeModal();
+          }
+        }
+
+        // Initial load
+        fetchStatus();
+    </script>
+</body>
+</html>

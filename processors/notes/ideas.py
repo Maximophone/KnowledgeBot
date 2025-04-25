@@ -4,9 +4,11 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, parse_frontmatter
 from ..common.markdown import create_wikilink
-from ai.types import Message, MessageContent
-from ai import get_prompt
+from ai_core.types import Message, MessageContent
+from prompts.prompts import get_prompt
+
 from config.logging_config import setup_logger
+from .speaker_identifier import SpeakerIdentifier
 
 logger = setup_logger(__name__)
 
@@ -14,10 +16,11 @@ logger = setup_logger(__name__)
 class IdeaProcessor(NoteProcessor):
     """Processes idea transcripts and adds them to an idea directory."""
     
+    stage_name = "ideas_extracted"
+    required_stage = SpeakerIdentifier.stage_name
+
     def __init__(self, input_dir: Path, directory_file: Path):
         super().__init__(input_dir)
-        self.stage_name = "ideas_extracted"
-        self.required_stage = "speakers_identified"
 
         self.directory_file = directory_file
         self.directory_file.parent.mkdir(parents=True, exist_ok=True)

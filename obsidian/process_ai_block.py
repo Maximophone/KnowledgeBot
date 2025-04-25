@@ -1,5 +1,8 @@
-from ai import AI, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
-from ai.types import Message, MessageContent, ToolCall, ToolResult
+from ai_core import AI, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from ai_core.types import Message, MessageContent, ToolCall, ToolResult
+from ai_core.tools import Tool
+from ai_core.models import DEFAULT_MODEL_IDENTIFIER
+
 from typing import Dict, List
 from obsidian.beacons import beacon_me, beacon_ai, beacon_error
 from obsidian.process_conversation import process_conversation
@@ -12,11 +15,10 @@ import json
 import traceback
 from config.logging_config import setup_logger
 from obsidian.beacons import beacon_tool_start, beacon_tool_end
-from ai.toolsets import TOOL_SETS
-from ai.tools import Tool
-from ai.models import DEFAULT_MODEL
+from toolsets import TOOL_SETS
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
-from vector_db import VectorDB
+from rag import VectorDB
+import subprocess
 
 logger = setup_logger(__name__)
 
@@ -38,7 +40,7 @@ beacon_thought = "|THOUGHT|"
 beacon_end_thought = "|/THOUGHT|"
 
 # Initialize AI model
-model = AI("claude-haiku")
+model = AI("haiku")
 twitter_api = TwitterAPI()
 
 # Define replacement functions
@@ -62,7 +64,7 @@ Your question or instructions here
 ## Advanced Options
 
 ### AI Model & Parameters
-- `<model!model_name>` - Specify different AI model (default: claude-haiku)
+- `<model!model_identifier>` - Specify different AI model (default: haiku)
 - `<temperature!value>` - Set temperature (0.0-1.0) for response randomness
 - `<max_tokens!value>` - Set maximum tokens for response
 - `<system!prompt_name>` - Use custom system prompt from prompts directory
@@ -143,6 +145,7 @@ What can you see in this image?
 """,
     "ai": lambda value, text, context: process_ai_block(text, context, value),
     "rag": lambda value, text, context: process_rag_block(text, context, value),
+    "script": lambda value, text, context: run_python_script(value, text, context),
 }
 
 REPLACEMENTS_INSIDE = {
@@ -204,7 +207,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         conv_txt, results = process_tags(conv_txt, REPLACEMENTS_INSIDE, context=context["doc"])
         params = dict([(n, v) for n, v, t in results])
 
-        model_name = params.get("model", DEFAULT_MODEL)
+        model_identifier = params.get("model", DEFAULT_MODEL_IDENTIFIER)
         system_prompt = params.get("system")
         debug = ("debug" in params)
         temperature = float(params.get("temperature", DEFAULT_TEMPERATURE))
@@ -221,7 +224,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                 logger.warning("Invalid thinking budget: %s. Using default.", params.get("think"))
         
         if "mock" in params:
-            model_name = "mock"
+            model_identifier = "mock"
 
         if debug:
             logger.debug("---PARAMETERS START---")
@@ -234,7 +237,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             if thinking:
                 logger.debug("Thinking mode enabled. Budget: %s", thinking_budget_tokens or "default")
 
-        logger.info("Answering with %s...", model_name)
+        logger.info("Answering with %s...", model_identifier)
         if option != "all":
             messages = process_conversation(conv_txt)
         else:
@@ -254,7 +257,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             if not prompt_found:
                 raise FileNotFoundError(f"Could not find system prompt '{system_prompt}' in any search paths")
         
-        ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
+        ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_identifier,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
         response = ""
@@ -383,7 +386,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             ))
             
             # Get AI's response to tool results
-            ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
+            ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_identifier,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
 
@@ -566,3 +569,74 @@ def process_rag_block(block: str, context: Dict, option: str) -> str:
         error_msg = f"Error processing RAG request: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         return f"<rag!{option_txt}>{block}\n<reply!>\n_Error: {escape_response(str(e))}_\n</reply!></rag!>"
+
+def run_python_script(script_name: str, text: str, context: Dict) -> str:
+    """
+    Run a Python script and return its output.
+    
+    If script_name has .md extension or no extension, it's treated as a markdown file,
+    and the first Python code block is executed.
+    
+    Args:
+        script_name (str): Name of the script file to run
+        text (str): Content of the script block (not used)
+        context (Dict): Context information
+        
+    Returns:
+        str: Output from the script execution
+    """
+    try:
+        # Check if script name is a markdown file (has .md extension or no extension)
+        is_markdown = script_name.endswith('.md') or '.' not in script_name
+        
+        # Add .md extension if not present but is markdown
+        if is_markdown and not script_name.endswith('.md'):
+            script_name = f"{script_name}.md"
+        
+        # Find script in the scripts folder
+        script_path = os.path.join(PATHS.scripts_folder, script_name)
+        
+        if not os.path.exists(script_path):
+            return f"Error: Script '{script_name}' not found in scripts folder"
+        
+        if is_markdown:
+            # Extract Python code from markdown file
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Find the first Python code block
+            import re
+            pattern = r'```python\s*\n(.*?)```'
+            matches = re.findall(pattern, content, re.DOTALL)
+            
+            if not matches:
+                return f"Error: No Python code block found in '{script_name}'"
+            
+            # Extract the first Python code block
+            code = matches[0]
+            
+            # Execute the python code directly using subprocess with -c
+            result = subprocess.run(
+                ["python", "-c", code],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            return result.stdout
+        else:
+            # Direct execution of Python script
+            result = subprocess.run(
+                ["python", script_path], 
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Return the stdout output
+            return result.stdout
+        
+    except subprocess.CalledProcessError as e:
+        return f"Error executing script '{script_name}':\n{e.stderr}"
+    except Exception as e:
+        return f"Error: {str(e)}\n{traceback.format_exc()}"

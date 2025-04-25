@@ -3,19 +3,22 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from ai_core import AI
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
+from .transcript_classifier import TranscriptClassifier
 
 logger = setup_logger(__name__)
 
 class IdeaCleanupProcessor(NoteProcessor):
     """Processes idea transcripts into clean, well-formatted entries."""
-    
+    stage_name = "idea_cleaned"
+    required_stage = TranscriptClassifier.stage_name
+
     def __init__(self, input_dir: Path, output_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "idea_cleaned"
-        self.required_stage = "classified"
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.prompt_format = get_prompt("idea_format")

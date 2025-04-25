@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTextEdit, QSizePolicy, QVBoxLayout, QWidget, QLabel, QDialogButtonBox, QDialog, QFrame
 from PyQt5.QtCore import Qt
 from typing import Dict, Any, Tuple
-from ai.tools import Tool
+from ai_core.tools import Tool
 import json
 import codecs
 import sys

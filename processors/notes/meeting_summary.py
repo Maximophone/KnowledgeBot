@@ -3,8 +3,11 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter
-from ai.types import Message, MessageContent
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
+from prompts.prompts import get_prompt
+
+from .meeting import MeetingProcessor
 
 logger = setup_logger(__name__)
 
@@ -12,10 +15,12 @@ logger = setup_logger(__name__)
 class MeetingSummaryProcessor(NoteProcessor):
     """Adds AI-generated summaries to meeting notes based on transcripts."""
     
+    stage_name = "meeting_summary_generated"
+    required_stage = MeetingProcessor.stage_name
+
     def __init__(self, input_dir: Path, transcript_dir: Path):
         super().__init__(input_dir)
         self.transcript_dir = transcript_dir
-        self.stage_name = "meeting_summarized"
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:            
         # Check if transcript exists and get its frontmatter            

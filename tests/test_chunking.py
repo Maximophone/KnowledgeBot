@@ -9,7 +9,7 @@ import unittest
 # Add parent directory to path to allow importing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai.chunking import Chunker, SimpleChunker, LLMChunker, Chunk
+from rag.chunking import Chunker, SimpleChunker, LLMChunker, Chunk
 
 
 class TestSimpleChunker(unittest.TestCase):

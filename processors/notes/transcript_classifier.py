@@ -3,21 +3,22 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import read_front_matter, update_front_matter
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from prompts.prompts import get_prompt
+from ai_core import AI
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)
 
 class TranscriptClassifier(NoteProcessor):
-    """Classifies transcripts using AI."""
-    
+    """Classifies transcripts using AI based on content."""
+    stage_name = "classified"
+    required_stage = "transcribed" # Assuming transcription is needed first
+
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
         self.ai_model = AI("haiku3.5")  # Using smaller model for classification
         self.prompt_classify = get_prompt("classify_transcript")
-        self.required_stage = "transcribed"
-        self.stage_name = "classified"
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         # Process if it's a transcription and hasn't been classified

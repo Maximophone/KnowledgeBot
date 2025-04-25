@@ -10,9 +10,9 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import directly from vector_db now that the circular import is fixed
-from vector_db import VectorDB
-from vector_db.similarity import CosineSimilarity, EuclideanDistance, DotProductSimilarity
-from ai.embeddings import OpenAIEmbedder
+from rag import VectorDB
+from rag.similarity import CosineSimilarity, EuclideanDistance, DotProductSimilarity
+from rag.embeddings import OpenAIEmbedder
 
 app = Flask(__name__)
 

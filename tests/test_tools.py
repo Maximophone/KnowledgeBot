@@ -1,7 +1,7 @@
 import unittest
 from typing import Literal
 from enum import Enum
-from ai.tools import tool, Tool, ToolParameter, ToolCall, ToolResult
+from ai_core.tools import tool, Tool, ToolParameter, ToolCall, ToolResult
 
 class TestToolDecorator(unittest.TestCase):
     def test_basic_types(self):

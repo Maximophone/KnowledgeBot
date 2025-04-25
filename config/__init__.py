@@ -1,5 +1,7 @@
 from typing import Any
 
+SLOW_REPEAT_INTERVAL = 30
+
 class Config:
     def __init__(self):
         self.slow_repeat_interval = 10

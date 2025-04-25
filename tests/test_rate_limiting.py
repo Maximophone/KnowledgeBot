@@ -4,10 +4,10 @@ import time
 from unittest.mock import patch, MagicMock
 import google.generativeai as genai
 
-from ai.client import AI
+from ai_core.client import AI
 from utils.rate_limiter import ReactiveRateLimiter
-from ai.wrappers.google import GeminiWrapper
-from ai.types import Message, MessageContent
+from ai_core.wrappers.google import GeminiWrapper
+from ai_core.types import Message, MessageContent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -61,7 +61,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=False)
+        client = AI(model_identifier="gemini1.5", rate_limiting=False)
         
         # Make a request
         response = client.message("Hello, world!")
@@ -95,7 +95,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client and pass the rate limiter explicitly
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a request
         start_time = time.time()
@@ -135,7 +135,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a request
         start_time = time.time()
@@ -175,7 +175,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a request and expect it to fail after retries
         with self.assertRaises(Exception) as context:
@@ -214,7 +214,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a request and expect the original error
         with self.assertRaises(ValueError):
@@ -251,7 +251,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a first request that hits rate limit then succeeds
         response1 = client.message("First message")
@@ -303,7 +303,7 @@ class TestRateLimiting(unittest.TestCase):
         self.mock_get_client.return_value = wrapper
         
         # Create the AI client
-        client = AI(model_name="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
+        client = AI(model_identifier="gemini1.5", rate_limiting=True, rate_limiter=rate_limiter)
         
         # Make a request
         response = client.message("Hello, world!")

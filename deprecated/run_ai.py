@@ -9,7 +9,7 @@ from watchdog.events import FileSystemEventHandler
 import time
 import traceback
 from beacons import *
-from ai.types import Message, MessageContent
+from ai_core.types import Message, MessageContent
 
 DEFAULT_LLM = "sonnet3.5"
 
@@ -163,7 +163,7 @@ api_key = secrets["claude_api_key"]
 client = anthropic.Client(api_key=api_key)
 
 #haiku = ai.Claude(client, "haiku")
-model = ai.AI("claude-haiku")
+model = ai.AI("haiku")
 
 def needs_answer(txt):
     return not txt.strip().endswith(beacon_me) and txt

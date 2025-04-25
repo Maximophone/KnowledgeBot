@@ -29,12 +29,12 @@ sys.path.insert(0, parent_dir)
 from scripts.base_script import BaseScript
 
 # Import vector_db components - use correct import paths
-from vector_db import VectorDB
-from vector_db.storage import VectorStorage
-from vector_db.similarity import CosineSimilarity
-from ai.chunking.chunker import Chunker
-from ai.chunking.strategies import SimpleChunker, LLMChunker
-from ai.embeddings import OpenAIEmbedder
+from rag import VectorDB
+from rag.storage import VectorStorage
+from rag.similarity import CosineSimilarity
+from rag.chunking.chunker import Chunker
+from rag.chunking.strategies import SimpleChunker, LLMChunker
+from rag.embeddings import OpenAIEmbedder
 from config.logging_config import setup_logger
 
 # Initialize colorama for colored terminal output

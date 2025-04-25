@@ -13,9 +13,10 @@ logger = setup_logger(__name__)
 class CodaProcessor(NoteProcessor):
     """Processes Coda pages by pulling their content and converting to markdown."""
     
+    stage_name = "coda_synced"
+    
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "coda_synced"
         self.coda_client = CodaClient(CODA_API_KEY)
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:        

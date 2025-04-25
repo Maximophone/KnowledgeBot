@@ -3,8 +3,10 @@ from typing import Dict
 import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter
-from ai import AI, get_prompt
-from ai.types import Message, MessageContent
+from ai_core import AI
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -13,9 +15,11 @@ logger = setup_logger(__name__)
 class MarkdownloadProcessor(NoteProcessor):
     """Processes downloaded web pages and creates source notes with summaries."""
     
+    stage_name = "markdownload_processed"
+    # No required_stage needed
+
     def __init__(self, input_dir: Path, output_dir: Path, template_path: Path):
         super().__init__(input_dir)
-        self.stage_name = "markdownload_summarised"
         self.output_dir = output_dir
         self.template_path = template_path
         self.output_dir.mkdir(parents=True, exist_ok=True)

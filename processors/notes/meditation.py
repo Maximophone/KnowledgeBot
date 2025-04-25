@@ -4,19 +4,21 @@ import aiofiles
 from .base import NoteProcessor
 from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
 from ..common.markdown import sanitize_filename
-from ai import get_prompt
-from ai.types import Message, MessageContent
+from prompts.prompts import get_prompt
+
+from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
+from .speaker_identifier import SpeakerIdentifier
 
 logger = setup_logger(__name__)
 
 class MeditationProcessor(NoteProcessor):
     """Processes meditation transcripts into structured notes."""
-    
+    stage_name = "meditation_processed"
+    required_stage = SpeakerIdentifier.stage_name
+
     def __init__(self, input_dir: Path, output_dir: Path):
         super().__init__(input_dir)
-        self.stage_name = "meditation_processed"
-        self.required_stage = "speakers_identified"
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.meditation_prompt = get_prompt("process_meditation")

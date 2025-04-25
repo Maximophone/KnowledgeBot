@@ -44,7 +44,7 @@ The AI Engine is the core component that manages all AI model interactions. It p
 ### Basic Usage
 
 ```python
-from ai import AI
+from ai_core import AI
 
 # Initialize with a specific model
 ai_model = AI("claude-3-sonnet")
@@ -70,7 +70,7 @@ response = ai_model.message(
 The AI Engine includes a powerful tool system that allows you to create AI-callable functions:
 
 ```python
-from ai.tools import tool
+from ai_core.tools import tool
 
 @tool(
     description="Fetch weather data for a location",
@@ -105,7 +105,7 @@ ai_model = AI("claude-3-sonnet", tools=memory.TOOLS)
 
 - **Document Chunking**: Advanced LLM-based semantic document chunking for RAG systems
 ```python
-from ai.chunking.strategies import LLMChunker
+from ai_core.chunking.strategies import LLMChunker
 
 chunker = LLMChunker(max_direct_tokens=2000, max_chunk_size=1000)
 chunks = chunker.chunk(text)
@@ -419,7 +419,7 @@ The system provides AI models with controlled access to various services through
 Tools can be created by extending the tool framework:
 
 ```python
-from ai.tools import tool
+from ai_core.tools import tool
 
 @tool(
     description="Description of what the tool does",
@@ -453,7 +453,7 @@ def custom_tool(param1: str, param2: str) -> str:
 ### Integration Example
 
 ```python
-from ai.toolsets import TOOL_SETS
+from ai_core.toolsets import TOOL_SETS
 
 # Initialize AI with specific toolsets
 ai_model = AI("claude-3-sonnet", tools=[
@@ -687,8 +687,8 @@ python kb_service.py
 
 2. **Test Installation**
 ```python
-from ai import AI
-from ai.toolsets import TOOL_SETS
+from ai_core import AI
+from ai_core.toolsets import TOOL_SETS
 
 # Initialize AI with basic tools
 ai = AI("haiku3.5", tools=TOOL_SETS["test"])

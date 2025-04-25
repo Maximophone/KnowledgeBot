@@ -17,7 +17,7 @@ from lxml import etree
 import requests
 
 from news.news_utils import get_all_urls, get_article_text, get_source, NEWS_SOURCES
-from ai import AI
+from ai_core import AI
 
 from news.question import Answer, answer_question, multi_answer_question
 

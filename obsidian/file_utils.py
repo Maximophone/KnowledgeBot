@@ -5,7 +5,7 @@ File utility functions for Obsidian integration.
 import os
 import glob
 from typing import List, Optional
-import ai  # for PDF extraction
+from obsidian.pdf_utils import extract_text_from_pdf  # for PDF extraction
 
 VAULT_PATH = "G:\\My Drive\\Obsidian"
 SEARCH_PATHS = [
@@ -50,7 +50,7 @@ def get_file_contents(fpath: str) -> str:
         str: File contents or error message
     """
     if fpath.endswith(".pdf"):
-        return ai.extract_text_from_pdf(fpath)
+        return extract_text_from_pdf(fpath)
     
     try:
         with open(fpath, "rb") as f:
