@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+import logging # Import standard logging
 from config import SLOW_REPEAT_INTERVAL # Added for scheduler interval
 from config.paths import PATHS
 from config.secrets import ASSEMBLY_AI_KEY, DISCORD_BOT_TOKEN
@@ -222,6 +223,10 @@ if __name__ == "__main__":
     # Set the default logging level
     set_default_log_level(args.log_level)
     logger.info(f"Logging level set to {args.log_level}") # Log level confirmation
+
+    # Silence APScheduler executor logs below WARNING level
+    logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
+    logger.info("Set APScheduler executor default logging level to WARNING to reduce noise.")
 
     # Run the main async function
     try:
