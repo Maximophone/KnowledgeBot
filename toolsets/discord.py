@@ -76,10 +76,9 @@ def initialize_discord_client():
 
 def run_in_discord_loop(coro):
     """Helper to run async Discord functions from synchronous tool calls."""
+    initialize_discord_client()
     if discord_io is None or event_loop is None:
-        initialize_discord_client() # Attempt lazy init if not already done
-        if discord_io is None or event_loop is None:
-             raise RuntimeError("Discord client is not initialized or event loop is unavailable.")
+        raise RuntimeError("Discord client is not initialized or event loop is unavailable.")
              
     if not event_loop.is_running():
          raise RuntimeError("Discord event loop is not running.")
@@ -110,10 +109,9 @@ def run_in_discord_loop(coro):
 )
 def list_discord_channels() -> str:
     """Lists all accessible text channels."""
+    initialize_discord_client()
     if not discord_io or not discord_io.client or not discord_io.client.is_ready():
-        initialize_discord_client()
-        if not discord_io or not discord_io.client or not discord_io.client.is_ready():
-            return json.dumps({"error": "Discord client not ready or not initialized."})
+        return json.dumps({"error": "Discord client not ready or not initialized."})
         
     channels = []
     try:
@@ -128,13 +126,16 @@ def list_discord_channels() -> str:
 @tool(
     description="Read the most recent messages from a specific Discord channel.",
     channel_id="The ID of the Discord channel to read messages from.",
-    limit="Maximum number of messages to retrieve (default: 50, max: 100).",
+    limit="Maximum number of messages to retrieve (default: 50, max: 1000).",
     safe=True
 )
 def read_discord_messages(channel_id: str, limit: int = 50) -> str:
     """Reads recent messages from a Discord channel."""
     try:
-        limit = min(max(1, limit), 100) # Clamp limit between 1 and 100
+        initialize_discord_client()
+        if not discord_io or not discord_io.client or not discord_io.client.is_ready():
+            return json.dumps({"error": "Discord client not ready or not initialized."})
+        limit = min(max(1, limit), 1000) # Clamp limit between 1 and 1000
         # Use the helper to run the async function
         messages = run_in_discord_loop(
             discord_io.read_recent_messages(int(channel_id), limit=limit)
@@ -158,6 +159,9 @@ def read_discord_messages(channel_id: str, limit: int = 50) -> str:
 def send_discord_dm(user_id: str, message_text: str) -> str:
     """Sends a direct message to a Discord user."""
     try:
+        initialize_discord_client()
+        if not discord_io or not discord_io.client or not discord_io.client.is_ready():
+            return json.dumps({"error": "Discord client not ready or not initialized."})
         # Use the helper to run the async function
         success = run_in_discord_loop(
             discord_io.send_dm(int(user_id), message_text)
@@ -175,9 +179,37 @@ def send_discord_dm(user_id: str, message_text: str) -> str:
     except Exception as e:
         return json.dumps({"error": f"Failed to send DM: {str(e)}"})
 
+@tool(
+    description="Read the most recent direct messages (DMs) from a specific user.",
+    user_id="The ID of the Discord user to read DMs from.",
+    limit="Maximum number of messages to retrieve (default: 50, max: 1000).",
+    safe=True
+)
+def read_discord_dm_history(user_id: str, limit: int = 50) -> str:
+    """Reads recent DMs from a specific user."""
+    try:
+        initialize_discord_client()
+        if not discord_io or not discord_io.client or not discord_io.client.is_ready():
+            return json.dumps({"error": "Discord client not ready or not initialized."})
+        limit = min(max(1, limit), 1000) # Clamp limit between 1 and 1000
+        # Use the helper to run the async function
+        messages = run_in_discord_loop(
+            discord_io.read_user_dm_history(int(user_id), limit=limit)
+        )
+        return json.dumps(messages)
+    except ValueError:
+        return json.dumps({"error": "Invalid user_id format. Must be an integer."})
+    except RuntimeError as e:
+         return json.dumps({"error": str(e)})
+    except TimeoutError as e:
+         return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"Failed to read DM history: {str(e)}"})
+
 # Export the tools
 TOOLS = [
     list_discord_channels,
     read_discord_messages,
     send_discord_dm,
+    read_discord_dm_history,
 ] 
