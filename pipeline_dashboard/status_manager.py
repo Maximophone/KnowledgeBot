@@ -26,6 +26,7 @@ try:
     from processors.notes.speaker_identifier import SpeakerIdentifier
     from processors.notes.interaction_logger import InteractionLogger
     from processors.notes.gdoc_uploader import GDocUploadProcessor
+    from processors.notes.meeting import MeetingProcessor
     # Add other processor classes here as they get reset methods
     # from processors.notes.todo import TodoProcessor
 
@@ -41,6 +42,7 @@ PROCESSOR_CLASSES = {
     SpeakerIdentifier.stage_name: SpeakerIdentifier,
     InteractionLogger.stage_name: InteractionLogger,
     GDocUploadProcessor.stage_name: GDocUploadProcessor,
+    MeetingProcessor.stage_name: MeetingProcessor,
     # Add other processors here as they get reset methods
     # TodoProcessor.stage_name: TodoProcessor,
 }
