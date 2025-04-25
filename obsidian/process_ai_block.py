@@ -1,7 +1,7 @@
 from ai_core import AI, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
 from ai_core.types import Message, MessageContent, ToolCall, ToolResult
 from ai_core.tools import Tool
-from ai_core.models import DEFAULT_MODEL
+from ai_core.models import DEFAULT_MODEL_IDENTIFIER
 
 from typing import Dict, List
 from obsidian.beacons import beacon_me, beacon_ai, beacon_error
@@ -40,7 +40,7 @@ beacon_thought = "|THOUGHT|"
 beacon_end_thought = "|/THOUGHT|"
 
 # Initialize AI model
-model = AI("claude-haiku")
+model = AI("haiku")
 twitter_api = TwitterAPI()
 
 # Define replacement functions
@@ -64,7 +64,7 @@ Your question or instructions here
 ## Advanced Options
 
 ### AI Model & Parameters
-- `<model!model_name>` - Specify different AI model (default: claude-haiku)
+- `<model!model_identifier>` - Specify different AI model (default: haiku)
 - `<temperature!value>` - Set temperature (0.0-1.0) for response randomness
 - `<max_tokens!value>` - Set maximum tokens for response
 - `<system!prompt_name>` - Use custom system prompt from prompts directory
@@ -207,7 +207,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         conv_txt, results = process_tags(conv_txt, REPLACEMENTS_INSIDE, context=context["doc"])
         params = dict([(n, v) for n, v, t in results])
 
-        model_name = params.get("model", DEFAULT_MODEL)
+        model_identifier = params.get("model", DEFAULT_MODEL_IDENTIFIER)
         system_prompt = params.get("system")
         debug = ("debug" in params)
         temperature = float(params.get("temperature", DEFAULT_TEMPERATURE))
@@ -224,7 +224,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                 logger.warning("Invalid thinking budget: %s. Using default.", params.get("think"))
         
         if "mock" in params:
-            model_name = "mock"
+            model_identifier = "mock"
 
         if debug:
             logger.debug("---PARAMETERS START---")
@@ -237,7 +237,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             if thinking:
                 logger.debug("Thinking mode enabled. Budget: %s", thinking_budget_tokens or "default")
 
-        logger.info("Answering with %s...", model_name)
+        logger.info("Answering with %s...", model_identifier)
         if option != "all":
             messages = process_conversation(conv_txt)
         else:
@@ -257,7 +257,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             if not prompt_found:
                 raise FileNotFoundError(f"Could not find system prompt '{system_prompt}' in any search paths")
         
-        ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
+        ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_identifier,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
         response = ""
@@ -386,7 +386,7 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             ))
             
             # Get AI's response to tool results
-            ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_name,
+            ai_response = model.messages(messages, system_prompt=system_prompt, model_override=model_identifier,
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
 

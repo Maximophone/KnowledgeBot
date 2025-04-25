@@ -103,7 +103,7 @@ def _handle_tool_calls(agent: AI, response: Message, tools: List[Tool]) -> Tuple
                 "- system: Basic system operations\n"
                 "- subagents: Create and manage other AI agents (note: nested subagents should be used carefully)\n\n"
                 "Choose the model based on the task complexity - use cheaper models for simple tasks and more powerful ones for complex reasoning.",
-    model_name="The model to use for the subagent (e.g., 'haiku3.5', 'sonnet3.5', 'deepseek-reasoner')",
+    model_identifier="The model to use for the subagent (e.g., 'haiku3.5', 'sonnet3.5', 'deepseek-reasoner')",
     system_prompt="The system prompt that defines the subagent's behavior and capabilities",
     toolset_names="Optional comma-separated list of toolset names to give the subagent access to (e.g., 'memory,gmail')",
     note_paths="Optional comma-separated list of Obsidian note paths to include as formatted context. Notes will be "
@@ -112,7 +112,7 @@ def _handle_tool_calls(agent: AI, response: Message, tools: List[Tool]) -> Tuple
     safe=True
 )
 def spawn_subagent(
-    model_name: str,
+    model_identifier: str,
     system_prompt: str,
     toolset_names: str = "",
     note_paths: str = ""
@@ -160,7 +160,7 @@ def spawn_subagent(
 
     # Create new AI instance
     agent = AI(
-        model_name=model_name,
+        model_identifier=model_identifier,
         system_prompt=system_prompt,
         tools=tools
     )
@@ -171,7 +171,7 @@ def spawn_subagent(
     
     return json.dumps({
         "agent_id": agent_id,
-        "model": model_name,
+        "model": model_identifier,
         "tools": [t.tool.name for t in tools]  # Access name directly from Tool object
     })
 
@@ -276,7 +276,7 @@ def list_conversations() -> str:
     """Lists all active subagent conversations"""
     return json.dumps({
         agent_id: {
-            "model": agent.model_name,
+            "model": agent.model_identifier,
             "tools": [t.tool.name for t in agent.tools]
         }
         for agent_id, agent in _conversations.items()

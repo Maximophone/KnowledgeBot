@@ -166,7 +166,7 @@ from ai_core.chunking.strategies import LLMChunker
 from ai_core.client import AI
 
 # Create an AI client
-ai_client = AI(model_name="gemini2.0flash")
+ai_client = AI(model_identifier="gemini2.0flash")
 
 # Create the chunker
 chunker = LLMChunker(
