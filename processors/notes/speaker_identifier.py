@@ -45,6 +45,8 @@ class SpeakerIdentifier(NoteProcessor):
         The base class already checks if the stage_name exists in processing_stages.
         We provide additional criteria here.
         """
+        if "nospeaker" in frontmatter.get("source_tags", []):
+            return False
         return True
 
     def _extract_unique_speakers(self, transcript: str) -> set:

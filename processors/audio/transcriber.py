@@ -91,19 +91,33 @@ class AudioTranscriber:
             )
             
             title = None
+            source_tags = [] # Initialize source_tags
             # Check if original filename starts with date pattern
             filename_without_ext = file_path.stem
             if filename_without_ext.startswith(date_str):
                 # Extract everything after the date as title
                 title_parts = filename_without_ext[len(date_str):].strip()
                 if title_parts.startswith("-"):
-                    title = title_parts[1:].strip()
+                    raw_title = title_parts[1:].strip()
+                    # Extract tags from the raw title
+                    source_tags = re.findall(r"#([a-zA-Z0-9_]+)", raw_title)
+                    # Remove tags from the title
+                    cleaned_title = re.sub(r"#([a-zA-Z0-9_]+)", "", raw_title)
+                    # Clean up extra hyphens and spaces
+                    cleaned_title = re.sub(r'-+', '-', cleaned_title).strip('-').strip()
+                    title = cleaned_title if cleaned_title else None # Assign cleaned title, or None if empty
             
             if title is None:
-                # Generate new title if none found in filename
+                # Generate new title if none found in filename or after cleaning
                 title = self.generate_title(transcript.text)
+            
+            # Ensure title is not empty after potential cleaning, fallback if needed
+            if not title:
+                 logger.warning("Title became empty after tag removal for file %s. Using generated title.", filename)
+                 title = self.generate_title(transcript.text)
 
             logger.info("Processing title: %s", title)
+            logger.info("Extracted source tags: %s", source_tags)
             
             # Create safe filename base
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -125,6 +139,7 @@ class AudioTranscriber:
                 "date": date_str,
                 "original_file": new_filename,
                 "title": title,
+                "source_tags": source_tags, # Add extracted tags
                 "json_data": json_filename,
                 "AutoNoteMover": "disable",
                 "processing_stages": ["transcribed"]  # Initialize as list

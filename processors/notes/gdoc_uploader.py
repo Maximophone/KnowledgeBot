@@ -24,6 +24,8 @@ class GDocUploadProcessor(NoteProcessor):
 
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         # Process only if it's a meeting and hasn't been uploaded yet
+        if "noupload" in frontmatter.get("source_tags", []):
+            return False
         if frontmatter.get("category") != "meeting":
             return False
         if not isinstance(frontmatter.get("identified_speakers"), dict):
