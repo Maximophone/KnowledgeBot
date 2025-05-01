@@ -51,6 +51,21 @@ class GoogleDocUtils:
         
         raise ValueError("Invalid Google Docs URL")
 
+    @staticmethod
+    def extract_folder_id_from_url(url):
+        # Pattern to match Google Drive folder URLs
+        patterns = [
+            r'/folders/([a-zA-Z0-9-_]+)',  # Standard folder URL
+            r'/drive/u/\d+/folders/([a-zA-Z0-9-_]+)' # Folder URL with user number
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        
+        raise ValueError("Invalid Google Drive folder URL")
+
     def get_document_as_markdown(self, doc_id_or_url) -> str | None:
         return self.get_document(doc_id_or_url, mime_type='text/markdown')
 
@@ -109,7 +124,7 @@ class GoogleDocUtils:
             return self.remove_styles(html_content)
         return None
 
-    def create_document_from_text(self, title: str, text_content: str, folder_id: str) -> str | None:
+    def create_document_from_text(self, title: str, text_content: str, folder_id: str, mime_type: str = 'text/plain') -> str | None:
         """Creates a new Google Doc with the given title and text content in the specified folder."""
         creds = self.get_credentials()
         service = build('drive', 'v3', credentials=creds)
@@ -125,7 +140,7 @@ class GoogleDocUtils:
             # Prepare media content (convert text to bytes)
             media = MediaIoBaseUpload(
                 io.BytesIO(text_content.encode('utf-8')),
-                mimetype='text/plain', # Upload as plain text, Google converts it
+                mimetype=mime_type, # Upload as plain text, Google converts it
                 resumable=True
             )
 
