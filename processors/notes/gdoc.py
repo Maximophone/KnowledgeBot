@@ -40,16 +40,7 @@ class GDocProcessor(NoteProcessor):
         frontmatter = parse_frontmatter(content)
         
         # Download and process Google Doc
-        gdoc_content_html = self.gdu.get_clean_document(frontmatter["url"])
-        prompt = get_prompt("summarise_gdoc")
-        message = Message(
-            role="user",
-            content=[MessageContent(
-                type="text",
-                text=prompt + gdoc_content_html
-            )]
-        )
-        gdoc_content_md = self.ai_model.message(message).content
+        gdoc_content_md = self.gdu.get_document_as_markdown(frontmatter["url"])
         
         # Update frontmatter and save
         frontmatter["synced"] = True

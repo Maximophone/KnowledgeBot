@@ -66,14 +66,14 @@ url: https://docs.google.com/test
         mock_aiofiles.return_value.__aenter__.return_value = mock_file_handle
 
         # Mock Google Doc and AI responses
-        self.processor.gdu.get_clean_document.return_value = "<html>Doc content</html>"
+        self.processor.gdu.get_clean_html_document.return_value = "<html>Doc content</html>"
         self.processor.ai_model.message.return_value = "# Processed content"
 
         # Process the file
         await self.processor.process_file(filename)
 
         # Verify interactions
-        self.processor.gdu.get_clean_document.assert_called_once_with("https://docs.google.com/test")
+        self.processor.gdu.get_clean_html_document.assert_called_once_with("https://docs.google.com/test")
         self.processor.ai_model.message.assert_called_once()
         
         # Verify file was written with updated content
@@ -96,7 +96,7 @@ url: https://docs.google.com/test
         await self.processor.process_file(filename)
         
         # Verify Google Doc was not processed
-        self.processor.gdu.get_clean_document.assert_not_called()
+        self.processor.gdu.get_clean_html_document.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

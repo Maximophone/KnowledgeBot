@@ -51,7 +51,13 @@ class GoogleDocUtils:
         
         raise ValueError("Invalid Google Docs URL")
 
-    def get_document_as_html(self, doc_id_or_url):
+    def get_document_as_markdown(self, doc_id_or_url) -> str | None:
+        return self.get_document(doc_id_or_url, mime_type='text/markdown')
+
+    def get_document_as_html(self, doc_id_or_url) -> str | None:
+        return self.get_document(doc_id_or_url, mime_type='text/html')
+    
+    def get_document(self, doc_id_or_url, mime_type='text/markdown') -> str | None:
         if 'docs.google.com' in doc_id_or_url:
             doc_id = self.extract_doc_id_from_url(doc_id_or_url)
         else:
@@ -61,7 +67,7 @@ class GoogleDocUtils:
         service = build('drive', 'v3', credentials=creds)
 
         try:
-            request = service.files().export_media(fileId=doc_id, mimeType='text/html')
+            request = service.files().export_media(fileId=doc_id, mimeType=mime_type)
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request)
             done = False
@@ -97,7 +103,7 @@ class GoogleDocUtils:
 
         return str(soup)
 
-    def get_clean_document(self, doc_id_or_url):
+    def get_clean_html_document(self, doc_id_or_url):
         html_content = self.get_document_as_html(doc_id_or_url)
         if html_content:
             return self.remove_styles(html_content)
@@ -159,7 +165,7 @@ def main():
     """Example usage of GoogleDocUtils."""
     gdoc_utils = GoogleDocUtils()
     FILE_ID = '1kB8SSmauWQSqxMmdG04ubpOtw-rTN3h8P36rncubuwc'
-    clean_html = gdoc_utils.get_clean_document(FILE_ID)
+    clean_html = gdoc_utils.get_clean_html_document(FILE_ID)
     
     if clean_html:
         print("Clean HTML Content:")
