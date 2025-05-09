@@ -44,7 +44,7 @@ class GDocProcessor(NoteProcessor):
 
         if frontmatter.get("push_to_gdoc"):
             # Get the content from the file and create a new Google Doc
-            gdoc_content_md = content.split("---")[2]
+            gdoc_content_md = content.split("---", 2)[2]
             folder_id = self.gdu.extract_folder_id_from_url(frontmatter["push_to_gdoc"])
             url = self.gdu.create_document_from_text(
                 filename.replace(".md", ""), 
