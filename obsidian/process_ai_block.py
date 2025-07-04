@@ -185,6 +185,27 @@ def calculate_tokens_from_messages(messages: List[Message], system_prompt: str =
     
     return input_tokens, output_tokens
 
+def calculate_tokens_including_current_response(messages: List[Message], current_response: str, system_prompt: str = None) -> tuple[int, int]:
+    """
+    Calculate tokens including the current AI response that hasn't been added to messages yet.
+    
+    Args:
+        messages: List of Message objects from the conversation
+        current_response: The current AI response text that will be added
+        system_prompt: Optional system prompt
+        
+    Returns:
+        (input_tokens, output_tokens) tuple
+    """
+    # First get the base counts from existing messages
+    input_tokens, output_tokens = calculate_tokens_from_messages(messages, system_prompt)
+    
+    # Add the current response to output tokens
+    if current_response:
+        output_tokens += round(len(current_response) / 4)
+    
+    return input_tokens, output_tokens
+
 REPLACEMENTS_OUTSIDE = {
     "help": lambda *_: """# KnowledgeBot Help
 
@@ -546,12 +567,46 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
                                     max_tokens=max_tokens, temperature=temperature,
                                     tools=tools, thinking=thinking, thinking_budget_tokens=thinking_budget_tokens)
 
-        response = escape_response(response)
+        # Calculate tokens before escaping (for accurate count)
         if option is None:
             # Calculate final cumulative tokens for the entire conversation
-            final_input_tokens, final_output_tokens = calculate_tokens_from_messages(messages, system_prompt)
+            # Note: 'response' contains the accumulated response text that hasn't been added to messages
+            final_input_tokens, final_output_tokens = calculate_tokens_including_current_response(
+                messages, response, system_prompt  # Use unescaped response
+            )
+            
             # Add the additional AI output (reasoning) that's not in messages
             final_output_tokens += round(total_reasoning_chars / 4)
+            
+            # Debug logging
+            if debug:
+                logger.debug("=== TOKEN COUNTING DEBUG ===")
+                logger.debug(f"Number of messages: {len(messages)}")
+                for i, msg in enumerate(messages):
+                    if msg.role == "assistant":
+                        total_chars = sum(len(c.text) for c in msg.content if c.type == "text" and c.text)
+                        logger.debug(f"Message {i}: Assistant message with {len(msg.content)} content items, {total_chars} text chars")
+                        for j, c in enumerate(msg.content):
+                            if c.type == "text" and c.text:
+                                logger.debug(f"  Content {j}: {len(c.text)} chars, preview: {c.text[:50]}...")
+                    elif msg.role == "user":
+                        total_chars = sum(len(c.text) for c in msg.content if c.type == "text" and c.text)
+                        logger.debug(f"Message {i}: User message with {len(msg.content)} content items, {total_chars} text chars")
+                
+                # Log the accumulated response
+                logger.debug(f"Accumulated 'response' variable: {len(response)} chars")
+                logger.debug(f"Response preview: {response[:100]}...")
+                
+                logger.debug(f"Total reasoning chars: {total_reasoning_chars}")
+                logger.debug(f"Base output tokens from messages: {final_output_tokens - round(total_reasoning_chars / 4) - round(len(response) / 4)}")
+                logger.debug(f"Current response tokens: {round(len(response) / 4)}")
+                logger.debug(f"Reasoning tokens: {round(total_reasoning_chars / 4)}")
+                logger.debug(f"Final output tokens: {final_output_tokens}")
+                logger.debug("=== END TOKEN DEBUG ===")
+
+        # Now escape the response for display
+        response = escape_response(response)
+        if option is None:
             final_token_beacon = f"{beacon_tokens_prefix}In={final_input_tokens},Out={final_output_tokens}|==\n"
             new_block = f"{block}{beacon_ai}\n{final_token_beacon}{thoughts}\n{response}\n{beacon_me}\n"
         elif option == "rep":
