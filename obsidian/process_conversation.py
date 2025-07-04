@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from obsidian.beacons import beacon_me, beacon_ai, beacon_tool_start, beacon_tool_end
+from obsidian.beacons import beacon_me, beacon_ai, beacon_tool_start, beacon_tool_end, beacon_tokens_prefix
 from obsidian.parser.tag_parser import process_tags
 import json
 from ai_core.types import Message, MessageContent, ToolCall, ToolResult
@@ -142,7 +142,22 @@ def process_conversation(txt: str) -> List[Message]:
             if parts[0].strip():
                 # Process AI response including any tool calls
                 content = []
-                text_parts = parts[0].split(beacon_tool_start)
+                ai_response = parts[0]
+                
+                # Remove token beacons if present
+                if beacon_tokens_prefix in ai_response:
+                    # Find and remove the token beacon
+                    token_start = ai_response.find(beacon_tokens_prefix)
+                    if token_start != -1:
+                        token_end = ai_response.find("|==", token_start)
+                        if token_end != -1:
+                            # Remove the entire token beacon including newline
+                            token_beacon = ai_response[token_start:token_end + 3]
+                            if token_beacon.endswith("\n"):
+                                token_end += 1
+                            ai_response = ai_response[:token_start] + ai_response[token_end + 3:]
+                
+                text_parts = ai_response.split(beacon_tool_start)
                 
                 # Add initial text if present
                 if text_parts[0].strip():

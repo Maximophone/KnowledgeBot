@@ -4,7 +4,7 @@ from ai_core.tools import Tool
 from ai_core.models import DEFAULT_MODEL_IDENTIFIER
 
 from typing import Dict, List
-from obsidian.beacons import beacon_me, beacon_ai, beacon_error
+from obsidian.beacons import beacon_me, beacon_ai, beacon_error, beacon_tokens_prefix
 from obsidian.process_conversation import process_conversation
 import os
 from obsidian.parser.tag_parser import process_tags
@@ -45,6 +45,146 @@ twitter_api = TwitterAPI()
 
 # Define replacement functions
 remove = lambda *_: ""
+
+def calculate_cumulative_tokens(conversation_text: str, system_prompt: str = None) -> tuple[int, int]:
+    """
+    Calculate cumulative input/output tokens from conversation text.
+    Returns (input_tokens, output_tokens) based on character count / 4.
+    
+    Input tokens include: user messages, system prompts, tool call arguments, tool results
+    Output tokens include: AI responses, thought blocks
+    """
+    input_chars = 0
+    output_chars = 0
+    
+    # Count system prompt if provided
+    if system_prompt:
+        input_chars += len(system_prompt)
+    
+    # Split by AI beacon to process sections
+    sections = conversation_text.split(beacon_ai)
+    
+    # First section is always user input (before first AI response)
+    if sections[0].strip():
+        # Remove any reply tags or other metadata
+        user_text = sections[0].strip()
+        input_chars += len(user_text)
+    
+    # Process subsequent sections
+    for section in sections[1:]:
+        # Skip token beacons themselves
+        if beacon_tokens_prefix in section:
+            # Extract the part after token beacon
+            token_end = section.find("|==")
+            if token_end > -1:
+                section = section[token_end + 3:]
+        
+        # Split by ME beacon to separate AI response from next user input  
+        parts = section.split(beacon_me)
+        
+        # First part is AI response (may include thought blocks and tool calls)
+        if parts[0]:
+            ai_part = parts[0]
+            
+            # Extract and count thought blocks
+            thought_start = ai_part.find(beacon_thought)
+            while thought_start != -1:
+                thought_end = ai_part.find(beacon_end_thought, thought_start)
+                if thought_end != -1:
+                    thought_content = ai_part[thought_start + len(beacon_thought):thought_end]
+                    output_chars += len(thought_content)
+                    # Remove the thought block from ai_part
+                    ai_part = ai_part[:thought_start] + ai_part[thought_end + len(beacon_end_thought):]
+                else:
+                    break
+                thought_start = ai_part.find(beacon_thought)
+            
+            # Extract and count tool calls and results
+            tool_start = ai_part.find(beacon_tool_start)
+            while tool_start != -1:
+                tool_end = ai_part.find(beacon_tool_end, tool_start)
+                if tool_end != -1:
+                    tool_section = ai_part[tool_start:tool_end + len(beacon_tool_end)]
+                    
+                    # Parse tool section to separate call from result
+                    if "Arguments:" in tool_section and "Result:" in tool_section:
+                        args_start = tool_section.find("Arguments:") + len("Arguments:")
+                        result_start = tool_section.find("Result:")
+                        
+                        # Tool arguments count as input
+                        args_section = tool_section[args_start:result_start].strip()
+                        input_chars += len(args_section)
+                        
+                        # Tool results count as input
+                        result_section = tool_section[result_start + len("Result:"):].strip()
+                        input_chars += len(result_section)
+                    
+                    # Remove the tool section from ai_part
+                    ai_part = ai_part[:tool_start] + ai_part[tool_end + len(beacon_tool_end):]
+                else:
+                    break
+                tool_start = ai_part.find(beacon_tool_start)
+            
+            # Remaining AI text counts as output
+            output_chars += len(ai_part.strip())
+        
+        # Second part (if exists) is user input
+        if len(parts) > 1 and parts[1].strip():
+            input_chars += len(parts[1].strip())
+    
+    # Convert to tokens (divide by 4 and round)
+    input_tokens = round(input_chars / 4)
+    output_tokens = round(output_chars / 4)
+    
+    return input_tokens, output_tokens
+
+def calculate_tokens_from_messages(messages: List[Message], system_prompt: str = None) -> tuple[int, int]:
+    """
+    Calculate cumulative input/output tokens from Message objects.
+    This gives the accurate count of what's actually sent to the AI.
+    Returns (input_tokens, output_tokens) based on character count / 4.
+    
+    Input tokens include: user messages, system prompts, tool call arguments, tool results
+    Output tokens include: AI responses
+    """
+    input_chars = 0
+    output_chars = 0
+    
+    # Count system prompt if provided
+    if system_prompt:
+        input_chars += len(system_prompt)
+    
+    # Process each message
+    for message in messages:
+        if message.role == "user":
+            # User messages count as input
+            for content in message.content:
+                if content.type == "text" and content.text:
+                    input_chars += len(content.text)
+                elif content.type == "tool_result" and content.tool_result:
+                    # Tool results count as input
+                    if content.tool_result.result:
+                        input_chars += len(str(content.tool_result.result))
+                    if content.tool_result.error:
+                        input_chars += len(str(content.tool_result.error))
+                # Note: Images are not counted for now as requested
+                    
+        elif message.role == "assistant":
+            # Assistant messages count as output
+            for content in message.content:
+                if content.type == "text" and content.text:
+                    output_chars += len(content.text)
+                elif content.type == "tool_use" and content.tool_call:
+                    # Tool call arguments count as input (they're sent to the tool, not output to user)
+                    if content.tool_call.arguments:
+                        input_chars += len(json.dumps(content.tool_call.arguments))
+    
+    # Convert to tokens (divide by 4 and round)
+    input_tokens = round(input_chars / 4)
+    output_tokens = round(output_chars / 4)
+    
+    return input_tokens, output_tokens
+
 REPLACEMENTS_OUTSIDE = {
     "help": lambda *_: """# KnowledgeBot Help
 
@@ -263,23 +403,39 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
         response = ""
         thoughts = ""
         
+        # Track reasoning output separately for token counting  
+        total_reasoning_chars = 0
+        
         start = True
         while True:  # Process responses until no more tool calls
             response += ai_response.content
 
             if ai_response.content.strip():
                 escaped_response = escape_response(ai_response.content)
+                
+                # For the first response, add the AI beacon
+                if start:
+                    # Add just the AI beacon first
+                    current_content = update_file_content(
+                        current_content,
+                        f"{beacon_ai}\n",
+                        context["file_path"]
+                    )
+                    start = False
+                
+                # Add the AI response
                 current_content = update_file_content(
                     current_content,
-                    f"{beacon_ai if start else ''}\n{escaped_response}\n",
+                    f"{escaped_response}\n",
                     context["file_path"]
                 )
-                start = False
                 if ai_response.reasoning and ai_response.reasoning.strip():
                     logger.debug("Reasoning: %s", ai_response.reasoning[:100])
                     escaped_reasoning = escape_response(ai_response.reasoning)
                     thought_block = f"\n{beacon_thought}\n{escaped_reasoning}\n{beacon_end_thought}\n"
                     thoughts += thought_block
+                    # Count reasoning as additional output
+                    total_reasoning_chars += len(ai_response.reasoning)
                     current_content = update_file_content(current_content, thought_block, context["file_path"])
 
             if not ai_response.tool_calls:
@@ -392,7 +548,12 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
 
         response = escape_response(response)
         if option is None:
-            new_block = f"{block}{beacon_ai}\n{thoughts}\n{response}\n{beacon_me}\n"
+            # Calculate final cumulative tokens for the entire conversation
+            final_input_tokens, final_output_tokens = calculate_tokens_from_messages(messages, system_prompt)
+            # Add the additional AI output (reasoning) that's not in messages
+            final_output_tokens += round(total_reasoning_chars / 4)
+            final_token_beacon = f"{beacon_tokens_prefix}In={final_input_tokens},Out={final_output_tokens}|==\n"
+            new_block = f"{block}{beacon_ai}\n{final_token_beacon}{thoughts}\n{response}\n{beacon_me}\n"
         elif option == "rep":
             return response
         elif option == "all":
