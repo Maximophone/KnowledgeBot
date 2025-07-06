@@ -51,7 +51,28 @@ class GoogleDocUtils:
         
         raise ValueError("Invalid Google Docs URL")
 
-    def get_document_as_html(self, doc_id_or_url):
+    @staticmethod
+    def extract_folder_id_from_url(url):
+        # Pattern to match Google Drive folder URLs
+        patterns = [
+            r'/folders/([a-zA-Z0-9-_]+)',  # Standard folder URL
+            r'/drive/u/\d+/folders/([a-zA-Z0-9-_]+)' # Folder URL with user number
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        
+        raise ValueError("Invalid Google Drive folder URL")
+
+    def get_document_as_markdown(self, doc_id_or_url) -> str | None:
+        return self.get_document(doc_id_or_url, mime_type='text/markdown')
+
+    def get_document_as_html(self, doc_id_or_url) -> str | None:
+        return self.get_document(doc_id_or_url, mime_type='text/html')
+    
+    def get_document(self, doc_id_or_url, mime_type='text/markdown') -> str | None:
         if 'docs.google.com' in doc_id_or_url:
             doc_id = self.extract_doc_id_from_url(doc_id_or_url)
         else:
@@ -61,7 +82,7 @@ class GoogleDocUtils:
         service = build('drive', 'v3', credentials=creds)
 
         try:
-            request = service.files().export_media(fileId=doc_id, mimeType='text/html')
+            request = service.files().export_media(fileId=doc_id, mimeType=mime_type)
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request)
             done = False
@@ -97,13 +118,13 @@ class GoogleDocUtils:
 
         return str(soup)
 
-    def get_clean_document(self, doc_id_or_url):
+    def get_clean_html_document(self, doc_id_or_url):
         html_content = self.get_document_as_html(doc_id_or_url)
         if html_content:
             return self.remove_styles(html_content)
         return None
 
-    def create_document_from_text(self, title: str, text_content: str, folder_id: str) -> str | None:
+    def create_document_from_text(self, title: str, text_content: str, folder_id: str, mime_type: str = 'text/plain') -> str | None:
         """Creates a new Google Doc with the given title and text content in the specified folder."""
         creds = self.get_credentials()
         service = build('drive', 'v3', credentials=creds)
@@ -119,7 +140,7 @@ class GoogleDocUtils:
             # Prepare media content (convert text to bytes)
             media = MediaIoBaseUpload(
                 io.BytesIO(text_content.encode('utf-8')),
-                mimetype='text/plain', # Upload as plain text, Google converts it
+                mimetype=mime_type, # Upload as plain text, Google converts it
                 resumable=True
             )
 
@@ -159,7 +180,7 @@ def main():
     """Example usage of GoogleDocUtils."""
     gdoc_utils = GoogleDocUtils()
     FILE_ID = '1kB8SSmauWQSqxMmdG04ubpOtw-rTN3h8P36rncubuwc'
-    clean_html = gdoc_utils.get_clean_document(FILE_ID)
+    clean_html = gdoc_utils.get_clean_html_document(FILE_ID)
     
     if clean_html:
         print("Clean HTML Content:")

@@ -27,6 +27,9 @@ class GDocProcessor(NoteProcessor):
         # Deprecated, here for backward-compatibility
         if frontmatter.get("synced"):
             return False
+
+        if frontmatter.get("push_to_gdoc"):
+            return True
         
         # Process if it has a URL
         return frontmatter.get("url")
@@ -38,18 +41,21 @@ class GDocProcessor(NoteProcessor):
         # Read the file
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter(content)
-        
-        # Download and process Google Doc
-        gdoc_content_html = self.gdu.get_clean_document(frontmatter["url"])
-        prompt = get_prompt("summarise_gdoc")
-        message = Message(
-            role="user",
-            content=[MessageContent(
-                type="text",
-                text=prompt + gdoc_content_html
-            )]
-        )
-        gdoc_content_md = self.ai_model.message(message).content
+
+        if frontmatter.get("push_to_gdoc"):
+            # Get the content from the file and create a new Google Doc
+            gdoc_content_md = content.split("---", 2)[2]
+            folder_id = self.gdu.extract_folder_id_from_url(frontmatter["push_to_gdoc"])
+            url = self.gdu.create_document_from_text(
+                filename.replace(".md", ""), 
+                gdoc_content_md, 
+                folder_id, 
+                mime_type="text/markdown")
+            frontmatter["url"] = url
+            frontmatter.pop("push_to_gdoc")
+        else:
+            # Download and process Google Doc
+            gdoc_content_md = self.gdu.get_document_as_markdown(frontmatter["url"])
         
         # Update frontmatter and save
         frontmatter["synced"] = True

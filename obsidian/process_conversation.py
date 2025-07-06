@@ -185,9 +185,31 @@ def process_conversation(txt: str) -> List[Message]:
         logger.debug(f"Conversation: {txt}")
         raise ValueError("Conversation must start with user message")
     if messages[-1].role != "user":
-        logger.error(f"Conversation must end with user message, but got {messages[-1].role}")
+        # Create a summary of all messages for better error reporting
+        message_summary = []
+        for i, msg in enumerate(messages):
+            content_preview = ""
+            if hasattr(msg, 'content') and msg.content:
+                if isinstance(msg.content, list):
+                    # Handle list of MessageContent objects
+                    text_parts = []
+                    for content_item in msg.content:
+                        if hasattr(content_item, 'text') and content_item.text:
+                            text_parts.append(content_item.text)
+                    content_preview = " ".join(text_parts)
+                elif isinstance(msg.content, str):
+                    content_preview = msg.content
+                else:
+                    content_preview = str(msg.content)
+            
+            # Truncate to first 100 characters
+            content_preview = content_preview[:100] + "..." if len(content_preview) > 100 else content_preview
+            message_summary.append(f"Message {i}: {msg.role} - {content_preview}")
+        
+        error_msg = f"Conversation must end with user message, but got {messages[-1].role}. Messages:\n" + "\n".join(message_summary)
+        logger.error(error_msg)
         logger.debug(f"Conversation: {txt}")
-        raise ValueError("Conversation must end with user message")
+        raise ValueError(error_msg)
     return messages
 
 
