@@ -19,6 +19,7 @@ from toolsets import TOOL_SETS
 from obsidian.context_pulling import pack_repo, pack_vault, insert_file_ref, fetch_url_content
 from rag import VectorDB
 import subprocess
+from obsidian.notification_utils import play_notification_sound, play_error_sound
 
 logger = setup_logger(__name__)
 
@@ -610,12 +611,18 @@ def process_ai_block(block: str, context: Dict, option: str) -> str:
             final_token_beacon = f"{beacon_tokens_prefix}In={final_input_tokens},Out={final_output_tokens}|==\n"
             new_block = f"{block}{beacon_ai}\n{final_token_beacon}{thoughts}\n{response}\n{beacon_me}\n"
         elif option == "rep":
+            play_notification_sound()  # Play sound on successful completion
             return response
         elif option == "all":
             context["new_doc"] = response
+            play_notification_sound()  # Play sound on successful completion
             return response
     except Exception:
         new_block = f"{block}{beacon_error}\n```sh\n{traceback.format_exc()}```\n"
+        play_error_sound()  # Play sound even on error to notify completion
+    
+    # Play notification sound when normal processing completes
+    play_notification_sound()
     return f"<ai!{option_txt}>{new_block}</ai!>"
 
 def format_tool_call(tool_call: ToolCall) -> str:
