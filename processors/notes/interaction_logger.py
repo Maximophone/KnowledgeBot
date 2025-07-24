@@ -29,7 +29,6 @@ class InteractionLogger(NoteProcessor):
 
     def __init__(self, input_dir: Path):
         super().__init__(input_dir)
-        self.ai_model = AI("sonnet3.7")
         self.people_dir = PATHS.people_path
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:

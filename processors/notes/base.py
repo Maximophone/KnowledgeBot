@@ -19,7 +19,8 @@ class NoteProcessor(ABC):
     def __init__(self, input_dir: Path):
         self.input_dir = input_dir
         self.files_in_process = set()
-        self.ai_model = AI("sonnet3.7")
+        self.ai_model = AI("gemini2.5pro")
+        self.tiny_ai_model = AI("gemini2.5flash")
     
     def _should_process(self, filename: str) -> bool:
         """Base implementation of should_process with pipeline logic."""

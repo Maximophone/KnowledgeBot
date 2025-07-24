@@ -35,8 +35,6 @@ class SpeakerIdentifier(NoteProcessor):
 
     def __init__(self, input_dir: Path, discord_io: DiscordIOCore):
         super().__init__(input_dir)
-        self.ai_model = AI("sonnet3.7")
-        self.tiny_model = AI("haiku")
         self.discord_io = discord_io
         
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
@@ -89,7 +87,7 @@ class SpeakerIdentifier(NoteProcessor):
                 text=prompt
             )]
         )
-        return self.tiny_model.message(message).content.strip()
+        return self.tiny_ai_model.message(message).content.strip()
         
     async def process_file(self, filename: str) -> None:
         """Process a transcript file through all substages: identify speakers, initiate matching, and process results."""
@@ -354,14 +352,6 @@ class SpeakerIdentifier(NoteProcessor):
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
         logger.info("Completed speaker identification workflow for: %s", filename)
-    
-    def identify_speakers(self, text: str) -> str:
-        prompt = self.prompt_identify + text
-        return self.ai_model.message(prompt).content.strip()
-
-    def identify_speakers_tiny(self, text: str) -> str:
-        prompt = self.prompt_identify_tiny + text
-        return self.tiny_model.message(prompt).content.strip()
 
     async def reset(self, filename: str) -> None:
         """

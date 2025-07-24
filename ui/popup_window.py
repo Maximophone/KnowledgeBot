@@ -37,7 +37,7 @@ from ai_core.types import Message, MessageContent
 from config.paths import PATHS
 import sys
 
-ai_model = AI("haiku3.5")
+ai_model = AI("gemini2.5pro")
 
 # Define a dictionary to map keys to their corresponding actions
 # Format: 'key': ('action_name', 'description')
