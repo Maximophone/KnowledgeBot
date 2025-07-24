@@ -49,7 +49,7 @@ class AudioTranscriber:
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
         # Add small AI model for title generation
-        self.ai_model = AI("haiku3.5")
+        self.ai_model = AI("gemini2.5pro")
         self.prompt_title = get_prompt("transcript_title")
 
     def generate_title(self, text: str) -> str:
