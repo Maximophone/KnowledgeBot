@@ -10,12 +10,12 @@ def read_front_matter(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         # Check for the start of front matter
         line = f.readline()
-        if line.strip() != '---':
+        if line.rstrip() != '---':
             return front_matter  # No front matter present
         # Read lines until the end of front matter
         yaml_lines = []
         for line in f:
-            if line.strip() == '---':
+            if line.rstrip() == '---':
                 break  # End of front matter
             yaml_lines.append(line)
         # Parse the YAML content
@@ -24,10 +24,18 @@ def read_front_matter(file_path):
             front_matter = yaml.safe_load(yaml_content)
         except yaml.YAMLError as e:
             logger.error("Error parsing YAML front matter in %s: %s", file_path, e)
+            raise e
             front_matter = {}
     return front_matter
 
 def update_front_matter(file_path, new_front_matter):
+    # Check for invalid lines in the new front matter (lines that are just '---' possibly with spaces)
+    front_matter_str_check = yaml.dump(new_front_matter)
+    for i, line in enumerate(front_matter_str_check.splitlines(), 1):
+        if line.rstrip() == '---':
+            reason = f"Invalid line in front matter: line {i} is just '---'. Not allowed as this will break the parsing."
+            logger.error(reason)
+            raise ValueError(reason)
     with open(file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     # Check if the file has front matter

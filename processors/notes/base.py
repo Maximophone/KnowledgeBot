@@ -33,7 +33,11 @@ class NoteProcessor(ABC):
             
         # Check pipeline stage requirements
         file_path = self.input_dir.joinpath(filename)
-        frontmatter = read_front_matter(file_path)
+        try:
+            frontmatter = read_front_matter(file_path)
+        except Exception as e:
+            logger.error("Error reading frontmatter for %s in stage %s: %s", filename, self.__class__.stage_name, str(e))
+            return False
 
         # Skip if "abandoned" flag is set in frontmatter
         if frontmatter.get('abandoned', False):
