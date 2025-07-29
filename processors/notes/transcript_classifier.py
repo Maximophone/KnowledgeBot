@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_frontmatter_from_file, set_frontmatter_in_file
+from ..common.frontmatter import read_frontmatter_from_file, set_frontmatter_in_file, read_text_from_content
 from prompts.prompts import get_prompt
 from ai_core import AI
 from ai_core.types import Message, MessageContent
@@ -42,7 +42,7 @@ class TranscriptClassifier(NoteProcessor):
         content = await self.read_file(filename)
         
         # Get text after frontmatter
-        text = content.split('---', 2)[2].strip()
+        text = read_text_from_content(content)
         
         # Classify the transcript
         category = self.classify(text)

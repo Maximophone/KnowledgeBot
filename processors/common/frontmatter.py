@@ -28,7 +28,7 @@ def read_frontmatter_from_file(file_path):
             front_matter = {}
     return front_matter
 
-def read_text(file_path) -> str:
+def read_text_from_file(file_path) -> str:
     """
     Read the text content of a file, excluding the front matter.
     
@@ -75,6 +75,81 @@ def read_text(file_path) -> str:
         return "".join(lines)
 
     # Valid frontmatter, so return text after it.
+    return "".join(lines[end_of_fm_idx + 1:])
+
+
+def has_frontmatter_from_content(content: str) -> bool:
+    """
+    Check if a string contains a valid YAML frontmatter block.
+    
+    Args:
+        content: The string content to process.
+        
+    Returns:
+        True if a valid frontmatter block is found, False otherwise.
+    """
+    return parse_frontmatter_from_content(content) is not None
+
+
+def has_frontmatter_from_file(file_path: str) -> bool:
+    """
+    Check if a file contains a valid YAML frontmatter block.
+    
+    Args:
+        file_path: Path to the file to check.
+        
+    Returns:
+        True if a valid frontmatter block is found, False otherwise.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return has_frontmatter_from_content(content)
+    except FileNotFoundError:
+        return False
+
+
+def read_text_from_content(content: str) -> str:
+    """
+    Extracts the text content from a string, excluding the front matter.
+
+    This function is thorough in its validation of frontmatter, checking for
+    delimiters and valid YAML syntax. If the frontmatter is not perfectly
+    formed, the entire content is treated as text.
+
+    Args:
+        content: The string content to process.
+
+    Returns:
+        The text content of the string, excluding any valid front matter.
+    """
+    lines = content.splitlines(True)
+
+    if not lines:
+        return ""
+
+    if lines[0].rstrip('\r\n') != '---':
+        return content
+
+    end_of_fm_idx = -1
+    for i, line in enumerate(lines[1:], start=1):
+        if line.rstrip('\r\n') == '---':
+            end_of_fm_idx = i
+            break
+
+    if end_of_fm_idx == -1:
+        return content
+
+    frontmatter_content = "".join(lines[1:end_of_fm_idx])
+    
+    if not frontmatter_content.strip():
+        return "".join(lines[end_of_fm_idx + 1:])
+
+    try:
+        yaml.safe_load(frontmatter_content)
+    except yaml.YAMLError:
+        return content
+
     return "".join(lines[end_of_fm_idx + 1:])
 
 

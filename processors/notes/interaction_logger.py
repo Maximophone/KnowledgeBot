@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 
 from .base import NoteProcessor
-from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text
+from ..common.frontmatter import read_text_from_content, parse_frontmatter_from_content, frontmatter_to_text
 from ai_core import AI
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
@@ -226,7 +226,7 @@ Your final output should be a series of bullet points that can be directly appen
         # Read the transcript file
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter_from_content(content)
-        transcript = content.split('---', 2)[2].strip()
+        transcript = read_text_from_content(content)
         
         # Extract required information
         meeting_date = frontmatter.get('date')
@@ -438,7 +438,7 @@ Your final output should be a series of bullet points that can be directly appen
             # Read and parse the transcript
             content = await self.read_file(filename)
             frontmatter = parse_frontmatter_from_content(content)
-            transcript = content.split('---', 2)[2].strip()
+            transcript = read_text_from_content(content)
 
             if not frontmatter:
                 logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")

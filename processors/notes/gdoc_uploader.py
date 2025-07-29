@@ -5,7 +5,7 @@ import os
 import traceback
 
 from .base import NoteProcessor
-from ..common.frontmatter import read_text, parse_frontmatter_from_content, set_frontmatter_in_file
+from ..common.frontmatter import read_text_from_content, read_text_from_file, parse_frontmatter_from_content, set_frontmatter_in_file
 from integrations.gdoc_utils import GoogleDocUtils
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
@@ -50,14 +50,7 @@ class GDocUploadProcessor(NoteProcessor):
 
         # Extract only the text content after the frontmatter delimiters
         try:
-            transcript_text = read_text(file_path)
-            logger.info("--------------------------------")
-            logger.info("TRANSCRIPT TEXT")
-            logger.info("--------------------------------")
-            logger.info(transcript_text)
-            logger.info("--------------------------------")
-            logger.info("END OF TRANSCRIPT TEXT")
-            logger.info("--------------------------------")
+            transcript_text = read_text_from_file(file_path)
             if not transcript_text:
                 logger.warning(f"No transcript text found after frontmatter in {filename}, skipping.")
                 return
@@ -110,7 +103,7 @@ class GDocUploadProcessor(NoteProcessor):
             # Read and parse the transcript
             content = await self.read_file(filename)
             frontmatter = parse_frontmatter_from_content(content)
-            transcript = content.split('---', 2)[2].strip()
+            transcript = read_text_from_content(content)
 
             if not frontmatter:
                 logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")

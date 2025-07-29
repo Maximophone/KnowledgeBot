@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter_from_content, frontmatter_to_text
+from ..common.frontmatter import read_text_from_content, parse_frontmatter_from_content, frontmatter_to_text
 from ..common.markdown import sanitize_filename
 from prompts.prompts import get_prompt
 
@@ -42,7 +42,7 @@ class MeditationProcessor(NoteProcessor):
             logger.warning("No frontmatter found in %s", filename)
             return
             
-        transcript = content.split('---', 2)[2].strip()
+        transcript = read_text_from_content(content)
         
         # Generate meditation summary
         message = Message(

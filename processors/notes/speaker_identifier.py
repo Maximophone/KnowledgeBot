@@ -8,7 +8,7 @@ import re
 import traceback
 
 from .base import NoteProcessor
-from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text
+from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text, read_text_from_content
 from ai_core import AI
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
@@ -95,7 +95,7 @@ class SpeakerIdentifier(NoteProcessor):
         
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter_from_content(content)
-        transcript = content.split('---', 2)[2].strip()
+        transcript = read_text_from_content(content)
         
         # --- Special case: Check for single speaker transcripts ---
         unique_speakers = self._extract_unique_speakers(transcript)
@@ -109,7 +109,7 @@ class SpeakerIdentifier(NoteProcessor):
             # Reload frontmatter and transcript after modifications
             content = await self.read_file(filename)
             frontmatter = parse_frontmatter_from_content(content)
-            transcript = content.split('---', 2)[2].strip()
+            transcript = read_text_from_content(content)
         else:
             logger.info("Speakers already identified for: %s", filename)
         
@@ -119,7 +119,7 @@ class SpeakerIdentifier(NoteProcessor):
             # Reload frontmatter and transcript after modifications
             content = await self.read_file(filename)
             frontmatter = parse_frontmatter_from_content(content)
-            transcript = content.split('---', 2)[2].strip()
+            transcript = read_text_from_content(content)
         else:
             logger.info("Speaker matching UI already initiated for: %s", filename)
         
@@ -328,6 +328,10 @@ class SpeakerIdentifier(NoteProcessor):
         # Update frontmatter with the modified results (containing Obsidian links)
         frontmatter['final_speaker_mapping'] = frontmatter_results
         
+        # Clean up intermediate data from frontmatter now that the process is complete
+        if 'identified_speakers' in frontmatter:
+            del frontmatter['identified_speakers']
+        
         # Replace speaker labels in the transcript with the identified names
         # (using the original results without [[ ]] for replacements)
         new_transcript = transcript
@@ -380,7 +384,7 @@ class SpeakerIdentifier(NoteProcessor):
                 return
 
             # --- Attempt to revert transcript text ---            
-            current_transcript = content.split('---', 2)[2].strip()
+            current_transcript = read_text_from_content(content)
             transcript_to_save = current_transcript # Default: keep current transcript if revert fails
             reverted = False
 

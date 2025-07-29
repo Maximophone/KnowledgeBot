@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content
+from ..common.frontmatter import read_text_from_content, parse_frontmatter_from_content
 from ..common.markdown import create_wikilink
 from ai_core.types import Message, MessageContent
 from prompts.prompts import get_prompt
@@ -59,7 +59,7 @@ tags:
             logger.warning("No frontmatter found in %s", filename)
             return
             
-        transcript = content.split('---', 2)[2].strip()
+        transcript = read_text_from_content(content)
         
         # Extract ideas using AI
         ideas_prompt = self.prompt_ideas + "\n\nTranscript:\n" + transcript

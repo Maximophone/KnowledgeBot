@@ -4,7 +4,7 @@ import aiofiles
 from datetime import datetime, timedelta, date
 import calendar
 from .base import NoteProcessor
-from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content
+from ..common.frontmatter import read_text_from_content, parse_frontmatter_from_content
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
@@ -74,7 +74,7 @@ Transcript:
             logger.warning("No frontmatter found in %s", filename)
             return
 
-        transcript = content.split('---', 2)[2].strip()
+        transcript = read_text_from_content(content)
         date_str = frontmatter.get('date', '')
         if isinstance(date_str, date):
             recording_date = date_str
