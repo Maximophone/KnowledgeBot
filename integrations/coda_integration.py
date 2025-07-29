@@ -27,7 +27,7 @@ class CodaClient:
             The page_id will be the full API page ID (e.g., 'canvas-AbcDefGhi')
         """
         # Pattern to match doc ID: _d followed by exactly 10 characters
-        doc_pattern = r'_d([a-zA-Z0-9]{10})'
+        doc_pattern = r'_d([a-zA-Z0-9\-_\.~]{10})'
         # Updated pattern to match shortened page ID: _su followed by characters until #, ?, or end of string
         page_pattern = r'_su([^#?\s]+)'
         
