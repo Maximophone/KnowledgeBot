@@ -5,7 +5,7 @@ import os
 import traceback
 
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, update_front_matter
+from ..common.frontmatter import read_text, parse_frontmatter_from_content, set_frontmatter_in_file
 from integrations.gdoc_utils import GoogleDocUtils
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
@@ -43,14 +43,21 @@ class GDocUploadProcessor(NoteProcessor):
         content = await self.read_file(filename)
 
         # Parse frontmatter and extract transcript text
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         if not frontmatter:
             logger.warning(f"No frontmatter found in {filename}, skipping GDoc upload.")
             return
 
         # Extract only the text content after the frontmatter delimiters
         try:
-            transcript_text = content.split('---', 2)[2].strip()
+            transcript_text = read_text(file_path)
+            logger.info("--------------------------------")
+            logger.info("TRANSCRIPT TEXT")
+            logger.info("--------------------------------")
+            logger.info(transcript_text)
+            logger.info("--------------------------------")
+            logger.info("END OF TRANSCRIPT TEXT")
+            logger.info("--------------------------------")
             if not transcript_text:
                 logger.warning(f"No transcript text found after frontmatter in {filename}, skipping.")
                 return
@@ -77,7 +84,7 @@ class GDocUploadProcessor(NoteProcessor):
         # Update frontmatter of the original transcript note
         try:
             frontmatter['gdoc_transcript_link'] = gdoc_link
-            update_front_matter(file_path, frontmatter)
+            set_frontmatter_in_file(file_path, frontmatter)
             os.utime(file_path, None) # Update modification time
             logger.info(f"Successfully uploaded transcript and updated frontmatter for: {filename}")
         except Exception as e:
@@ -102,7 +109,7 @@ class GDocUploadProcessor(NoteProcessor):
         try:
             # Read and parse the transcript
             content = await self.read_file(filename)
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
             transcript = content.split('---', 2)[2].strip()
 
             if not frontmatter:
@@ -127,7 +134,7 @@ class GDocUploadProcessor(NoteProcessor):
                     logger.info(f"Removing stage '{self.stage_name}' even though link is missing.")
                     frontmatter['processing_stages'].remove(self.stage_name)
                     # Save the cleaned frontmatter
-                    updated_content = update_front_matter(file_path, frontmatter)
+                    updated_content = set_frontmatter_in_file(file_path, frontmatter)
                     os.utime(file_path, None)
                 return
 
@@ -153,7 +160,7 @@ class GDocUploadProcessor(NoteProcessor):
                 frontmatter['processing_stages'] = processing_stages
 
             # Write the updated transcript
-            updated_content = update_front_matter(file_path, frontmatter)
+            updated_content = set_frontmatter_in_file(file_path, frontmatter)
             
             # Update modification time
             os.utime(file_path, None)

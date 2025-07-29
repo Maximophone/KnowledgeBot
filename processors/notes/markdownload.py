@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter
+from ..common.frontmatter import parse_frontmatter_from_content
 from ai_core import AI
 from prompts.prompts import get_prompt
 
@@ -39,7 +39,7 @@ class MarkdownloadProcessor(NoteProcessor):
         
         # Read source file
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         
         # Generate summary
         message = Message(

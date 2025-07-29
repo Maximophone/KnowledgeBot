@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
+from ..common.frontmatter import parse_frontmatter_from_content, frontmatter_to_text
 from integrations.gdoc_utils import GoogleDocUtils
 import os
 from prompts.prompts import get_prompt
@@ -40,7 +40,7 @@ class GDocProcessor(NoteProcessor):
         
         # Read the file
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
 
         if frontmatter.get("push_to_gdoc"):
             # Get the content from the file and create a new Google Doc

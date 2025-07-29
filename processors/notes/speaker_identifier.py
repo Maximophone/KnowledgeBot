@@ -8,7 +8,7 @@ import re
 import traceback
 
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
+from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text
 from ai_core import AI
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
@@ -94,7 +94,7 @@ class SpeakerIdentifier(NoteProcessor):
         logger.info("Processing file for speaker identification: %s", filename)
         
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         transcript = content.split('---', 2)[2].strip()
         
         # --- Special case: Check for single speaker transcripts ---
@@ -108,7 +108,7 @@ class SpeakerIdentifier(NoteProcessor):
             await self._substage1_identify_speakers(filename, frontmatter, transcript)
             # Reload frontmatter and transcript after modifications
             content = await self.read_file(filename)
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
             transcript = content.split('---', 2)[2].strip()
         else:
             logger.info("Speakers already identified for: %s", filename)
@@ -118,7 +118,7 @@ class SpeakerIdentifier(NoteProcessor):
             await self._substage2_initiate_matching(filename, frontmatter, transcript)
             # Reload frontmatter and transcript after modifications
             content = await self.read_file(filename)
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
             transcript = content.split('---', 2)[2].strip()
         else:
             logger.info("Speaker matching UI already initiated for: %s", filename)
@@ -368,7 +368,7 @@ class SpeakerIdentifier(NoteProcessor):
 
         try:
             content = await self.read_file(filename)
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
 
             if not frontmatter:
                 logger.warning(f"No frontmatter found in {filename}. Cannot reset stage.")

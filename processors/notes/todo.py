@@ -4,7 +4,7 @@ import aiofiles
 from datetime import datetime, timedelta, date
 import calendar
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, parse_frontmatter
+from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
@@ -68,7 +68,7 @@ Transcript:
         content = await self.read_file(filename)
 
         # Parse frontmatter and content
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         
         if not frontmatter:
             logger.warning("No frontmatter found in %s", filename)

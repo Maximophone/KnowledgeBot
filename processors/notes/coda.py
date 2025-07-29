@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
+from ..common.frontmatter import parse_frontmatter_from_content, frontmatter_to_text
 from integrations.coda_integration import CodaClient
 import os
 from config.secrets import CODA_API_KEY
@@ -36,7 +36,7 @@ class CodaProcessor(NoteProcessor):
         
         # Read the file
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         
         try:
             # Extract doc and page IDs from URL

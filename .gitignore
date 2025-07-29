@@ -16,3 +16,5 @@ test
 tests/data
 __pycache__
 data
+
+repomix-output.xml

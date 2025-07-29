@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, Dict
 import aiofiles
-from ..common.frontmatter import read_front_matter, update_front_matter, parse_frontmatter
+from ..common.frontmatter import read_frontmatter_from_file, set_frontmatter_in_file, parse_frontmatter_from_content
 import traceback
 from ai_core import AI
 import os
@@ -34,7 +34,7 @@ class NoteProcessor(ABC):
         # Check pipeline stage requirements
         file_path = self.input_dir.joinpath(filename)
         try:
-            frontmatter = read_front_matter(file_path)
+            frontmatter = read_frontmatter_from_file(file_path)
         except Exception as e:
             logger.error("Error reading frontmatter for %s in stage %s: %s", filename, self.__class__.stage_name, str(e))
             return False
@@ -72,12 +72,12 @@ class NoteProcessor(ABC):
             
             # Update processing stages
             file_path = self.input_dir / filename
-            frontmatter = read_front_matter(file_path)
+            frontmatter = read_frontmatter_from_file(file_path)
             if 'processing_stages' not in frontmatter:
                 frontmatter['processing_stages'] = []
             if self.__class__.stage_name not in frontmatter['processing_stages']:
                 frontmatter['processing_stages'].append(self.__class__.stage_name)
-            update_front_matter(file_path, frontmatter)
+            set_frontmatter_in_file(file_path, frontmatter)
             os.utime(file_path, None)
             
         except Exception as e:

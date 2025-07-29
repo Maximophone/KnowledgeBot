@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, frontmatter_to_text
+from ..common.frontmatter import parse_frontmatter_from_content, frontmatter_to_text
 from prompts.prompts import get_prompt
 
 from ai_core.types import Message, MessageContent
@@ -35,7 +35,7 @@ class ConversationProcessor(NoteProcessor):
         # Parse frontmatter if it exists
         has_frontmatter = content.startswith('---')
         if has_frontmatter:
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
             text = content.split('---', 2)[2].strip()
         else:
             frontmatter = {

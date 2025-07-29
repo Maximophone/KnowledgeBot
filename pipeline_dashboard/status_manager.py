@@ -19,7 +19,7 @@ try:
     # Ensure processors path is included
     if str(PROJECT_ROOT / 'processors') not in sys.path:
          sys.path.insert(0, str(PROJECT_ROOT / 'processors'))
-    from common.frontmatter import read_front_matter, update_front_matter
+    from processors.common.frontmatter import read_frontmatter_from_file
     # Import the function to get processor instances
     from kb_service import instantiate_all_processors
     # Import specific classes needed for hasattr checks
@@ -112,7 +112,7 @@ def update_status_index():
 
             # File is new or modified, read frontmatter
             logging.debug(f"Reading frontmatter for: {filename}")
-            frontmatter = read_front_matter(file_path)
+            frontmatter = read_frontmatter_from_file(file_path)
             if not frontmatter:
                  logging.warning(f"No frontmatter found in {filename}. Skipping index update for this file.")
                  # If the file exists in index, remove it or mark as invalid?

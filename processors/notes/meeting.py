@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import parse_frontmatter, update_front_matter
+from ..common.frontmatter import parse_frontmatter_from_content, set_frontmatter_in_file
 from config.logging_config import setup_logger
 from .speaker_identifier import SpeakerIdentifier
 import os
@@ -39,7 +39,7 @@ class MeetingProcessor(NoteProcessor):
         
         # Read source transcript
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         
         if not frontmatter:
             logger.warning("No frontmatter found in %s", filename)
@@ -83,7 +83,7 @@ class MeetingProcessor(NoteProcessor):
         try:
             async with aiofiles.open(input_path, 'r', encoding='utf-8') as f:
                 source_content = await f.read()
-            frontmatter = parse_frontmatter(source_content)
+            frontmatter = parse_frontmatter_from_content(source_content)
 
             if not frontmatter:
                 logger.warning(f"No frontmatter found in source file {input_path}. Cannot reset stage '{self.stage_name}'.")
@@ -137,7 +137,7 @@ class MeetingProcessor(NoteProcessor):
             frontmatter['processing_stages'].remove(self.stage_name)
             
             # Use the synchronous update_front_matter, following pattern from other resets
-            update_front_matter(input_path, frontmatter) 
+            set_frontmatter_in_file(input_path, frontmatter) 
             os.utime(input_path, None) # Update modification time
             
             logger.info(f"Successfully reset stage '{self.stage_name}' for: {filename}")

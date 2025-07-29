@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, parse_frontmatter
+from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content
 from ..common.markdown import create_wikilink
 from ai_core.types import Message, MessageContent
 from prompts.prompts import get_prompt
@@ -53,7 +53,7 @@ tags:
         content = await self.read_file(filename)
         
         # Parse frontmatter and content
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         
         if not frontmatter:
             logger.warning("No frontmatter found in %s", filename)

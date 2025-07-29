@@ -17,7 +17,80 @@ These tests cover:
 """
 
 import unittest
-from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text, update_frontmatter
+import os
+from processors.common.frontmatter import read_text, parse_frontmatter_from_content, frontmatter_to_text, update_frontmatter_in_content
+
+class TestReadText(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = "test_data"
+        if not os.path.exists(self.test_dir):
+            os.makedirs(self.test_dir)
+
+    def tearDown(self):
+        for f in os.listdir(self.test_dir):
+            os.remove(os.path.join(self.test_dir, f))
+        os.rmdir(self.test_dir)
+
+    def _create_file(self, filename, content):
+        path = os.path.join(self.test_dir, filename)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return path
+
+    def test_with_valid_frontmatter(self):
+        content = "---\ntitle: Test\n---\nHello World"
+        path = self._create_file("valid.md", content)
+        self.assertEqual(read_text(path), "Hello World")
+
+    def test_no_frontmatter(self):
+        content = "Hello World"
+        path = self._create_file("no_fm.md", content)
+        self.assertEqual(read_text(path), content)
+
+    def test_empty_file(self):
+        path = self._create_file("empty.md", "")
+        self.assertEqual(read_text(path), "")
+
+    def test_only_frontmatter(self):
+        content = "---\ntitle: Test\n---"
+        path = self._create_file("only_fm.md", content)
+        self.assertEqual(read_text(path), "")
+
+    def test_frontmatter_with_three_dashes_inside(self):
+        content = "---\ntitle: Test\ncontent: ---\n---\nHello World"
+        path = self._create_file("dashes_inside.md", content)
+        self.assertEqual(read_text(path), "Hello World")
+
+    def test_malformed_frontmatter_start(self):
+        content = " ---\ntitle: Test\n---\nHello World"
+        path = self._create_file("malformed_start.md", content)
+        self.assertEqual(read_text(path), content)
+
+    def test_malformed_frontmatter_end(self):
+        content = "---\ntitle: Test\n --- \nHello World"
+        path = self._create_file("malformed_end.md", content)
+        self.assertEqual(read_text(path), content)
+
+    def test_no_closing_delimiter(self):
+        content = "---\ntitle: Test\nHello World"
+        path = self._create_file("no_closing.md", content)
+        self.assertEqual(read_text(path), content)
+
+    def test_invalid_yaml(self):
+        content = "---\ntitle: \"Unclosed string\n---\nHello World"
+        path = self._create_file("invalid_yaml.md", content)
+        self.assertEqual(read_text(path), content)
+
+    def test_empty_frontmatter(self):
+        content = "---\n---\nHello World"
+        path = self._create_file("empty_fm.md", content)
+        self.assertEqual(read_text(path), "Hello World")
+        
+    def test_crlf_line_endings(self):
+        content = "---\r\ntitle: Test\r\n---\r\nHello World"
+        path = self._create_file("crlf.md", content)
+        self.assertEqual(read_text(path), "Hello World")
+
 
 class TestFrontmatter(unittest.TestCase):
 
@@ -28,7 +101,7 @@ tags: [one, two]
 ---
 # Content here
 """
-        result = parse_frontmatter(content)
+        result = parse_frontmatter_from_content(content)
         expected = {
             'title': 'Test',
             'tags': ['one', 'two']
@@ -37,7 +110,7 @@ tags: [one, two]
 
     def test_parse_frontmatter_invalid(self):
         # No frontmatter
-        self.assertIsNone(parse_frontmatter("Just content"))
+        self.assertIsNone(parse_frontmatter_from_content("Just content"))
         
         # Invalid YAML
         content = """---
@@ -45,14 +118,14 @@ title: "unclosed string
 ---
 content
 """
-        self.assertIsNone(parse_frontmatter(content))
+        self.assertIsNone(parse_frontmatter_from_content(content))
         
         # Missing end delimiter
         content = """---
 title: Test
 content
 """
-        self.assertIsNone(parse_frontmatter(content))
+        self.assertIsNone(parse_frontmatter_from_content(content))
 
     def test_frontmatter_to_text(self):
         frontmatter = {
@@ -87,10 +160,10 @@ More content
             'date': '2024-03-20'
         }
         
-        result = update_frontmatter(original, updates)
+        result = update_frontmatter_in_content(original, updates)
         
         # Verify the updated frontmatter
-        parsed = parse_frontmatter(result)
+        parsed = parse_frontmatter_from_content(result)
         self.assertEqual(parsed['title'], 'Original')  # Unchanged
         self.assertEqual(parsed['tags'], ['one', 'two'])  # Updated
         self.assertEqual(parsed['date'], '2024-03-20')  # Added
@@ -102,10 +175,10 @@ More content
         original = "# Just content\nMore content"
         updates = {'title': 'New', 'tags': ['test']}
         
-        result = update_frontmatter(original, updates)
+        result = update_frontmatter_in_content(original, updates)
         
         # Verify the new frontmatter
-        parsed = parse_frontmatter(result)
+        parsed = parse_frontmatter_from_content(result)
         self.assertEqual(parsed['title'], 'New')
         self.assertEqual(parsed['tags'], ['test'])
         
@@ -118,8 +191,8 @@ title: Original
 ---
 # Content
 """
-        result = update_frontmatter(original, {})
-        parsed = parse_frontmatter(result)
+        result = update_frontmatter_in_content(original, {})
+        parsed = parse_frontmatter_from_content(result)
         self.assertEqual(parsed['title'], 'Original')
         self.assertIn('# Content', result)
 
@@ -129,9 +202,51 @@ title: Original
             'author': 'José'
         }
         result = frontmatter_to_text(frontmatter)
-        parsed = parse_frontmatter(result)
+        parsed = parse_frontmatter_from_content(result)
         self.assertEqual(parsed['title'], '测试')
         self.assertEqual(parsed['author'], 'José')
+
+    def test_parse_frontmatter_empty_content(self):
+        self.assertIsNone(parse_frontmatter_from_content(""))
+
+    def test_parse_frontmatter_empty_fm_block(self):
+        content = "---\n---\n# Content"
+        self.assertEqual(parse_frontmatter_from_content(content), {})
+
+    def test_update_frontmatter_with_dashes_in_content(self):
+        original = """---
+title: Original
+---
+# Content
+--- with dashes ---
+"""
+        updates = {'author': 'Me'}
+        result = update_frontmatter_in_content(original, updates)
+        parsed = parse_frontmatter_from_content(result)
+        self.assertEqual(parsed['title'], 'Original')
+        self.assertEqual(parsed['author'], 'Me')
+        self.assertIn('--- with dashes ---', result)
+
+    def test_update_frontmatter_malformed_no_closing_delimiter(self):
+        original = "---\ntitle: Malformed\n# Content"
+        updates = {'author': 'Me'}
+        result = update_frontmatter_in_content(original, updates)
+        parsed = parse_frontmatter_from_content(result)
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.get('author'), 'Me')
+        # The new frontmatter should be at the start, and the original content should still be there
+        self.assertTrue(result.startswith('---\nauthor: Me\n---\n'))
+        self.assertIn(original, result)
+
+    def test_parse_frontmatter_with_dashes_in_value(self):
+        content = """---
+title: Title with --- in it
+---
+# Content
+"""
+        result = parse_frontmatter_from_content(content)
+        expected = {'title': 'Title with --- in it'}
+        self.assertEqual(result, expected)
 
 if __name__ == '__main__':
     unittest.main()

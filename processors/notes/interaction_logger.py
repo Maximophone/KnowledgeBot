@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, parse_frontmatter, frontmatter_to_text
+from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text
 from ai_core import AI
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
@@ -225,7 +225,7 @@ Your final output should be a series of bullet points that can be directly appen
         
         # Read the transcript file
         content = await self.read_file(filename)
-        frontmatter = parse_frontmatter(content)
+        frontmatter = parse_frontmatter_from_content(content)
         transcript = content.split('---', 2)[2].strip()
         
         # Extract required information
@@ -437,7 +437,7 @@ Your final output should be a series of bullet points that can be directly appen
         try:
             # Read and parse the transcript
             content = await self.read_file(filename)
-            frontmatter = parse_frontmatter(content)
+            frontmatter = parse_frontmatter_from_content(content)
             transcript = content.split('---', 2)[2].strip()
 
             if not frontmatter:

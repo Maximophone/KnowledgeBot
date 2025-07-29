@@ -1,7 +1,7 @@
 from ai_core.tools import tool
 from pathlib import Path
 from config.paths import PATHS
-from processors.common.frontmatter import parse_frontmatter, frontmatter_to_text, update_frontmatter
+from processors.common.frontmatter import parse_frontmatter_from_content, frontmatter_to_text, update_frontmatter_in_content
 from datetime import datetime
 from .file_utils import validate_filepath, ensure_md_extension
 import json
@@ -108,7 +108,7 @@ def append_memory(
         existing_content = f.read()
     
     # Parse existing metadata
-    existing_meta = parse_frontmatter(existing_content) or {}
+    existing_meta = parse_frontmatter_from_content(existing_content) or {}
     
     # Update metadata if provided
     if metadata:
@@ -157,7 +157,7 @@ def read_memory(filepath: str) -> str:
     with open(full_path, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    metadata = parse_frontmatter(content) or {}
+    metadata = parse_frontmatter_from_content(content) or {}
     
     # Remove frontmatter from content if it exists
     if content.startswith('---\n'):
@@ -218,7 +218,7 @@ def search_memories(query: str) -> str:
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            metadata = parse_frontmatter(content) or {}
+            metadata = parse_frontmatter_from_content(content) or {}
             
             # Remove frontmatter from content if it exists
             if content.startswith('---\n'):
@@ -292,7 +292,7 @@ def apply_content_patch(filepath: Path, diff_content: str) -> tuple[bool, str, d
         full_content = f.read()
     
     # Split frontmatter and content
-    meta = parse_frontmatter(full_content) or {}
+    meta = parse_frontmatter_from_content(full_content) or {}
     if not full_content.startswith('---\n'):
         content = full_content
     else:

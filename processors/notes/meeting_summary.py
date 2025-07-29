@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter
+from ..common.frontmatter import read_frontmatter_from_file
 from ai_core.types import Message, MessageContent
 from config.logging_config import setup_logger
 from prompts.prompts import get_prompt
@@ -28,7 +28,7 @@ class MeetingSummaryProcessor(NoteProcessor):
         if not transcript_path.exists():
             return False
 
-        transcript_frontmatter = read_front_matter(transcript_path)
+        transcript_frontmatter = read_frontmatter_from_file(transcript_path)
         if "speakers_identified" not in transcript_frontmatter.get("processing_stages", []):
             return False
 

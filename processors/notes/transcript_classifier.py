@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import aiofiles
 from .base import NoteProcessor
-from ..common.frontmatter import read_front_matter, update_front_matter
+from ..common.frontmatter import read_frontmatter_from_file, set_frontmatter_in_file
 from prompts.prompts import get_prompt
 from ai_core import AI
 from ai_core.types import Message, MessageContent
@@ -50,11 +50,11 @@ class TranscriptClassifier(NoteProcessor):
         
         # Update frontmatter
         file_path = self.input_dir / filename
-        frontmatter = read_front_matter(file_path)
+        frontmatter = read_frontmatter_from_file(file_path)
         frontmatter["category"] = category
         if "tags" not in frontmatter:
             frontmatter["tags"] = []
         frontmatter["tags"].append(category)
         
-        update_front_matter(file_path, frontmatter)
+        set_frontmatter_in_file(file_path, frontmatter)
         logger.info("Updated classification for: %s", filename)
