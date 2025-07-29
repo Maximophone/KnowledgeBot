@@ -28,7 +28,10 @@ class GDocUploadProcessor(NoteProcessor):
             return False
         if frontmatter.get("category") != "meeting":
             return False
-        if not isinstance(frontmatter.get("identified_speakers"), dict):
+        if not isinstance(frontmatter.get("final_speaker_mapping"), dict):
+            return False
+        if len(frontmatter.get("final_speaker_mapping", {})) <= 1:
+            # We need at least two speakers to upload to a Google Doc
             return False
         if "gdoc_transcript_link" in frontmatter:
             return False
