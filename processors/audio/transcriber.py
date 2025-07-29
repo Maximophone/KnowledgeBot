@@ -145,7 +145,7 @@ class AudioTranscriber:
                 "processing_stages": ["transcribed"]  # Initialize as list
             }
             
-            full_content = frontmatter_to_text(frontmatter) + "\n" + text_with_speaker_labels
+            full_content = frontmatter_to_text(frontmatter) + text_with_speaker_labels
 
             md_filename = f"{base_filename}.md"
             md_path = self.output_dir / md_filename

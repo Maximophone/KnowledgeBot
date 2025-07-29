@@ -68,7 +68,7 @@ class DiaryProcessor(NoteProcessor):
         # Combine into final content
         final_content = (
             frontmatter_to_text(new_frontmatter) +
-            "\n# Diary Entry\n\n" +
+            "# Diary Entry\n\n" +
             formatted_entry +
             "\n\n## Original Transcription\n" +
             transcript

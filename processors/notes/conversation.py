@@ -71,7 +71,7 @@ class ConversationProcessor(NoteProcessor):
         # Combine into final content
         final_content = (
             frontmatter_to_text(frontmatter) +
-            "\n## Summary\n" +
+            "## Summary\n" +
             summary + "\n\n" +
             "## Conversation\n" +
             formatted_conversation

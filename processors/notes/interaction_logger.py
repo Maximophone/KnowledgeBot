@@ -303,7 +303,7 @@ Your final output should be a series of bullet points that can be directly appen
                     
                     # Update the transcript's frontmatter
                     file_path = self.input_dir / filename
-                    updated_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+                    updated_content = frontmatter_to_text(frontmatter) + transcript
                     
                     # Write back to the file
                     async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
@@ -470,7 +470,7 @@ Your final output should be a series of bullet points that can be directly appen
                 frontmatter['processing_stages'] = processing_stages
 
             # Write the updated transcript
-            updated_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+            updated_content = frontmatter_to_text(frontmatter) + transcript
             async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
                 await f.write(updated_content)
             

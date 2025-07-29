@@ -72,7 +72,6 @@ class MeditationProcessor(NoteProcessor):
         # Combine into final markdown
         final_content = (
             frontmatter_to_text(new_frontmatter) +
-            "\n" +
             ai_response +
             "\n\n## Original Transcription\n" +
             transcript

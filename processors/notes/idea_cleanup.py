@@ -70,7 +70,7 @@ class IdeaCleanupProcessor(NoteProcessor):
         # Combine into final content
         final_content = (
             frontmatter_to_text(new_frontmatter) +
-            "\n# Idea Development\n\n" +
+            "# Idea Development\n\n" +
             formatted_entry +
             "\n\n## Original Transcription\n" +
             transcript

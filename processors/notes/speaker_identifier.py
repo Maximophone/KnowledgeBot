@@ -151,7 +151,7 @@ class SpeakerIdentifier(NoteProcessor):
         new_transcript = re.sub(pattern, f"{USER_NAME} ([[{USER_ORGANIZATION}]]):", new_transcript)
         
         # Save the updated file
-        full_content = frontmatter_to_text(frontmatter) + "\n" + new_transcript
+        full_content = frontmatter_to_text(frontmatter) + new_transcript
         async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
@@ -179,7 +179,7 @@ class SpeakerIdentifier(NoteProcessor):
         
         # Save the identified speakers to frontmatter immediately
         frontmatter['identified_speakers'] = speaker_mapping
-        temp_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+        temp_content = frontmatter_to_text(frontmatter) + transcript
         async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
             await f.write(temp_content)
         os.utime(self.input_dir / filename, None)
@@ -257,7 +257,7 @@ class SpeakerIdentifier(NoteProcessor):
         frontmatter['speaker_matcher_task_id'] = task_id
         
         # Save updated file
-        full_content = frontmatter_to_text(frontmatter) + "\n" + transcript
+        full_content = frontmatter_to_text(frontmatter) + transcript
         async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
@@ -351,7 +351,7 @@ class SpeakerIdentifier(NoteProcessor):
             new_transcript = re.sub(pattern, replacement, new_transcript)
         
         # Save the updated file
-        full_content = frontmatter_to_text(frontmatter) + "\n" + new_transcript
+        full_content = frontmatter_to_text(frontmatter) + new_transcript
         async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
             await f.write(full_content)
         os.utime(self.input_dir / filename, None)
@@ -447,7 +447,7 @@ class SpeakerIdentifier(NoteProcessor):
                  #     del cleaned_frontmatter['processing_stages']
 
             # --- Combine and Save ---            
-            new_content = frontmatter_to_text(cleaned_frontmatter) + "\n" + transcript_to_save
+            new_content = frontmatter_to_text(cleaned_frontmatter) + transcript_to_save
 
             # Write back to file
             async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
