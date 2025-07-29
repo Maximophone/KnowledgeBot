@@ -225,8 +225,9 @@ if __name__ == "__main__":
     logger.info(f"Logging level set to {args.log_level}") # Log level confirmation
 
     # Silence APScheduler executor logs below WARNING level
-    logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
-    logger.info("Set APScheduler executor default logging level to WARNING to reduce noise.")
+    logging.getLogger('apscheduler.executors.default').setLevel(logging.ERROR)
+    logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)
+    logger.info("Set APScheduler executor default logging level to ERROR to reduce noise.")
 
     # Run the main async function
     try:

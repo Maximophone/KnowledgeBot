@@ -67,6 +67,7 @@ class NoteProcessor(ABC):
     async def _process_file(self, filename: str) -> None:
         """Wrapper for file processing that handles stage tracking."""
         try:
+            logger.info(f"Processing file {filename} for stage {self.__class__.stage_name}")
             # Process the file
             await self.process_file(filename)
             
@@ -96,6 +97,7 @@ class NoteProcessor(ABC):
 
     async def process_all(self) -> None:
         """Process all eligible files in the input directory."""
+        logger.debug(f"Processing all eligible files for stage {self.__class__.stage_name}")
         for file_path in self.input_dir.iterdir():
             await asyncio.sleep(0)
             filename = file_path.name
@@ -114,3 +116,4 @@ class NoteProcessor(ABC):
                 traceback.print_exc()
             finally:
                 self.files_in_process.remove(filename)
+        logger.debug(f"Finished processing all eligible files for stage {self.__class__.stage_name}")
