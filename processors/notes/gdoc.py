@@ -28,7 +28,7 @@ class GDocProcessor(NoteProcessor):
         if frontmatter.get("synced"):
             return False
 
-        if frontmatter.get("push_to_gdoc"):
+        if frontmatter.get("push_to_gdoc") or frontmatter.get("push_to_gdrive"):
             return True
         
         # Process if it has a URL
@@ -42,17 +42,21 @@ class GDocProcessor(NoteProcessor):
         content = await self.read_file(filename)
         frontmatter = parse_frontmatter_from_content(content)
 
-        if frontmatter.get("push_to_gdoc"):
+        if frontmatter.get("push_to_gdoc") or frontmatter.get("push_to_gdrive"):
             # Get the content from the file and create a new Google Doc
             gdoc_content_md = content.split("---", 2)[2]
-            folder_id = self.gdu.extract_folder_id_from_url(frontmatter["push_to_gdoc"])
+            folder_url = frontmatter.get("push_to_gdoc") or frontmatter.get("push_to_gdrive")
+            folder_id = self.gdu.extract_folder_id_from_url(folder_url)
             url = self.gdu.create_document_from_text(
                 filename.replace(".md", ""), 
                 gdoc_content_md, 
                 folder_id, 
                 mime_type="text/markdown")
             frontmatter["url"] = url
-            frontmatter.pop("push_to_gdoc")
+            if frontmatter.get("push_to_gdoc"):
+                frontmatter.pop("push_to_gdoc")
+            if frontmatter.get("push_to_gdrive"):
+                frontmatter.pop("push_to_gdrive")
         else:
             # Download and process Google Doc
             gdoc_content_md = self.gdu.get_document_as_markdown(frontmatter["url"])
