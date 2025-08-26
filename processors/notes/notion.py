@@ -90,6 +90,7 @@ class NotionProcessor(NoteProcessor):
                 body_md = content
 
             parent_url = local_frontmatter.get("push_to_notion")
+            parent_type = local_frontmatter.get("parent_type", "database" if "?v=" in parent_url else "page")
             title = filename.replace(".md", "")
 
             try:
@@ -97,6 +98,7 @@ class NotionProcessor(NoteProcessor):
                     markdown_content=body_md,
                     parent_url=parent_url,
                     title=title,
+                    parent_type=parent_type
                 )
                 # The integration returns a dict with fields like 'id' and 'url'.
                 notion_url = None

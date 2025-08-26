@@ -5,7 +5,7 @@ class NotionClient:
     def __init__(self):
         self.client = create_notion_client()
 
-    def create_page_from_markdown(self, markdown_content: str, parent_url: str, title: Optional[str] = None) -> Dict[str, Any]:
+    def create_page_from_markdown(self, markdown_content: str, parent_url: str, title: Optional[str] = None, parent_type="page") -> Dict[str, Any]:
         """
         Create a Notion page from Markdown content.
         
@@ -13,12 +13,12 @@ class NotionClient:
             markdown_content: The Markdown content
             parent_url: Parent page or database ID
             title: Optional page title. If None, extracts from first # heading
-            
+            parent_type: The type of parent ("page" or "database")
         Returns:
             The created page response from Notion API
         """
         parent_id = extract_page_id(parent_url)
-        page_id = create_page_from_markdown(markdown_content, parent_id, title, self.client)
+        page_id = create_page_from_markdown(markdown_content, parent_id=parent_id, title=title, parent_type=parent_type, client=self.client)
         return page_id
     
     def fetch_page_as_markdown(self, page_url: str) -> str:
