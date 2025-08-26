@@ -14,6 +14,7 @@ from processors.notes.meditation import MeditationProcessor
 from processors.notes.ideas import IdeaProcessor
 from processors.notes.gdoc import GDocProcessor
 from processors.notes.coda import CodaProcessor
+from processors.notes.notion import NotionProcessor
 from processors.notes.markdownload import MarkdownloadProcessor
 from processors.notes.speaker_identifier import SpeakerIdentifier
 from processors.notes.meeting import MeetingProcessor
@@ -63,22 +64,27 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
     # processors["video_to_audio"] = video_to_audio_processor # Example key
 
     # Instantiate note processors
+    # note_processor_classes = [
+    #     MeditationProcessor,
+    #     IdeaProcessor,
+    #     GDocProcessor,
+    #     CodaProcessor,
+    #     NotionProcessor,
+    #     MarkdownloadProcessor,
+    #     SpeakerIdentifier,
+    #     MeetingProcessor,
+    #     MeetingSummaryProcessor,
+    #     TranscriptClassifier,
+    #     ConversationProcessor,
+    #     DiaryProcessor,
+    #     IdeaCleanupProcessor,
+    #     TodoProcessor,
+    #     InteractionLogger,
+    #     GDocUploadProcessor
+    # ]
+
     note_processor_classes = [
-        MeditationProcessor,
-        IdeaProcessor,
-        GDocProcessor,
-        CodaProcessor,
-        MarkdownloadProcessor,
-        SpeakerIdentifier,
-        MeetingProcessor,
-        MeetingSummaryProcessor,
-        TranscriptClassifier,
-        ConversationProcessor,
-        DiaryProcessor,
-        IdeaCleanupProcessor,
-        TodoProcessor,
-        InteractionLogger,
-        GDocUploadProcessor
+        NotionProcessor
     ]
 
     for cls in note_processor_classes:
@@ -100,6 +106,8 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
                 instance = cls(input_dir=PATHS.gdoc_path)
             elif cls is CodaProcessor:
                 instance = cls(input_dir=PATHS.coda_path)
+            elif cls is NotionProcessor:
+                instance = cls(input_dir=PATHS.notion_path)
             elif cls is MarkdownloadProcessor:
                 instance = cls(input_dir=PATHS.markdownload_path, output_dir=PATHS.sources_path, template_path=PATHS.source_template_path)
             elif cls is SpeakerIdentifier:
