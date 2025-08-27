@@ -64,27 +64,23 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
     # processors["video_to_audio"] = video_to_audio_processor # Example key
 
     # Instantiate note processors
-    # note_processor_classes = [
-    #     MeditationProcessor,
-    #     IdeaProcessor,
-    #     GDocProcessor,
-    #     CodaProcessor,
-    #     NotionProcessor,
-    #     MarkdownloadProcessor,
-    #     SpeakerIdentifier,
-    #     MeetingProcessor,
-    #     MeetingSummaryProcessor,
-    #     TranscriptClassifier,
-    #     ConversationProcessor,
-    #     DiaryProcessor,
-    #     IdeaCleanupProcessor,
-    #     TodoProcessor,
-    #     InteractionLogger,
-    #     GDocUploadProcessor
-    # ]
-
     note_processor_classes = [
-        NotionProcessor
+        MeditationProcessor,
+        IdeaProcessor,
+        GDocProcessor,
+        CodaProcessor,
+        NotionProcessor,
+        MarkdownloadProcessor,
+        SpeakerIdentifier,
+        MeetingProcessor,
+        MeetingSummaryProcessor,
+        TranscriptClassifier,
+        ConversationProcessor,
+        DiaryProcessor,
+        IdeaCleanupProcessor,
+        TodoProcessor,
+        InteractionLogger,
+        GDocUploadProcessor
     ]
 
     for cls in note_processor_classes:
