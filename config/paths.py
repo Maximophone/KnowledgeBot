@@ -50,6 +50,9 @@ class Paths:
     # Google Drive paths
     meetings_gdrive_folder_id: str = "13tFGdok5I-UTlE-3_We7W1Yym_iV7SK7"
 
+    # Notion database URLs
+    meetings_notion_database_url: str = "https://www.notion.so/pauseia/24d28fc94b7780d78c4ec96a7a29f5c6?v=24d28fc94b778072b94a000cd54e5004"
+
     def __iter__(self):
         """Allow iteration over all paths for directory creation."""
         return iter([

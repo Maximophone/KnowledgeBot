@@ -29,9 +29,23 @@ from processors.audio.video_to_audio import VideoToAudioProcessor
 # Import base class for type checking
 from processors.notes.base import NoteProcessor
 # Import the new processor
-from processors.notes.gdoc_uploader import GDocUploadProcessor
+from processors.notes.notion_uploader import NotionUploadProcessor
 
 from integrations.discord import DiscordIOCore
+
+import sys, io, os
+
+# Ensure stdout/stderr use UTF-8 on Windows to avoid 'charmap' UnicodeEncodeError
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    else:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 # Initialize logger for this module
 logger = setup_logger(__name__)
@@ -80,7 +94,7 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
         IdeaCleanupProcessor,
         TodoProcessor,
         InteractionLogger,
-        GDocUploadProcessor
+        NotionUploadProcessor
     ]
 
     for cls in note_processor_classes:
@@ -124,8 +138,8 @@ def instantiate_all_processors(discord_io: DiscordIOCore) -> Dict[str, Any]:
                 instance = cls(input_dir=PATHS.transcriptions, directory_file=PATHS.todo_directory)
             elif cls is InteractionLogger:
                 instance = cls(input_dir=PATHS.transcriptions)
-            elif cls is GDocUploadProcessor:
-                instance = cls(input_dir=PATHS.transcriptions, gdrive_folder_id=PATHS.meetings_gdrive_folder_id)
+            elif cls is NotionUploadProcessor:
+                instance = cls(input_dir=PATHS.transcriptions, database_url=PATHS.meetings_notion_database_url)
 
             processors[cls.stage_name] = instance
 
