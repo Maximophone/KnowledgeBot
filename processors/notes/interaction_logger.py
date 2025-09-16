@@ -165,7 +165,11 @@ class InteractionLogger(NoteProcessor):
         
         # Filter out future logs from the person's notes before sending to AI
         filtered_person_content = await self._filter_future_logs(person_content, meeting_date)
-        
+
+        # If the length of filtered_person_content is longer than 10,000 characters, truncate and add "...[truncated]"
+        if len(filtered_person_content) > 10000:
+            filtered_person_content = filtered_person_content[:10000] + "...[truncated]"
+
         prompt = f"""
 You will be given a transcript of a meeting, the name of a participant in this meeting, and some background notes on this person. Your task is to extract specific information about this person to be appended to a markdown log. Follow these instructions carefully:
 
