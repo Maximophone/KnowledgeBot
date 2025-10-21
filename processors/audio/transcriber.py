@@ -70,7 +70,7 @@ class AudioTranscriber:
     
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
         _, ext = os.path.splitext(filename)
-        return ext.lower() not in ['.mkv', '.mp4', '.avi']
+        return ext.lower() not in ['.mkv', '.mp4', '.avi', ".ini"]
     
     async def process_single_file(self, filename: str) -> None:
         """Process a single audio file: transcribe and save outputs."""
