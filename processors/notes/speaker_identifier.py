@@ -6,6 +6,7 @@ import json
 import os
 import re
 import traceback
+import asyncio
 
 from .base import NoteProcessor
 from ..common.frontmatter import read_frontmatter_from_file, parse_frontmatter_from_content, frontmatter_to_text, read_text_from_content
@@ -18,6 +19,8 @@ from integrations.discord import DiscordIOCore
 from .transcript_classifier import TranscriptClassifier
 
 logger = setup_logger(__name__)
+
+SPEAKER_IDENTIFICATION_MAX_RETRIES = 3
 
 class SpeakerIdentificationError(Exception):
     """Exception raised when speaker identification processing encounters an error."""
@@ -69,9 +72,37 @@ class SpeakerIdentifier(NoteProcessor):
                 text=prompt
             )]
         )
-        return self.ai_model.message(message).content.strip()
+        response = await asyncio.to_thread(self.ai_model.message, message)
+        fallback = False
+        fallback_message = ""
+        response_content = ""
+        response_content = ""
+        fallback = False
+        fallback_message = ""
+        if response.content is None:
+            # Try fallback model up to max_retries times
+            # Often this happens because the reasoning model reaches its max tokens during its reasoning.
+            max_retries = SPEAKER_IDENTIFICATION_MAX_RETRIES
+            fallback = True
+            fallback_message = "Used fallback model for speaker identification. "
+            logger.warning("Fallback to tiny model used for speaker identification.")
+            retry_count = 0
+            while retry_count < max_retries:
+                response = await asyncio.to_thread(self.tiny_ai_model.message, message)
+                if response.content is not None:
+                    response_content = response.content
+                    break
+                retry_count += 1
+                logger.warning(f"Fallback tiny model response was empty for speaker {speaker_label}. Retry {retry_count}/{max_retries}...")
+            else:
+                logger.error("Response from AI is empty after retries. Response error: %s", response.error)
+                response_content = f"PROBLEM WITH SPEAKER IDENTIFICATION FOR SPEAKER {speaker_label}."
+        else:
+            response_content = response.content
 
-    def consolidate_answer(self, text: str) -> str:
+        return fallback_message + response_content.strip()
+
+    async def consolidate_answer(self, text: str) -> str:
         """Extract just the name from the verbose AI response."""
         prompt = f"""The text below is the answer from an LLM that was tasked to identify someone.
         Please return only the first name of the person identified, or "unknown" if the LLM was unable to identify the person. 
@@ -87,8 +118,13 @@ class SpeakerIdentifier(NoteProcessor):
                 text=prompt
             )]
         )
-        return self.tiny_ai_model.message(message).content.strip()
-        
+        response = await asyncio.to_thread(self.tiny_ai_model.message, message)
+        if response.content is None:
+            logger.error("Response from AI is empty. Response error: %s", response.error)
+            return "unknown"
+        else:
+            return response.content.strip()
+
     async def process_file(self, filename: str) -> None:
         """Process a transcript file through all substages: identify speakers, initiate matching, and process results."""
         logger.info("Processing file for speaker identification: %s", filename)
@@ -168,7 +204,7 @@ class SpeakerIdentifier(NoteProcessor):
             logger.info("Identifying %s...", speaker)
             label = speaker.replace('Speaker ', '')
             identified_name_verbose = await self.identify_speaker(transcript, label)
-            identified_name = self.consolidate_answer(identified_name_verbose)
+            identified_name = await self.consolidate_answer(identified_name_verbose)
 
             logger.info("Result: %s", identified_name_verbose)
             # Store both name and reason
@@ -263,6 +299,29 @@ class SpeakerIdentifier(NoteProcessor):
         os.utime(self.input_dir / filename, None)
         logger.info("Completed speaker matching UI initiation for: %s", filename)
     
+    async def _clear_matching_session_fields_and_save(self, filename: str, frontmatter: Dict, transcript: str) -> None:
+        """Clear session-specific matching fields and persist the file.
+
+        This is used to gracefully recover when the external UI server restarts
+        or the ephemeral results endpoint is no longer valid. By removing these
+        fields, the next processing pass re-enters substage 2 to obtain a fresh
+        set of URLs without discarding previously identified speakers.
+        """
+        # Remove only the session-scoped fields so we can re-initiate matching
+        for key in (
+            'speaker_matcher_ui_url',
+            'speaker_matcher_results_url',
+            'speaker_matcher_task_id',
+        ):
+            if key in frontmatter:
+                del frontmatter[key]
+
+        full_content = frontmatter_to_text(frontmatter) + transcript
+        async with aiofiles.open(self.input_dir / filename, "w", encoding='utf-8') as f:
+            await f.write(full_content)
+        os.utime(self.input_dir / filename, None)
+        logger.info("Cleared speaker matcher session fields for: %s", filename)
+
     async def _substage3_process_results(self, filename: str, frontmatter: Dict, transcript: str) -> None:
         """Substage 3: Poll for matching results and process when ready."""
         # Get the results URL from the frontmatter
@@ -272,43 +331,86 @@ class SpeakerIdentifier(NoteProcessor):
             logger.error(error_msg)
             raise SpeakerIdentificationError(error_msg)
         
-        # Poll the results endpoint
+        # Poll the results endpoint with minimal retry and timeouts.
+        # If the endpoint has been lost (e.g., UI server restarted), clear the
+        # session fields so the next pass re-initiates substage 2.
         logger.info("Polling for speaker matching results for: %s", filename)
+
+        timeout = aiohttp.ClientTimeout(total=15, connect=5)
+        max_attempts = 3
+        backoff_seconds = 1.0
+        results = None  # Will hold the results on success
+
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(results_url) as response:
-                    response.raise_for_status()
-                    response_data = await response.json()
-                    
-                    # Check if results are ready
-                    status = response_data.get("status")
-                    
-                    if status == "PENDING":
-                        logger.info("Results not ready yet for: %s. Will retry later.", filename)
-                        # This is expected behavior that will result in retry
-                        raise ResultsNotReadyError(f"Results not ready for task: {response_data.get('task_id')}")
-                    
-                    if status != "COMPLETE":
-                        error_msg = f"Unexpected status from results endpoint: {status}"
-                        logger.error(error_msg)
-                        raise SpeakerIdentificationError(error_msg)
-                    
-                    # Extract the final speaker mapping
-                    results = response_data.get("results", {})
-                    if not results:
-                        error_msg = f"Empty results received for: {filename}"
-                        logger.error(error_msg)
-                        raise SpeakerIdentificationError(error_msg)
-                    
-                    logger.info("Successfully received matching results for: %s", filename)
-                    logger.info("Speaker mapping from UI: %s", results)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                for attempt in range(max_attempts):
+                    try:
+                        async with session.get(results_url) as response:
+                            response.raise_for_status()
+                            response_data = await response.json()
+
+                            # Check if results are ready
+                            status = response_data.get("status")
+
+                            if status == "PENDING":
+                                logger.info("Results not ready yet for: %s. Will retry later.", filename)
+                                # Let the scheduler retry later; do not clear session fields.
+                                raise ResultsNotReadyError(
+                                    f"Results not ready for task: {response_data.get('task_id')}"
+                                )
+
+                            if status != "COMPLETE":
+                                error_msg = f"Unexpected status from results endpoint: {status}"
+                                logger.error(error_msg)
+                                raise SpeakerIdentificationError(error_msg)
+
+                            # Extract the final speaker mapping
+                            results = response_data.get("results", {})
+                            if not results:
+                                error_msg = f"Empty results received for: {filename}"
+                                logger.error(error_msg)
+                                raise SpeakerIdentificationError(error_msg)
+
+                            logger.info("Successfully received matching results for: %s", filename)
+                            logger.info("Speaker mapping from UI: %s", results)
+                            break  # Success; exit retry loop
+
+                    except aiohttp.ClientResponseError as cre:
+                        # 404/410 likely means the ephemeral URL/session no longer exists
+                        if cre.status in (404, 410):
+                            logger.warning(
+                                "Results endpoint gone (status %s) for %s. Clearing session fields to re-initiate.",
+                                cre.status, filename,
+                            )
+                            await self._clear_matching_session_fields_and_save(filename, frontmatter, transcript)
+                            return
+                        # Other HTTP errors: retry a few times before clearing
+                        logger.warning(
+                            "HTTP error polling results (attempt %d/%d) for %s: %s",
+                            attempt + 1, max_attempts, filename, cre,
+                        )
+                    except (aiohttp.ClientError, json.JSONDecodeError, asyncio.TimeoutError) as e:
+                        # Transient network/parse/timeout issues: retry a few times
+                        logger.warning(
+                            "Transient error polling results (attempt %d/%d) for %s: %s",
+                            attempt + 1, max_attempts, filename, e,
+                        )
+
+                    # Apply simple exponential backoff between attempts
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(backoff_seconds * (2 ** attempt))
+                        continue
+
+                    # Exhausted attempts: clear session so next pass re-initiates substage 2
+                    logger.error(
+                        "Exhausted retries polling results for %s. Clearing session fields to re-initiate.",
+                        filename,
+                    )
+                    await self._clear_matching_session_fields_and_save(filename, frontmatter, transcript)
+                    return
         except ResultsNotReadyError:
-            # Re-raise this exception to trigger retry
+            # Re-raise to allow the orchestrator/scheduler to retry later
             raise
-        except (aiohttp.ClientError, json.JSONDecodeError) as e:
-            error_msg = f"Error polling results endpoint: {str(e)}"
-            logger.error(error_msg)
-            raise SpeakerIdentificationError(error_msg) from e
         
         # Process the results: create a modified copy for frontmatter with Obsidian links
         frontmatter_results = {}
