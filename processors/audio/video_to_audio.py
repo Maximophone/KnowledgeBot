@@ -21,6 +21,12 @@ class VideoToAudioProcessor:
         """Process all video files in the input directory."""
         for file_path in self.input_dir.iterdir():
             filename = file_path.name
+
+            # Check if the file is a video file (e.g., .mkv, .mp4, .avi)
+            _, ext = os.path.splitext(filename)
+            if ext.lower() not in ['.mkv', '.mp4', '.avi']:
+                return
+
             await self.process_single_file(filename)
             await asyncio.sleep(0)
 
@@ -32,11 +38,6 @@ class VideoToAudioProcessor:
             input_path = self.input_dir / filename
             output_path = self.output_dir / f"{os.path.splitext(filename)[0]}.m4a"
             
-            # Check if the file is a video file (e.g., .mkv, .mp4, .avi)
-            _, ext = os.path.splitext(filename)
-            if ext.lower() not in ['.mkv', '.mp4', '.avi']:
-                return
-
             # Extract audio using ffmpeg
             await self._extract_audio(input_path, output_path)
             
