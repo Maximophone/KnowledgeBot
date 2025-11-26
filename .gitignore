@@ -1,5 +1,7 @@
 secrets.yml
 .env
+.venv/
+venv/
 summary.txt
 *.m4a
 summary.json

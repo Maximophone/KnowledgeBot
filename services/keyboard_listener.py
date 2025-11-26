@@ -1,30 +1,45 @@
 """
 Keyboard Listener Module
 
-This module provides a system-wide hotkey (Ctrl+.) to trigger the popup window
-for text processing. It handles clipboard integration and ensures the window
-appears properly in focus.
+This module provides a system-wide hotkey (Ctrl+. on Windows/Linux, Cmd+. on macOS) 
+to trigger the popup window for text processing. It handles clipboard integration 
+and ensures the window appears properly in focus.
 
 Implementation notes:
+- Uses pynput for cross-platform keyboard monitoring (works on macOS without root)
 - Robust error handling with fallback methods for key operations
 - Comprehensive logging to help diagnose any issues
 - Safe window activation and focus management
 
 Compatibility considerations:
+- Works on macOS, Windows, and Linux without requiring elevated privileges
 - Some PyQt5 versions may have issues with certain methods, so fallbacks are provided
 - The show_popup function uses multiple layers of error handling to ensure stability
 - Error conditions are logged in detail to help with troubleshooting
+
+macOS Note:
+- On macOS, you may need to grant accessibility permissions to the terminal/IDE
+- Go to System Preferences > Security & Privacy > Privacy > Accessibility
 """
 
 import asyncio
-import keyboard
+import sys
 import pyperclip
+from pynput import keyboard
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 from ui.popup_window import PopupWindow
 from config.logging_config import setup_logger
 
 logger = setup_logger(__name__)
+
+# Determine the modifier key based on platform
+IS_MACOS = sys.platform == "darwin"
+MODIFIER_KEY = keyboard.Key.cmd if IS_MACOS else keyboard.Key.ctrl
+
+# Track pressed keys for hotkey detection
+_pressed_keys = set()
+
 
 def show_popup(test_mode=False):
     """
@@ -80,17 +95,52 @@ def show_popup(test_mode=False):
         logger.error(f"Failed to show popup: {str(e)}")
         return None
 
+
+def on_press(key):
+    """Handle key press events."""
+    _pressed_keys.add(key)
+    
+    # Check for hotkey: Ctrl+. (Windows/Linux) or Cmd+. (macOS)
+    try:
+        # Check if the modifier is pressed
+        if MODIFIER_KEY in _pressed_keys:
+            # Check for period key
+            if hasattr(key, 'char') and key.char == '.':
+                logger.info("Hotkey detected! Showing popup...")
+                show_popup()
+            elif key == keyboard.KeyCode.from_char('.'):
+                logger.info("Hotkey detected! Showing popup...")
+                show_popup()
+    except Exception as e:
+        logger.error(f"Error in key press handler: {str(e)}")
+
+
+def on_release(key):
+    """Handle key release events."""
+    try:
+        _pressed_keys.discard(key)
+    except Exception:
+        pass  # Ignore errors during key release
+
+
 async def main():
     """Main function to listen for the keyboard shortcut and show the popup"""
-    hotkey = 'ctrl+.'
-    logger.info("Listening for hotkey %s", hotkey)
+    hotkey_str = 'Cmd+.' if IS_MACOS else 'Ctrl+.'
+    logger.info("Listening for hotkey %s", hotkey_str)
     
-    # Register the hotkey
+    if IS_MACOS:
+        logger.info("Running on macOS - make sure accessibility permissions are granted")
+        logger.info("Go to System Preferences > Security & Privacy > Privacy > Accessibility")
+    
+    # Start the keyboard listener
     try:
-        keyboard.add_hotkey(hotkey, show_popup)
-        logger.info("Hotkey registered successfully")
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener.start()
+        logger.info("Keyboard listener started successfully")
     except Exception as e:
-        logger.error(f"Failed to register hotkey: {str(e)}")
+        logger.error(f"Failed to start keyboard listener: {str(e)}")
+        if IS_MACOS:
+            logger.error("On macOS, this usually means accessibility permissions are not granted")
         return
 
     try:
@@ -102,7 +152,10 @@ async def main():
     except Exception as e:
         logger.error(f"Error in main loop: {str(e)}")
     finally:
+        logger.info("Stopping keyboard listener...")
+        listener.stop()
         logger.info("Exiting...")
+
 
 if __name__ == "__main__":
     asyncio.run(main()) 
