@@ -99,6 +99,20 @@ else
     echo "  pip install -e /path/to/ai_engine"
 fi
 
+# Check for notion_md_converter sibling directory
+NOTION_CONVERTER_PATH="../notion_md_converter"
+if [ -d "$NOTION_CONVERTER_PATH" ]; then
+    echo
+    echo "Found notion_md_converter at $NOTION_CONVERTER_PATH"
+    echo "Installing notion_markdown_converter as editable package..."
+    pip install -e "$NOTION_CONVERTER_PATH"
+else
+    echo
+    echo "Warning: notion_md_converter not found at $NOTION_CONVERTER_PATH"
+    echo "You'll need to install notion_markdown_converter manually:"
+    echo "  pip install -e /path/to/notion_md_converter"
+fi
+
 echo
 echo "=========================================="
 echo "Setup Complete!"
