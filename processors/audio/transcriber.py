@@ -69,8 +69,24 @@ class AudioTranscriber:
         return transcript
     
     def should_process(self, filename: str, frontmatter: Dict) -> bool:
+        # Skip hidden files (like .DS_Store on macOS)
+        if filename.startswith('.'):
+            return False
         _, ext = os.path.splitext(filename)
-        return ext.lower() not in ['.mkv', '.mp4', '.avi', ".ini"]
+        # Only process audio files, skip video files and other non-audio files
+        audio_extensions = ['.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.wma', '.aiff']
+        video_extensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.webm']
+        excluded_extensions = ['.ini', '.txt', '.json', '.md']
+        
+        ext_lower = ext.lower()
+        # If it's a known audio format, process it
+        if ext_lower in audio_extensions:
+            return True
+        # If it's a video or excluded format, skip it
+        if ext_lower in video_extensions or ext_lower in excluded_extensions:
+            return False
+        # For unknown extensions, skip to be safe
+        return False
     
     async def process_single_file(self, filename: str) -> None:
         """Process a single audio file: transcribe and save outputs."""
