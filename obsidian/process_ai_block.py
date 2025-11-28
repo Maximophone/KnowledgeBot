@@ -324,11 +324,11 @@ REPLACEMENTS_INSIDE = {
     "this": lambda v, t, context: f"<document>{context}</document>\n",
     "repo": pack_repo,
     "vault": lambda *_: pack_vault(),
-    "meeting": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Meetings\\Transcriptions"),
-    "transcription": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Transcriptions"),
+    "meeting": lambda v, t, c: insert_file_ref(v, "KnowledgeBot/Meetings/Transcriptions"),
+    "transcription": lambda v, t, c: insert_file_ref(v, "KnowledgeBot/Transcriptions"),
     "daily": lambda v, t, c: insert_file_ref(v, "Daily Notes"),
-    "idea": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Ideas\\Transcriptions"),
-    "unsorted": lambda v, t, c: insert_file_ref(v, "KnowledgeBot\\Unsorted\\Transcriptions"),
+    "idea": lambda v, t, c: insert_file_ref(v, "KnowledgeBot/Ideas/Transcriptions"),
+    "unsorted": lambda v, t, c: insert_file_ref(v, "KnowledgeBot/Unsorted/Transcriptions"),
     "doc": lambda v, t, c: insert_file_ref(v),
     "pdf": lambda v, t, c: insert_file_ref(v, "pdf", typ="pdf"),
     "md": lambda v, t, c: insert_file_ref(v, "MarkDownload"),
@@ -808,6 +808,7 @@ def run_python_script(script_name: str, text: str, context: Dict) -> str:
     Returns:
         str: Output from the script execution
     """
+    import sys
     try:
         # Check if script name is a markdown file (has .md extension or no extension)
         is_markdown = script_name.endswith('.md') or '.' not in script_name
@@ -820,7 +821,7 @@ def run_python_script(script_name: str, text: str, context: Dict) -> str:
         script_path = os.path.join(PATHS.scripts_folder, script_name)
         
         if not os.path.exists(script_path):
-            return f"Error: Script '{script_name}' not found in scripts folder"
+            return f"Error: Script '{script_name}' not found in scripts folder: {PATHS.scripts_folder}"
         
         if is_markdown:
             # Extract Python code from markdown file
@@ -839,27 +840,31 @@ def run_python_script(script_name: str, text: str, context: Dict) -> str:
             code = matches[0]
             
             # Execute the python code directly using subprocess with -c
+            # Use sys.executable to ensure we use the same Python interpreter
             result = subprocess.run(
-                ["python", "-c", code],
+                [sys.executable, "-c", code],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                cwd=str(PATHS.scripts_folder)  # Set working directory to scripts folder
             )
             
             return result.stdout
         else:
             # Direct execution of Python script
+            # Use sys.executable to ensure we use the same Python interpreter
             result = subprocess.run(
-                ["python", script_path], 
+                [sys.executable, script_path], 
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                cwd=str(PATHS.scripts_folder)  # Set working directory to scripts folder
             )
             
             # Return the stdout output
             return result.stdout
         
     except subprocess.CalledProcessError as e:
-        return f"Error executing script '{script_name}':\n{e.stderr}"
+        return f"Error executing script '{script_name}':\nstdout: {e.stdout}\nstderr: {e.stderr}"
     except Exception as e:
         return f"Error: {str(e)}\n{traceback.format_exc()}"

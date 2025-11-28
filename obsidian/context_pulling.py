@@ -4,7 +4,7 @@ from obsidian.beacons import beacon_me, beacon_ai, beacon_error
 from obsidian.file_utils import resolve_file_path, get_file_contents, get_markdown_files, remove_frontmatter, VAULT_PATH
 import os
 
-VAULT_EXCLUDE = ["KnowledgeBot\\Meetings", "AI Chats", "MarkDownload", "gdoc", ".smart-connections"]
+VAULT_EXCLUDE = ["KnowledgeBot/Meetings", "AI Chats", "MarkDownload", "gdoc", ".smart-connections"]
 
 # Initialize HTML to Markdown converter
 html_to_md = HTMLToMarkdown()
