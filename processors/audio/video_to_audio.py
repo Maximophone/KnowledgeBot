@@ -21,11 +21,15 @@ class VideoToAudioProcessor:
         """Process all video files in the input directory."""
         for file_path in self.input_dir.iterdir():
             filename = file_path.name
+            
+            # Skip hidden files (like .DS_Store on macOS)
+            if filename.startswith('.'):
+                continue
 
-            # Check if the file is a video file (e.g., .mkv, .mp4, .avi)
+            # Check if the file is a video file
             _, ext = os.path.splitext(filename)
-            if ext.lower() not in ['.mkv', '.mp4', '.avi']:
-                return
+            if ext.lower() not in ['.mkv', '.mp4', '.avi', '.mov', '.webm', '.wmv']:
+                continue  # Skip non-video files, don't exit the loop!
 
             await self.process_single_file(filename)
             await asyncio.sleep(0)
